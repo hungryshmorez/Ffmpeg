@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ffmpeg.wasm x264 minimal repro</title>
+<style>
+  body { background:#0d0d0d; color:#e0e0e0; font:14px ui-monospace,Menlo,monospace; padding:24px; max-width:900px; margin:0 auto; }
+  h1 { color:#00d4ff; font-size:18px; }
+  button { background:#00d4ff; color:#000; border:0; padding:10px 18px; font:inherit; font-weight:700; cursor:pointer; border-radius:4px; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  #log { white-space:pre-wrap; margin-top:16px; line-height:1.5; }
+  .ok { color:#44ff88; } .bad { color:#ff4444; } .dim { color:#888; } .warn { color:#ffcc00; }
+  table { border-collapse:collapse; margin-top:16px; width:100%; }
+  td,th { border:1px solid #2a2a2a; padding:6px 10px; text-align:left; }
+  th { color:#00d4ff; }
+</style>
+</head>
+<body>
+<h1>ffmpeg.wasm — x264 multi-frame minimal repro</h1>
+<p class="dim">
+No app code. No queue. No fonts. No service worker. No media bin.<br>
+Just: load the core → encode 90 frames of testsrc → <b>count the frames that actually came out.</b><br>
+Expected: <b>90 frames, ~90&ndash;125 KB</b> (verified against native ffmpeg 6.1 / libx264).
+</p>
+
+<button id="go">Run all tests</button>
+<div id="log"></div>
+<table id="results" hidden>
+  <thead><tr><th>#</th><th>Config</th><th>Frames</th><th>Bytes</th><th>Verdict</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+<script>
+const $log = document.getElementById('log');
+const $tb  = document.querySelector('#results tbody');
+const log = (m, c = 'dim') => { $log.innerHTML += `<span class="${c}">${m}</span>\n`; };
+
+// 90 frames of 1280x720 testsrc @30fps. Native libx264 → 90 frames, 92–123 KB.
+const EXPECT_FRAMES = 90;
+const SRC = ['-f','lavfi','-i','testsrc=duration=3:size=1280x720:rate=30'];
+
+const TESTS = [
+  { n:'x264 ultrafast (clean)',        args:['-c:v','libx264','-preset','ultrafast'] },
+  { n:'x264 ultrafast -threads 1',     args:['-c:v','libx264','-preset','ultrafast','-threads','1'] },
+  { n:'x264 veryfast + zerolatency + x264-params (current app config)',
+    args:['-c:v','libx264','-preset','veryfast','-tune','zerolatency','-threads','1',
+          '-x264-params','threads=1:sliced-threads=0:lookahead-threads=1:sync-lookahead=0:rc-lookahead=0:mbtree=0:bframes=0:ref=1'] },
+  { n:'x264 ultrafast, NO -pix_fmt',   args:['-c:v','libx264','-preset','ultrafast','-threads','1'], noPixFmt:true },
+  { n:'x264 baseline profile',         args:['-c:v','libx264','-preset','ultrafast','-threads','1','-profile:v','baseline','-level','3.0'] },
+  { n:'mpeg4 (control — known working)', args:['-c:v','mpeg4','-q:v','5'] },
+];
+
+let ff;
+
+// Count frames by DECODING the output. Bytes lie; a 1-frame file is still ~20KB.
+async function countFrames(name) {
+  let buf = '';
+  const grab = ({ message }) => { buf += message + '\n'; };
+  ff.on('log', grab);
+  try { await ff.exec(['-hide_banner','-i',name,'-f','null','-']); } catch (_) {}
+  ff.off?.('log', grab);
+  const all = [...buf.matchAll(/frame=\s*(\d+)/g)];
+  return all.length ? parseInt(all[all.length - 1][1], 10) : 0;
+}
+
+async function run() {
+  document.getElementById('go').disabled = true;
+  const { FFmpeg } = FFmpegWASM;
+  const { toBlobURL } = FFmpegUtil;
+
+  log(`crossOriginIsolated = ${window.crossOriginIsolated}`, window.crossOriginIsolated ? 'ok' : 'warn');
+  log(`hardwareConcurrency = ${navigator.hardwareConcurrency}`);
+
+  ff = new FFmpeg();
+  ff.on('log', ({ message }) => {
+    if (/error|Error|failed|out of bounds|malloc/i.test(message)) log('  ' + message, 'bad');
+  });
+
+  // Single-thread core. No SharedArrayBuffer needed. Nothing else loaded.
+  const BASE = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
+  log('\nLoading single-thread core…');
+  await ff.load({
+    coreURL: await toBlobURL(`${BASE}/ffmpeg-core.js`,   'text/javascript'),
+    wasmURL: await toBlobURL(`${BASE}/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+  log('Core loaded. Nothing else is in MEMFS.\n', 'ok');
+
+  document.getElementById('results').hidden = false;
+
+  for (let i = 0; i < TESTS.length; i++) {
+    const t = TESTS[i];
+    const out = `t${i}.mp4`;
+    log(`\n[${i + 1}/${TESTS.length}] ${t.n}`);
+
+    let frames = 0, bytes = 0, err = null;
+    try {
+      const args = [...SRC, ...t.args];
+      if (!t.noPixFmt) args.push('-pix_fmt', 'yuv420p');
+      args.push('-y', out);
+
+      await ff.exec(args);
+      const data = await ff.readFile(out);
+      bytes = data.length;
+      frames = await countFrames(out);
+      await ff.deleteFile(out).catch(() => {});   // keep MEMFS clean between tests
+    } catch (e) {
+      err = e.message || String(e);
+    }
+
+    const pass = frames >= EXPECT_FRAMES * 0.9;
+    const verdict = err ? `CRASH: ${err}`
+                  : frames === 0 ? 'FAIL — 0 frames (empty container)'
+                  : frames === 1 ? 'FAIL — 1 FRAME ONLY (this is the bug)'
+                  : pass ? 'PASS'
+                  : `FAIL — truncated at ${frames}`;
+
+    log(`      frames=${frames}/${EXPECT_FRAMES}  bytes=${bytes}  → ${verdict}`, pass ? 'ok' : 'bad');
+    $tb.innerHTML += `<tr>
+      <td>${i + 1}</td><td>${t.n}</td>
+      <td class="${pass ? 'ok' : 'bad'}">${frames}/${EXPECT_FRAMES}</td>
+      <td>${bytes.toLocaleString()}</td>
+      <td class="${pass ? 'ok' : 'bad'}">${verdict}</td></tr>`;
+  }
+
+  log('\n\n=== HOW TO READ THIS ===', 'warn');
+  log('Any x264 row shows 90/90  → the core is FINE. The bug is in the app.', 'dim');
+  log('Every x264 row shows 1/90 → the bug is in the CORE BUILD, not the app.', 'dim');
+  log('mpeg4 passes but all x264 fails → x264 in this wasm build is broken. Try a different core version.', 'dim');
+}
+
+document.getElementById('go').addEventListener('click', () => run().catch(e => log('FATAL: ' + e.message, 'bad')));
+</script>
+</body>
+</html>

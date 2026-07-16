@@ -1,0 +1,2399 @@
+<!DOCTYPE html>
+<!--
+  =============================================================================
+  FFmpeg Studio - Browser-based video/audio processor using ffmpeg.wasm
+  =============================================================================
+  HOSTING REQUIREMENTS — SharedArrayBuffer is required for multi-threaded
+  ffmpeg.wasm operation. Your web server MUST send the following two HTTP
+  response headers on every response:
+
+      Cross-Origin-Opener-Policy: same-origin
+      Cross-Origin-Embedder-Policy: require-corp
+
+  Without these headers, the page will see `typeof SharedArrayBuffer ===
+  'undefined'` and a visible error banner will be displayed on the UI.
+
+  Common server configurations:
+    - Python:  python -m http.server (does NOT set headers; use a custom server)
+    - Node:    npx serve --cors (lacks COOP/COEP — use a real server)
+    - Nginx:   add_header in the server/location block
+    - Vercel:  set headers in vercel.json
+    - Netlify: set headers in _headers file
+
+  If you just want to test locally, the simplest path is:
+      npx http-server . --header "Cross-Origin-Opener-Policy: same-origin" --header "Cross-Origin-Embedder-Policy: require-corp"
+  =============================================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- PHASE 0: tiny inline favicon to silence the /favicon.ico 404
+       that otherwise clutters the DevTools console. -->
+  <link rel="icon" href="favicon.ico" type="image/x-icon" />
+  <title>FFmpeg Studio</title>
+
+  <!--
+    Pinned CDN sources. Per spec Part 1 §1.1 these versions are NON-NEGOTIABLE.
+    After load the globals FFmpegWASM.FFmpeg and FFmpegUtil.fetchFile are available.
+    coi-serviceworker.js self-registers to enable SharedArrayBuffer on
+    static hosts (GitHub Pages, Netlify free, MiniMax Space) that can't set
+    COOP/COEP headers.
+
+    PHASE 0 FIX: ffmpeg.wasm 0.12.7's UMD bundle creates an internal Web
+    Worker whose URL is resolved relative to the ffmpeg.js script
+    directory. When ffmpeg.js is loaded from a cross-origin CDN
+    (unpkg.com), the Worker URL is also cross-origin, and Chromium
+    refuses to construct the Worker ("cannot be accessed from origin")
+    even when the response carries Cross-Origin-Resource-Policy. The
+    fix is to self-host ffmpeg.js and its dynamic chunk (814.ffmpeg.js)
+    so the Worker URL is same-origin. The core files
+    (ffmpeg-core-mt.js/wasm, ffmpeg-core.js/wasm, ffmpeg-core.worker.js)
+    are also vendored so the Worker's importScripts() calls resolve
+    same-origin too. util.js stays on unpkg because it doesn't create
+    any Workers. Versions are still pinned to the spec-mandated 0.12.7
+    / 0.12.6 / 0.12.1.
+  -->
+  <script src="coi-serviceworker.js"></script>
+  <script src="vendor/util.js"></script>
+  <script src="vendor/ffmpeg.js"></script>
+  <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+  <!-- JSZip — used by the Batch Runner (Agents) and Frames & Stills ZIP export. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d0d0d">
+</head>
+<body>
+  <!-- =========================================================================
+       v5 HOTFIX (Bug 2): The full-width red "sab-warning" banner is GONE.
+       It used to lie — the app works fine single-threaded, just slower.
+       In its place, a small dismissible yellow chip (#engine-st-chip) and
+       a red error chip (#engine-err-chip) live in the engine status bar
+       (see the .engine-status block below). They are created lazily by
+       app.js; this file just provides the parent container #engine-status.
+       The legacy #sab-warning element is preserved as a hidden stub so
+       any old call to showSabBanner()/hideSabBanner() that targets the
+       DOM element still resolves to something instead of failing.
+       ========================================================================= -->
+  <div id="sab-warning" class="sab-warning hidden" hidden aria-hidden="true"></div>
+
+  <!-- =========================================================================
+       Top Bar: title, engine status, file info, presets, shortcuts help
+       ========================================================================= -->
+  <header id="topbar" class="topbar">
+    <div class="topbar-left">
+      <h1 class="brand">FFmpeg Studio</h1>
+      <div class="engine-status" id="engine-status">
+        <span class="status-dot" id="status-dot" data-state="red"></span>
+        <span id="status-text">Engine: Not loaded</span>
+        <span id="path-badge" class="path-badge" hidden></span>
+        <span id="opfs-chip" class="opfs-chip" hidden></span>
+        <span id="memfs-gauge" title="Wasm heap usage. MEMFS IS the heap the encoder allocates from — keep it small.">MEMFS: 0 files · 0 B</span>
+        <!-- v5 HOTFIX (Bug 2): small yellow status-bar chip shown ONLY when the
+             engine is running single-threaded. Hidden by default; app.js
+             toggles visibility. A dismiss writes sessionStorage so it does
+             not come back on the same tab. The same parent also hosts the
+             red #engine-err-chip which is created lazily on true engine
+             download failure. -->
+        <span id="engine-st-chip" class="engine-st-chip" hidden>
+          <span class="engine-st-chip-text">⚡ Single-thread mode — renders are slower. (Server isn’t sending cross-origin isolation headers.)</span>
+          <button type="button" class="engine-st-chip-x" aria-label="Dismiss single-thread warning">×</button>
+        </span>
+        <!-- v5 HOTFIX 5: small queue-depth chip — shows the current
+             in-flight ffmpeg task and the queue length. Updated on
+             every queue transition; hidden when the queue is idle. -->
+        <span id="ff-queue-chip" class="ff-queue-chip" hidden>ffmpeg: …</span>
+      </div>
+    </div>
+
+    <div class="topbar-center" id="file-info">
+      <span class="file-info-empty">No file loaded</span>
+    </div>
+
+    <div class="topbar-right">
+      <!-- v4 PART B15: Undo/Redo (top-bar buttons). The action-bar (mobile
+           bottom) also has Undo/Redo. These mirror that state. -->
+      <button id="btn-undo" class="topbar-btn" type="button" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+      <button id="btn-redo" class="topbar-btn" type="button" title="Redo (Ctrl+Shift+Z)" disabled>↷ Redo</button>
+      <label class="topbar-btn" for="preset-select">Preset</label>
+      <select id="preset-select" class="topbar-select">
+        <option value="">— Choose preset —</option>
+        <option value="quick-compress">Quick Compress</option>
+        <option value="social-instagram">Social Media (Instagram)</option>
+        <option value="gif-from-video">GIF from Video</option>
+        <option value="audio-rip">Audio Only Rip</option>
+        <option value="vhs-glitch">VHS Glitch</option>
+        <option value="film-grain">Film Grain</option>
+        <option value="cyberpunk">Cyberpunk</option>
+        <option value="max-quality">Max Quality Export</option>
+      </select>
+      <button id="btn-shortcuts" class="topbar-btn" type="button" title="Keyboard shortcuts (?)">?</button>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       Tab bar (sits below the top bar). Tabs are pure CSS-driven, switched
+       by .tab-content { display:none|block } toggled from app.js.
+       ========================================================================= -->
+  <nav id="tab-bar" class="tab-bar" role="tablist">
+    <button class="tab-btn"        data-tab="audio"     type="button" role="tab" aria-controls="tab-audio">🎛 Studio</button>
+    <button class="tab-btn active" data-tab="workflows" type="button" role="tab" aria-controls="tab-workflows">📋 Workflows</button>
+    <button class="tab-btn"        data-tab="editor"    type="button" role="tab" aria-controls="tab-editor">✂️ Editor</button>
+    <button class="tab-btn"        data-tab="preview"   type="button" role="tab" aria-controls="tab-preview">▶️ Preview</button>
+    <button class="tab-btn"        data-tab="agents"    type="button" role="tab" aria-controls="tab-agents">🤖 Agents</button>
+        <button type="button" class="tab-btn" data-tab="tripcam" role="tab">🌀 Trip Cam</button>
+        <button type="button" class="tab-btn" data-tab="graph" role="tab">⛓️ Graph</button>
+  </nav>
+
+  <!-- =========================================================================
+       Global Media Bin Drawer (v4 PART A1) — placed right under the tab
+       bar so it sits at the top of every page load. Slides open/closed.
+       Default state: open when the bin is empty, collapsed once files
+       load. Toggled by the active-file chip in the action bar.
+       ========================================================================= -->
+  <section id="global-bin-drawer" class="global-bin-drawer" aria-label="Global media bin drawer">
+    <div class="global-bin-inner">
+      <div class="global-bin-header">
+        <span class="gbin-title">📁 Media Bin <span class="bin-count" id="global-bin-count">0</span></span>
+        <div class="gbin-actions">
+          <input type="url" id="bin-url-input" class="gbin-url" placeholder="Paste media URL…" />
+          <button id="bin-url-load" class="mini-btn" type="button" title="Fetch a file from a URL into the bin">🔗 Load URL</button>
+          <button id="global-bin-add" class="mini-btn" type="button" title="Add files from disk">＋ Add Files</button>
+          <button id="global-bin-clear" class="mini-btn danger" type="button" title="Remove every item from the bin">Clear All</button>
+        </div>
+      </div>
+      <div class="media-bin-strip" id="global-bin-strip">
+        <em class="muted bin-empty">No media loaded. Drop files here or tap + Add Media.</em>
+      </div>
+      <div class="media-bin-multi" id="bin-multi" hidden>
+        <span class="bin-multi-label"><span id="bin-multi-count">0</span> selected:</span>
+        <button id="bin-op-concat"   class="mini-btn" type="button" title="Concatenate selected (concat demuxer)">⛓ Concat</button>
+        <button id="bin-op-hstack"   class="mini-btn" type="button" title="Stack Horizontal (hstack)">⇋ HStack</button>
+        <button id="bin-op-vstack"   class="mini-btn" type="button" title="Stack Vertical (vstack)">⇅ VStack</button>
+        <button id="bin-op-grid"     class="mini-btn" type="button" title="2×2 Grid (4 files)">▦ Grid 2×2</button>
+        <button id="bin-op-pip"      class="mini-btn" type="button" title="Picture-in-Picture overlay">◳ PiP</button>
+        <button id="bin-op-merge"    class="mini-btn" type="button" title="Take video from first, audio from second">🎬+🔊 Merge A/V</button>
+        <button id="bin-op-batch"    class="mini-btn" type="button" title="Apply a workflow to every selected file">⚡ Batch Apply</button>
+      </div>
+      <div id="bin-url-msg" class="bin-url-msg" hidden></div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       Main app container — wraps the four tab-content panes.
+       ========================================================================= -->
+  <main id="app-main" class="app-main">
+    <!-- =====================================================================
+         TAB: WORKFLOWS (default on load)
+         ===================================================================== -->
+    <div class="tab-content" id="tab-workflows" data-tab="workflows">
+      <div class="workflows-toolbar">
+        <input type="search" id="wf-search" class="wf-search" placeholder="Search 180+ workflows…" autocomplete="off" />
+        <div class="wf-categories" id="wf-categories" role="tablist">
+          <!-- Category pills injected by workflows.js -->
+        </div>
+      </div>
+      <div class="workflows-grid" id="workflows-grid" role="list">
+        <!-- Workflow cards injected by workflows.js -->
+      </div>
+      <div class="workflows-empty hidden" id="workflows-empty">
+        <p id="workflows-empty-text">No matching workflows.</p>
+        <p class="muted" id="workflows-empty-hint">Try a different search term or category.</p>
+        <button type="button" class="secondary-btn hidden" id="workflows-empty-action">Open Agents tab</button>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         TAB: EDITOR (the original 3-column v1 layout, plus 3 new sections
+         23 Merge, 24 Stabilize, 25 Deinterlace, plus curves presets in
+         section 7 and chromashift in section 19).
+         ===================================================================== -->
+    <div class="tab-content" id="tab-editor" data-tab="editor" style="display:none">
+  <div class="app-grid">
+    <!-- ============================================================ LEFT: Controls -->
+    <aside class="controls-column" id="controls-column">
+      <div class="controls-header">
+        <span>Controls</span>
+        <button id="btn-reset-all" class="mini-btn" type="button" title="Reset all controls (Ctrl+Z)">Reset</button>
+      </div>
+
+      <!-- Section template:
+           <details class="section" id="section-N" open> ... </details>
+           Each section has:
+             - <summary>: header with title, enable toggle, tooltip (?)
+             - <div class="section-body">: controls
+      -->
+
+      <!-- =========== SECTION 1: Output Format & Codec =========== -->
+      <details class="section" id="section-1" open>
+        <summary>
+          <span class="section-num">1</span>
+          <span class="section-title">Output Format &amp; Codec</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-1" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="out-format">Output Format <span class="tt" data-tip="Container format for the output file.">?</span></label>
+            <select id="out-format" class="ctrl">
+              <option value="mp4">MP4 (.mp4)</option>
+              <option value="webm">WebM (.webm)</option>
+              <option value="mkv">MKV (.mkv)</option>
+              <option value="gif">GIF (.gif)</option>
+              <option value="mp3">MP3 (.mp3)</option>
+              <option value="wav">WAV (.wav)</option>
+              <option value="ogg">OGG (.ogg)</option>
+              <option value="aac">AAC (.aac)</option>
+            </select>
+          </div>
+          <div class="control-row" id="row-vcodec">
+            <label for="vcodec">Video Codec <span class="tt" data-tip="Video encoder. 'copy' stream-copies without re-encoding (no filters).">?</span></label>
+            <select id="vcodec" class="ctrl">
+              <option value="libx264">libx264 (H.264)</option>
+              <option value="libx265">libx265 (HEVC)</option>
+              <option value="libvpx-vp9">libvpx-vp9 (VP9)</option>
+              <option value="copy">copy (no re-encode)</option>
+            </select>
+          </div>
+          <div class="control-row" id="row-acodec">
+            <label for="acodec">Audio Codec <span class="tt" data-tip="Audio encoder. 'none' strips audio entirely.">?</span></label>
+            <select id="acodec" class="ctrl">
+              <option value="aac">aac</option>
+              <option value="libmp3lame">libmp3lame (MP3)</option>
+              <option value="libvorbis">libvorbis</option>
+              <option value="libopus">libopus</option>
+              <option value="copy">copy (no re-encode)</option>
+              <option value="none">none (strip audio)</option>
+            </select>
+          </div>
+          <div class="control-row" id="row-preset">
+            <label for="enc-preset">Quality Preset <span class="tt" data-tip="Encoder speed/quality tradeoff. Slower = smaller file & better quality.">?</span></label>
+            <select id="enc-preset" class="ctrl">
+              <option value="ultrafast">ultrafast</option>
+              <option value="superfast">superfast</option>
+              <option value="veryfast" selected>veryfast</option>
+              <option value="faster">faster</option>
+              <option value="fast">fast</option>
+              <option value="medium">medium</option>
+              <option value="slow">slow</option>
+              <option value="slower">slower</option>
+              <option value="veryslow">veryslow</option>
+            </select>
+          </div>
+          <div class="control-row" id="row-crf">
+            <label for="crf">CRF <span class="tt" data-tip="Constant Rate Factor. 0=lossless, 23=default, 51=worst. Lower = better quality, larger file.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="crf" class="ctrl slider" min="0" max="51" value="23" step="1" />
+              <span class="val-display" id="crf-val">23</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="ab-rate">Audio Bitrate <span class="tt" data-tip="Audio bitrate (kbps). 128k is good for voice, 192-320k for music.">?</span></label>
+            <select id="ab-rate" class="ctrl">
+              <option value="64k">64k</option>
+              <option value="96k">96k</option>
+              <option value="128k" selected>128k</option>
+              <option value="192k">192k</option>
+              <option value="256k">256k</option>
+              <option value="320k">320k</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="pix-fmt">Pixel Format <span class="tt" data-tip="Pixel format. yuv420p is the most compatible.">?</span></label>
+            <select id="pix-fmt" class="ctrl">
+              <option value="yuv420p" selected>yuv420p</option>
+              <option value="yuv444p">yuv444p</option>
+              <option value="rgb24">rgb24</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 2: Trim & Cut =========== -->
+      <details class="section" id="section-2">
+        <summary>
+          <span class="section-num">2</span>
+          <span class="section-title">Trim &amp; Cut</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-2" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="trim-start">Start Time <span class="tt" data-tip="Where to begin in the source (HH:MM:SS.ms). -ss placed before -i for fast seek.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="trim-start-slider" class="ctrl slider" min="0" max="100" value="0" step="0.1" />
+              <input type="text" id="trim-start" class="ctrl small-input" value="00:00:00.000" />
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="trim-end">End Time <span class="tt" data-tip="Where to stop in the source (HH:MM:SS.ms). -to placed after -i for accurate cut.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="trim-end-slider" class="ctrl slider" min="0" max="100" value="100" step="0.1" />
+              <input type="text" id="trim-end" class="ctrl small-input" value="00:00:00.000" />
+            </div>
+          </div>
+          <div class="control-row readonly">
+            <label>Duration</label>
+            <span class="val-display" id="trim-duration">00:00:00.000</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 3: Resize & Scale =========== -->
+      <details class="section" id="section-3">
+        <summary>
+          <span class="section-num">3</span>
+          <span class="section-title">Resize &amp; Scale</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-3" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="scale-w">Width <span class="tt" data-tip="Output width in pixels. Use -1 to auto-calculate from aspect ratio.">?</span></label>
+            <input type="number" id="scale-w" class="ctrl small-input" value="-1" min="-1" step="2" />
+          </div>
+          <div class="control-row">
+            <label for="scale-h">Height <span class="tt" data-tip="Output height in pixels. Use -1 to auto-calculate from aspect ratio.">?</span></label>
+            <input type="number" id="scale-h" class="ctrl small-input" value="-1" min="-1" step="2" />
+          </div>
+          <div class="control-row">
+            <label for="lock-aspect">Lock Aspect Ratio <span class="tt" data-tip="When checked, changing one dimension sets the other to -1.">?</span></label>
+            <input type="checkbox" id="lock-aspect" checked />
+          </div>
+          <div class="control-row">
+            <label for="scale-algo">Scaling Algorithm <span class="tt" data-tip="Resampling method. lanczos is highest quality, neighbor is for pixel art.">?</span></label>
+            <select id="scale-algo" class="ctrl">
+              <option value="bilinear">bilinear</option>
+              <option value="bicubic">bicubic</option>
+              <option value="lanczos" selected>lanczos</option>
+              <option value="neighbor">neighbor (nearest)</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label>Preset Resolutions</label>
+            <div class="btn-group">
+              <button type="button" class="mini-btn preset-res" data-w="1920" data-h="1080">1920×1080</button>
+              <button type="button" class="mini-btn preset-res" data-w="1280" data-h="720">1280×720</button>
+              <button type="button" class="mini-btn preset-res" data-w="854" data-h="480">854×480</button>
+              <button type="button" class="mini-btn preset-res" data-w="640" data-h="360">640×360</button>
+              <button type="button" class="mini-btn preset-res" data-w="320" data-h="240">320×240</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 4: Crop =========== -->
+      <details class="section" id="section-4">
+        <summary>
+          <span class="section-num">4</span>
+          <span class="section-title">Crop</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-4" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="crop-w">Crop Width <span class="tt" data-tip="Width of the crop region in pixels.">?</span></label>
+            <input type="number" id="crop-w" class="ctrl small-input" value="640" min="2" step="2" />
+          </div>
+          <div class="control-row">
+            <label for="crop-h">Crop Height <span class="tt" data-tip="Height of the crop region in pixels.">?</span></label>
+            <input type="number" id="crop-h" class="ctrl small-input" value="480" min="2" step="2" />
+          </div>
+          <div class="control-row">
+            <label for="crop-x">X Offset <span class="tt" data-tip="Horizontal position of crop box (pixels from left).">?</span></label>
+            <input type="number" id="crop-x" class="ctrl small-input" value="0" min="0" step="2" />
+          </div>
+          <div class="control-row">
+            <label for="crop-y">Y Offset <span class="tt" data-tip="Vertical position of crop box (pixels from top).">?</span></label>
+            <input type="number" id="crop-y" class="ctrl small-input" value="0" min="0" step="2" />
+          </div>
+          <div class="control-row">
+            <label for="crop-center">Center Crop <span class="tt" data-tip="Auto-center the crop box. Disables X/Y offset inputs.">?</span></label>
+            <input type="checkbox" id="crop-center" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 5: Rotation & Flip =========== -->
+      <details class="section" id="section-5">
+        <summary>
+          <span class="section-num">5</span>
+          <span class="section-title">Rotation &amp; Flip</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-5" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="rotate">Rotation <span class="tt" data-tip="Rotate the video. Implemented with the transpose filter.">?</span></label>
+            <select id="rotate" class="ctrl">
+              <option value="none" selected>None</option>
+              <option value="90cw">90° Clockwise</option>
+              <option value="90ccw">90° Counter-Clockwise</option>
+              <option value="180">180°</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="hflip">Horizontal Flip <span class="tt" data-tip="Mirror left/right (hflip filter).">?</span></label>
+            <input type="checkbox" id="hflip" />
+          </div>
+          <div class="control-row">
+            <label for="vflip">Vertical Flip <span class="tt" data-tip="Mirror top/bottom (vflip filter).">?</span></label>
+            <input type="checkbox" id="vflip" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 6: Speed & Time Manipulation =========== -->
+      <details class="section" id="section-6">
+        <summary>
+          <span class="section-num">6</span>
+          <span class="section-title">Speed &amp; Time Manipulation</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-6" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="speed">Speed Multiplier <span class="tt" data-tip="Playback speed. <1 = slow motion, >1 = timelapse. atempo only supports 0.5-2.0; the app chains multiple atempo filters for extreme values.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="speed" class="ctrl slider" min="0.25" max="4" value="1" step="0.05" />
+              <span class="val-display" id="speed-val">1.00×</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="speed-video">Apply to Video <span class="tt" data-tip="Apply the speed change to video (setpts filter).">?</span></label>
+            <input type="checkbox" id="speed-video" checked />
+          </div>
+          <div class="control-row">
+            <label for="speed-audio">Apply to Audio <span class="tt" data-tip="Apply the speed change to audio (atempo filter).">?</span></label>
+            <input type="checkbox" id="speed-audio" checked />
+          </div>
+          <div class="control-row">
+            <label for="rev-video">Reverse Video <span class="tt" data-tip="Plays the video backwards. Requires the entire file in memory — slow on large files.">?</span></label>
+            <input type="checkbox" id="rev-video" />
+          </div>
+          <div class="control-row">
+            <label for="rev-audio">Reverse Audio <span class="tt" data-tip="Plays the audio backwards. Same memory warning as reverse video.">?</span></label>
+            <input type="checkbox" id="rev-audio" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 7: Color Correction & Grading =========== -->
+      <details class="section" id="section-7">
+        <summary>
+          <span class="section-num">7</span>
+          <span class="section-title">Color Correction &amp; Grading</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-7" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="eq-brightness">Brightness <span class="tt" data-tip="Adjust brightness (-1.0 to 1.0).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="eq-brightness" class="ctrl slider" min="-1" max="1" value="0" step="0.01" />
+              <span class="val-display" id="eq-brightness-val">0.00</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="eq-contrast">Contrast <span class="tt" data-tip="Adjust contrast (0.0 to 3.0, default 1.0).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="eq-contrast" class="ctrl slider" min="0" max="3" value="1" step="0.01" />
+              <span class="val-display" id="eq-contrast-val">1.00</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="eq-saturation">Saturation <span class="tt" data-tip="Adjust color saturation (0.0 to 3.0, default 1.0).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="eq-saturation" class="ctrl slider" min="0" max="3" value="1" step="0.01" />
+              <span class="val-display" id="eq-saturation-val">1.00</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="eq-gamma">Gamma <span class="tt" data-tip="Adjust gamma (0.1 to 10.0, default 1.0).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="eq-gamma" class="ctrl slider" min="0.1" max="10" value="1" step="0.1" />
+              <span class="val-display" id="eq-gamma-val">1.0</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="eq-gamma-r">Gamma Red <span class="tt" data-tip="Per-channel gamma for red. 1.0 = neutral.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="eq-gamma-r" class="ctrl slider" min="0.1" max="10" value="1" step="0.1" />
+              <span class="val-display" id="eq-gamma-r-val">1.0</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="eq-gamma-g">Gamma Green <span class="tt" data-tip="Per-channel gamma for green. 1.0 = neutral.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="eq-gamma-g" class="ctrl slider" min="0.1" max="10" value="1" step="0.1" />
+              <span class="val-display" id="eq-gamma-g-val">1.0</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="eq-gamma-b">Gamma Blue <span class="tt" data-tip="Per-channel gamma for blue. 1.0 = neutral.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="eq-gamma-b" class="ctrl slider" min="0.1" max="10" value="1" step="0.1" />
+              <span class="val-display" id="eq-gamma-b-val">1.0</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="hue-h">Hue Shift <span class="tt" data-tip="Rotate the hue (-180 to 180 degrees).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="hue-h" class="ctrl slider" min="-180" max="180" value="0" step="1" />
+              <span class="val-display" id="hue-h-val">0</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="hue-s">Hue Saturation <span class="tt" data-tip="Boost (or dampen) hue saturation (-10 to 10).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="hue-s" class="ctrl slider" min="-10" max="10" value="1" step="0.1" />
+              <span class="val-display" id="hue-s-val">1.0</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="negate">Invert Colors <span class="tt" data-tip="Invert all colors (negate filter).">?</span></label>
+            <input type="checkbox" id="negate" />
+          </div>
+          <div class="control-row">
+            <label for="curves-preset">Curves Preset <span class="tt" data-tip="Built-in FFmpeg curves preset. Inserted into the filter chain after eq.">?</span></label>
+            <select id="curves-preset" class="ctrl">
+              <option value="none" selected>None</option>
+              <option value="vintage">Vintage</option>
+              <option value="cross_process">Cross Process</option>
+              <option value="darker">Darker</option>
+              <option value="lighter">Lighter</option>
+              <option value="increase_contrast">Increase Contrast</option>
+              <option value="strong_contrast">Strong Contrast</option>
+              <option value="negative">Negative</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label>Color Grading Presets <span class="tt" data-tip="One-click reference presets. Sets the relevant sliders AND inserts a curves= filter.">?</span></label>
+            <div class="btn-group">
+              <button type="button" class="mini-btn" data-color-preset="vaporwave-purple-cyan">Vaporwave Purple-Cyan</button>
+              <button type="button" class="mini-btn" data-color-preset="cinematic-teal-orange">Cinematic Teal-Orange</button>
+              <button type="button" class="mini-btn" data-color-preset="retro-vhs-warm">Retro VHS Warm</button>
+              <button type="button" class="mini-btn" data-color-preset="high-contrast-bw">High Contrast B&amp;W</button>
+              <button type="button" class="mini-btn" data-color-preset="vintage-bleach">Vintage Film Bleach Bypass</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <button type="button" class="mini-btn" id="btn-reset-section-7">Reset All</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 8: Color Channel Mixer =========== -->
+      <details class="section" id="section-8">
+        <summary>
+          <span class="section-num">8</span>
+          <span class="section-title">Color Channel Mixer</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-8" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="matrix-grid">
+            <!-- Row labels: input channel, sliders: -> R, G, B -->
+            <div class="matrix-label"></div><div class="matrix-col">R</div><div class="matrix-col">G</div><div class="matrix-col">B</div>
+            <div class="matrix-row-label">Red &rarr;</div>
+              <input type="range" id="ccm-rr" min="-2" max="2" value="1" step="0.01" class="slider" />
+              <input type="range" id="ccm-rg" min="-2" max="2" value="0" step="0.01" class="slider" />
+              <input type="range" id="ccm-rb" min="-2" max="2" value="0" step="0.01" class="slider" />
+            <div class="matrix-row-label">Green &rarr;</div>
+              <input type="range" id="ccm-gr" min="-2" max="2" value="0" step="0.01" class="slider" />
+              <input type="range" id="ccm-gg" min="-2" max="2" value="1" step="0.01" class="slider" />
+              <input type="range" id="ccm-gb" min="-2" max="2" value="0" step="0.01" class="slider" />
+            <div class="matrix-row-label">Blue &rarr;</div>
+              <input type="range" id="ccm-br" min="-2" max="2" value="0" step="0.01" class="slider" />
+              <input type="range" id="ccm-bg" min="-2" max="2" value="0" step="0.01" class="slider" />
+              <input type="range" id="ccm-bb" min="-2" max="2" value="1" step="0.01" class="slider" />
+          </div>
+          <div class="control-row">
+            <label>Presets</label>
+            <div class="btn-group">
+              <button type="button" class="mini-btn" data-ccm-preset="sepia">Sepia</button>
+              <button type="button" class="mini-btn" data-ccm-preset="teal">Blue/Orange Teal</button>
+              <button type="button" class="mini-btn" data-ccm-preset="bw">High Contrast B&amp;W</button>
+              <button type="button" class="mini-btn" data-ccm-preset="night">Night Vision</button>
+              <button type="button" class="mini-btn" data-ccm-preset="identity">Identity (Reset)</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 9: Blur & Sharpen =========== -->
+      <details class="section" id="section-9">
+        <summary>
+          <span class="section-num">9</span>
+          <span class="section-title">Blur &amp; Sharpen</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-9" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="blur-type">Blur Type <span class="tt" data-tip="boxblur uses a square kernel, gblur is Gaussian.">?</span></label>
+            <select id="blur-type" class="ctrl">
+              <option value="box">Box Blur</option>
+              <option value="gauss">Gaussian Blur</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="blur-strength">Blur Strength <span class="tt" data-tip="Higher = stronger blur.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="blur-strength" class="ctrl slider" min="0" max="20" value="0" step="1" />
+              <span class="val-display" id="blur-strength-val">0</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="sharpen-amt">Sharpen Amount <span class="tt" data-tip="Unsharp mask amount. 0 = off.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="sharpen-amt" class="ctrl slider" min="0" max="10" value="0" step="0.1" />
+              <span class="val-display" id="sharpen-amt-val">0.0</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 10: Fade Effects =========== -->
+      <details class="section" id="section-10">
+        <summary>
+          <span class="section-num">10</span>
+          <span class="section-title">Fade Effects</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-10" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="fade-in-dur">Fade In Duration <span class="tt" data-tip="Seconds of fade-in at the start of the video.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="fade-in-dur" class="ctrl slider" min="0" max="10" value="0" step="0.1" />
+              <span class="val-display" id="fade-in-dur-val">0.0s</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="fade-in-type">Fade In Type <span class="tt" data-tip="What color the video fades in FROM.">?</span></label>
+            <select id="fade-in-type" class="ctrl">
+              <option value="black" selected>Black</option>
+              <option value="white">White</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="fade-out-dur">Fade Out Duration <span class="tt" data-tip="Seconds of fade-out at the end of the video.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="fade-out-dur" class="ctrl slider" min="0" max="10" value="0" step="0.1" />
+              <span class="val-display" id="fade-out-dur-val">0.0s</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="fade-out-type">Fade Out Type <span class="tt" data-tip="What color the video fades out TO.">?</span></label>
+            <select id="fade-out-type" class="ctrl">
+              <option value="black" selected>Black</option>
+              <option value="white">White</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="afade-in">Audio Fade In <span class="tt" data-tip="Audio fade-in seconds (afade filter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="afade-in" class="ctrl slider" min="0" max="10" value="0" step="0.1" />
+              <span class="val-display" id="afade-in-val">0.0s</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="afade-out">Audio Fade Out <span class="tt" data-tip="Audio fade-out seconds (afade filter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="afade-out" class="ctrl slider" min="0" max="10" value="0" step="0.1" />
+              <span class="val-display" id="afade-out-val">0.0s</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 11: Text Overlay / Watermark =========== -->
+      <details class="section" id="section-11">
+        <summary>
+          <span class="section-num">11</span>
+          <span class="section-title">Text Overlay / Watermark</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-11" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="text-content">Text Content <span class="tt" data-tip="The text to draw. Single quotes and special characters are auto-escaped for FFmpeg.">?</span></label>
+            <input type="text" id="text-content" class="ctrl" value="" placeholder="Your text..." />
+          </div>
+          <div class="control-row">
+            <label for="text-size">Font Size <span class="tt" data-tip="Font size in pixels (drawtext fontsize).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="text-size" class="ctrl slider" min="8" max="200" value="24" step="1" />
+              <span class="val-display" id="text-size-val">24</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="text-color">Font Color <span class="tt" data-tip="Text color (HTML hex).">?</span></label>
+            <input type="color" id="text-color" class="ctrl color-input" value="#ffffff" />
+          </div>
+          <div class="control-row">
+            <label for="text-bg">Background Color <span class="tt" data-tip="Optional box color behind the text. Leave blank for transparent.">?</span></label>
+            <input type="color" id="text-bg" class="ctrl color-input" value="#000000" />
+          </div>
+          <div class="control-row">
+            <label for="text-bg-opacity">Background Opacity <span class="tt" data-tip="0 = invisible, 1 = solid.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="text-bg-opacity" class="ctrl slider" min="0" max="1" value="0.5" step="0.05" />
+              <span class="val-display" id="text-bg-opacity-val">0.50</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="text-x-align">X Position <span class="tt" data-tip="Horizontal alignment. Fine-tune offset added to the alignment.">?</span></label>
+            <div class="slider-row">
+              <select id="text-x-align" class="ctrl small-input">
+                <option value="left" selected>Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+              <input type="number" id="text-x-offset" class="ctrl small-input" value="20" />
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="text-y-align">Y Position <span class="tt" data-tip="Vertical alignment. Fine-tune offset added to the alignment.">?</span></label>
+            <div class="slider-row">
+              <select id="text-y-align" class="ctrl small-input">
+                <option value="top">Top</option>
+                <option value="center">Center</option>
+                <option value="bottom" selected>Bottom</option>
+              </select>
+              <input type="number" id="text-y-offset" class="ctrl small-input" value="20" />
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="text-shadow">Shadow <span class="tt" data-tip="Add a drop-shadow under the text.">?</span></label>
+            <input type="checkbox" id="text-shadow" />
+          </div>
+          <div class="control-row">
+            <label for="text-shadow-color">Shadow Color <span class="tt" data-tip="Shadow color (HTML hex).">?</span></label>
+            <input type="color" id="text-shadow-color" class="ctrl color-input" value="#000000" />
+          </div>
+          <div class="control-row">
+            <label for="text-shadow-x">Shadow X <span class="tt" data-tip="Shadow horizontal offset.">?</span></label>
+            <input type="number" id="text-shadow-x" class="ctrl small-input" value="2" />
+          </div>
+          <div class="control-row">
+            <label for="text-shadow-y">Shadow Y <span class="tt" data-tip="Shadow vertical offset.">?</span></label>
+            <input type="number" id="text-shadow-y" class="ctrl small-input" value="2" />
+          </div>
+          <!-- v4 PART A2: Font Family selector + Custom Font Upload.
+               Defaults are populated by app.js from the MEMFS-resident TTF
+               files that loadFonts() writes at engine boot. -->
+          <div class="control-row">
+            <label for="text-font">Font Family <span class="tt" data-tip="Typeface drawn by drawtext. Defaults to Roboto (loaded into MEMFS at engine boot).">?</span></label>
+            <div class="slider-row">
+              <select id="text-font" class="ctrl small-input">
+                <option value="/sans.ttf" selected>Sans (Roboto)</option>
+                <option value="/bold.ttf">Bold (Roboto Bold)</option>
+                <option value="/mono.ttf">Mono (Roboto Mono)</option>
+              </select>
+              <input type="file" id="text-font-upload" accept=".ttf,.otf" hidden />
+              <button id="text-font-upload-btn" type="button" class="mini-btn" title="Upload a custom .ttf or .otf font from the media bin">📂 Custom</button>
+            </div>
+          </div>
+          <div class="control-row" id="text-font-note-row" hidden>
+            <em id="text-font-note" class="muted" style="font-size: 11px; color: var(--warning);">
+              Fonts could not be loaded from CDN. Section 11 is disabled until a custom font is uploaded.
+            </em>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 12: Audio Controls =========== -->
+      <details class="section" id="section-12">
+        <summary>
+          <span class="section-num">12</span>
+          <span class="section-title">Audio Controls</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-12" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <h4 class="subgroup">Levels</h4>
+          <div class="control-row">
+            <label for="volume">Volume <span class="tt" data-tip="0.0 = mute, 1.0 = 100%, 5.0 = 500% (volume filter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="volume" class="ctrl slider" min="0" max="5" value="1" step="0.01" />
+              <span class="val-display" id="volume-val">1.00</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="loudnorm">Normalize Audio <span class="tt" data-tip="EBU R128 loudness normalization (loudnorm filter).">?</span></label>
+            <input type="checkbox" id="loudnorm" />
+          </div>
+          <h4 class="subgroup">EQ</h4>
+          <div class="control-row">
+            <label for="bass">Bass Boost <span class="tt" data-tip="+/- 20 dB at low frequencies (bass filter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="bass" class="ctrl slider" min="-20" max="20" value="0" step="0.5" />
+              <span class="val-display" id="bass-val">0 dB</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="treble">Treble Boost <span class="tt" data-tip="+/- 20 dB at high frequencies (treble filter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="treble" class="ctrl slider" min="-20" max="20" value="0" step="0.5" />
+              <span class="val-display" id="treble-val">0 dB</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="highpass">High-Pass Filter <span class="tt" data-tip="Cutoff in Hz. 0 = off (highpass filter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="highpass" class="ctrl slider" min="0" max="8000" value="0" step="10" />
+              <span class="val-display" id="highpass-val">0 Hz</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="lowpass">Low-Pass Filter <span class="tt" data-tip="Cutoff in Hz. 20000 = off (lowpass filter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="lowpass" class="ctrl slider" min="200" max="20000" value="20000" step="50" />
+              <span class="val-display" id="lowpass-val">20000 Hz</span>
+            </div>
+          </div>
+          <h4 class="subgroup">Modulation</h4>
+          <div class="control-row">
+            <label for="aecho">Echo <span class="tt" data-tip="Add an echo (aecho=0.8:0.9:DELAY:DECAY).">?</span></label>
+            <input type="checkbox" id="aecho" />
+          </div>
+          <div class="control-row">
+            <label for="aecho-delay">Echo Delay <span class="tt" data-tip="Delay in ms between echoes.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="aecho-delay" class="ctrl slider" min="0" max="1000" value="100" step="10" />
+              <span class="val-display" id="aecho-delay-val">100 ms</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="aecho-decay">Echo Decay <span class="tt" data-tip="Decay factor 0-1. Higher = more repeats.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="aecho-decay" class="ctrl slider" min="0" max="1" value="0.5" step="0.05" />
+              <span class="val-display" id="aecho-decay-val">0.50</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="flanger">Flanger <span class="tt" data-tip="Add a flanger effect.">?</span></label>
+            <input type="checkbox" id="flanger" />
+          </div>
+          <div class="control-row">
+            <label for="tremolo">Tremolo <span class="tt" data-tip="Modulate amplitude (tremolo filter).">?</span></label>
+            <input type="checkbox" id="tremolo" />
+          </div>
+          <div class="control-row">
+            <label for="tremolo-f">Tremolo Freq <span class="tt" data-tip="Tremolo modulation frequency (Hz).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="tremolo-f" class="ctrl slider" min="0.1" max="20" value="5" step="0.1" />
+              <span class="val-display" id="tremolo-f-val">5.0 Hz</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="tremolo-d">Tremolo Depth <span class="tt" data-tip="Tremolo modulation depth (0-1).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="tremolo-d" class="ctrl slider" min="0" max="1" value="0.5" step="0.05" />
+              <span class="val-display" id="tremolo-d-val">0.50</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="vibrato">Vibrato <span class="tt" data-tip="Modulate pitch (vibrato filter).">?</span></label>
+            <input type="checkbox" id="vibrato" />
+          </div>
+          <div class="control-row">
+            <label for="vibrato-f">Vibrato Freq <span class="tt" data-tip="Vibrato modulation frequency (Hz).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="vibrato-f" class="ctrl slider" min="0.1" max="20" value="5" step="0.1" />
+              <span class="val-display" id="vibrato-f-val">5.0 Hz</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="vibrato-d">Vibrato Depth <span class="tt" data-tip="Vibrato modulation depth (0-1).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="vibrato-d" class="ctrl slider" min="0" max="1" value="0.5" step="0.05" />
+              <span class="val-display" id="vibrato-d-val">0.50</span>
+            </div>
+          </div>
+          <h4 class="subgroup">Output</h4>
+          <div class="control-row">
+            <label for="audio-speed">Audio Speed <span class="tt" data-tip="Independent of Section 6. Stacks with the main speed multiplier (atempo filter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="audio-speed" class="ctrl slider" min="0.5" max="2" value="1" step="0.05" />
+              <span class="val-display" id="audio-speed-val">1.00</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="strip-audio">Strip Audio Entirely <span class="tt" data-tip="Add -an flag to remove all audio from the output.">?</span></label>
+            <input type="checkbox" id="strip-audio" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 13: Noise & Grain =========== -->
+      <details class="section" id="section-13">
+        <summary>
+          <span class="section-num">13</span>
+          <span class="section-title">Noise &amp; Grain</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-13" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="add-noise">Add Noise <span class="tt" data-tip="Enable the noise filter.">?</span></label>
+            <input type="checkbox" id="add-noise" />
+          </div>
+          <div class="control-row">
+            <label for="noise-strength">Noise Strength <span class="tt" data-tip="Magnitude of noise added (alls= parameter).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="noise-strength" class="ctrl slider" min="0" max="100" value="10" step="1" />
+              <span class="val-display" id="noise-strength-val">10</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="noise-type">Noise Type <span class="tt" data-tip="Distribution and pattern of the noise.">?</span></label>
+            <select id="noise-type" class="ctrl">
+              <option value="u">Uniform (spatial)</option>
+              <option value="g">Gaussian (spatial)</option>
+              <option value="t+u" selected>Temporal Uniform</option>
+              <option value="t+g">Temporal Gaussian</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="grain-overlay">Grain Overlay <span class="tt" data-tip="Shortcut for film-grain-style noise: noise=alls=15:allf=t+u.">?</span></label>
+            <input type="checkbox" id="grain-overlay" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 14: Frame Rate =========== -->
+      <details class="section" id="section-14">
+        <summary>
+          <span class="section-num">14</span>
+          <span class="section-title">Frame Rate</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-14" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="out-fps">Output FPS <span class="tt" data-tip="Frames per second of the output. Maps to -r or fps= filter.">?</span></label>
+            <input type="number" id="out-fps" class="ctrl small-input" value="30" min="1" max="240" step="0.01" />
+          </div>
+          <div class="control-row">
+            <label>Common FPS</label>
+            <div class="btn-group">
+              <button type="button" class="mini-btn preset-fps" data-fps="15">15</button>
+              <button type="button" class="mini-btn preset-fps" data-fps="24">24</button>
+              <button type="button" class="mini-btn preset-fps" data-fps="25">25</button>
+              <button type="button" class="mini-btn preset-fps" data-fps="29.97">29.97</button>
+              <button type="button" class="mini-btn preset-fps" data-fps="30">30</button>
+              <button type="button" class="mini-btn preset-fps" data-fps="60">60</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 15: Padding & Letterboxing =========== -->
+      <details class="section" id="section-15">
+        <summary>
+          <span class="section-num">15</span>
+          <span class="section-title">Padding &amp; Letterboxing</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-15" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="pad-w">Pad Width <span class="tt" data-tip="Total output width (including padding).">?</span></label>
+            <input type="number" id="pad-w" class="ctrl small-input" value="1280" min="2" step="2" />
+          </div>
+          <div class="control-row">
+            <label for="pad-h">Pad Height <span class="tt" data-tip="Total output height (including padding).">?</span></label>
+            <input type="number" id="pad-h" class="ctrl small-input" value="720" min="2" step="2" />
+          </div>
+          <div class="control-row">
+            <label for="pad-color">Pad Color <span class="tt" data-tip="Color of the padded area.">?</span></label>
+            <input type="color" id="pad-color" class="ctrl color-input" value="#000000" />
+          </div>
+          <div class="control-row">
+            <label for="pad-center">Center Video <span class="tt" data-tip="Auto-compute x/y to center the video inside the padded frame.">?</span></label>
+            <input type="checkbox" id="pad-center" />
+          </div>
+          <div class="control-row">
+            <label for="pad-x">X Offset <span class="tt" data-tip="Disabled when 'Center Video' is on.">?</span></label>
+            <input type="number" id="pad-x" class="ctrl small-input" value="0" step="1" />
+          </div>
+          <div class="control-row">
+            <label for="pad-y">Y Offset <span class="tt" data-tip="Disabled when 'Center Video' is on.">?</span></label>
+            <input type="number" id="pad-y" class="ctrl small-input" value="0" step="1" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 16: Edge Detection & Artistic Filters =========== -->
+      <details class="section" id="section-16">
+        <summary>
+          <span class="section-num">16</span>
+          <span class="section-title">Edge Detection &amp; Artistic Filters</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-16" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="edge-detect">Edge Detection <span class="tt" data-tip="Apply edgedetect filter.">?</span></label>
+            <input type="checkbox" id="edge-detect" />
+          </div>
+          <div class="control-row">
+            <label for="edge-mode">Edge Mode <span class="tt" data-tip="wires = edges on black bg, colormix = mixed with original, canny = multi-step.">?</span></label>
+            <select id="edge-mode" class="ctrl">
+              <option value="wires" selected>wires</option>
+              <option value="colormix">colormix</option>
+              <option value="canny">canny</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="edge-low">Low Threshold <span class="tt" data-tip="Canny low threshold.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="edge-low" class="ctrl slider" min="0" max="1" value="0.1" step="0.01" />
+              <span class="val-display" id="edge-low-val">0.10</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="edge-high">High Threshold <span class="tt" data-tip="Canny high threshold.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="edge-high" class="ctrl slider" min="0" max="1" value="0.3" step="0.01" />
+              <span class="val-display" id="edge-high-val">0.30</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="sobel">Sobel Edge <span class="tt" data-tip="Apply sobel operator (sobel filter).">?</span></label>
+            <input type="checkbox" id="sobel" />
+          </div>
+          <div class="control-row">
+            <label for="emboss">Emboss <span class="tt" data-tip="Emboss effect via convolution filter.">?</span></label>
+            <input type="checkbox" id="emboss" />
+          </div>
+          <div class="control-row">
+            <label for="vignette">Vignette <span class="tt" data-tip="Darken edges (vignette filter).">?</span></label>
+            <input type="checkbox" id="vignette" />
+          </div>
+          <div class="control-row">
+            <label for="vignette-angle">Vignette Angle <span class="tt" data-tip="Smaller angle = larger dark area.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="vignette-angle" class="ctrl slider" min="0.1" max="6.28" value="0.628" step="0.01" />
+              <span class="val-display" id="vignette-angle-val">0.63</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="posterize">Posterize <span class="tt" data-tip="Bit depth (1-8). Lower = more banding. Implemented as lutyuv with bitand.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="posterize" class="ctrl slider" min="1" max="8" value="8" step="1" />
+              <span class="val-display" id="posterize-val">8</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 17: GIF Creation =========== -->
+      <details class="section" id="section-17">
+        <summary>
+          <span class="section-num">17</span>
+          <span class="section-title">GIF Creation</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-17" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="gif-enable">Enable GIF Output <span class="tt" data-tip="Auto-switches output format to GIF and uses the two-pass palette method.">?</span></label>
+            <input type="checkbox" id="gif-enable" />
+          </div>
+          <div class="control-row">
+            <label for="gif-w">GIF Width <span class="tt" data-tip="Output width (height auto-calculated to maintain aspect ratio).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="gif-w" class="ctrl slider" min="160" max="800" value="480" step="10" />
+              <span class="val-display" id="gif-w-val">480</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="gif-fps">GIF FPS <span class="tt" data-tip="Frames per second of the GIF.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="gif-fps" class="ctrl slider" min="5" max="30" value="15" step="1" />
+              <span class="val-display" id="gif-fps-val">15</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="gif-palette">Color Palette Optimization <span class="tt" data-tip="Use the two-pass palettegen+paletteuse method. Strongly recommended for quality.">?</span></label>
+            <input type="checkbox" id="gif-palette" checked />
+          </div>
+          <div class="control-row">
+            <label for="gif-loop">Loop Count <span class="tt" data-tip="0 = infinite, -1 = no loop, N = loop N times.">?</span></label>
+            <input type="number" id="gif-loop" class="ctrl small-input" value="0" step="1" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 18: Audio Extraction =========== -->
+      <details class="section" id="section-18">
+        <summary>
+          <span class="section-num">18</span>
+          <span class="section-title">Audio Extraction</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-18" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="extract-audio">Extract Audio Only <span class="tt" data-tip="Adds -vn flag and limits output to audio formats.">?</span></label>
+            <input type="checkbox" id="extract-audio" />
+          </div>
+          <div class="control-row">
+            <label for="audio-format">Audio Format <span class="tt" data-tip="Output audio container. The output format in Section 1 will be overridden when this is set.">?</span></label>
+            <select id="audio-format" class="ctrl">
+              <option value="mp3" selected>MP3 (.mp3)</option>
+              <option value="wav">WAV (.wav)</option>
+              <option value="ogg">OGG (.ogg)</option>
+              <option value="aac">AAC (.aac)</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="audio-rate">Sample Rate <span class="tt" data-tip="Audio sample rate (Hz). Maps to -ar.">?</span></label>
+            <select id="audio-rate" class="ctrl">
+              <option value="22050">22050</option>
+              <option value="44100" selected>44100</option>
+              <option value="48000">48000</option>
+              <option value="96000">96000</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 19: Glitch & Datamosh =========== -->
+      <details class="section" id="section-19">
+        <summary>
+          <span class="section-num">19</span>
+          <span class="section-title">Glitch &amp; Datamosh</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-19" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="sub-section">
+            <h4>A) Frame Blending (tmix)</h4>
+            <div class="control-row">
+              <label for="g-tmix-enable">Enable <span class="tt" data-tip="Blend N consecutive frames into one (tmix filter).">?</span></label>
+              <input type="checkbox" id="g-tmix-enable" />
+            </div>
+            <div class="control-row">
+              <label for="g-tmix-frames">Frame Count <span class="tt" data-tip="How many frames to blend per output frame.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-tmix-frames" class="ctrl slider" min="2" max="30" value="5" step="1" />
+                <span class="val-display" id="g-tmix-frames-val">5</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <h4>B) Temporal Blend (tblend)</h4>
+            <div class="control-row">
+              <label for="g-tblend-enable">Enable <span class="tt" data-tip="Pixel-wise blend with previous frame (tblend filter).">?</span></label>
+              <input type="checkbox" id="g-tblend-enable" />
+            </div>
+            <div class="control-row">
+              <label for="g-tblend-mode">Blend Mode <span class="tt" data-tip="Compositing operator for tblend.">?</span></label>
+              <select id="g-tblend-mode" class="ctrl">
+                <option value="addition">addition</option>
+                <option value="multiply">multiply</option>
+                <option value="screen">screen</option>
+                <option value="darken">darken</option>
+                <option value="lighten">lighten</option>
+                <option value="difference">difference</option>
+                <option value="negation" selected>negation</option>
+                <option value="exclusion">exclusion</option>
+                <option value="phoenix">phoenix</option>
+                <option value="softlight">softlight</option>
+                <option value="hardlight">hardlight</option>
+                <option value="overlay">overlay</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <h4>C) Lag / Trail (lagfun)</h4>
+            <div class="control-row">
+              <label for="g-lagfun-enable">Enable <span class="tt" data-tip="Pixel decay trail (lagfun filter).">?</span></label>
+              <input type="checkbox" id="g-lagfun-enable" />
+            </div>
+            <div class="control-row">
+              <label for="g-lagfun-decay">Decay <span class="tt" data-tip="0.85 = short trail, 1.0 = no decay.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-lagfun-decay" class="ctrl slider" min="0.85" max="1" value="0.95" step="0.001" />
+                <span class="val-display" id="g-lagfun-decay-val">0.950</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <h4>D) Pixel Math (geq)</h4>
+            <div class="control-row">
+              <label for="g-geq-enable">Enable <span class="tt" data-tip="Generic equation filter for pixel-level glitches.">?</span></label>
+              <input type="checkbox" id="g-geq-enable" />
+            </div>
+            <div class="control-row">
+              <label for="g-geq-preset">Preset <span class="tt" data-tip="Choose a preset glitch equation. 'Custom' uses the text field below.">?</span></label>
+              <select id="g-geq-preset" class="ctrl">
+                <option value="hshift" selected>Horizontal Shift</option>
+                <option value="vshift">Vertical Tear</option>
+                <option value="chansplit">Channel Split</option>
+                <option value="scanline">Scanline Corrupt</option>
+                <option value="warp">Warp / Melt</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <label for="g-geq-custom">Custom Expression <span class="tt" data-tip="Raw geq expression used when preset is 'Custom'. Variables: I, X, Y, W, H, N. Functions: r,g,b,random.">?</span></label>
+              <input type="text" id="g-geq-custom" class="ctrl" value="lum(X,Y)" placeholder="e.g. lum(X+random(1)*20,Y)" />
+            </div>
+            <div class="control-row">
+              <label for="g-geq-intensity">Intensity <span class="tt" data-tip="Substituted into the preset expressions.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-geq-intensity" class="ctrl slider" min="1" max="200" value="20" step="1" />
+                <span class="val-display" id="g-geq-intensity-val">20</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-geq-freq">Frequency <span class="tt" data-tip="Used in warp expressions.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-geq-freq" class="ctrl slider" min="1" max="100" value="10" step="1" />
+                <span class="val-display" id="g-geq-freq-val">10</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-geq-amp">Amplitude <span class="tt" data-tip="Used in warp expressions.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-geq-amp" class="ctrl slider" min="1" max="100" value="10" step="1" />
+                <span class="val-display" id="g-geq-amp-val">10</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-geq-spacing">Spacing <span class="tt" data-tip="Pixel spacing for scanline effect.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-geq-spacing" class="ctrl slider" min="2" max="50" value="4" step="1" />
+                <span class="val-display" id="g-geq-spacing-val">4</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-geq-offset">Channel Offset <span class="tt" data-tip="Channel-split offset (channel split glitch).">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-geq-offset" class="ctrl slider" min="1" max="50" value="10" step="1" />
+                <span class="val-display" id="g-geq-offset-val">10</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <h4>E) Color Corruption <span class="tt" data-tip="Animated per-frame color corruption. The legacy static LUT version is preserved as an opt-in.">🐌</span></h4>
+            <div class="control-row">
+              <label for="g-cc-enable">Enable <span class="tt" data-tip="Apply color corruption to the frame. See Mode below for the honest description of behavior.">?</span></label>
+              <input type="checkbox" id="g-cc-enable" />
+            </div>
+            <div class="control-row">
+              <label for="g-cc-mode">Mode <span class="tt" data-tip="Temporal: fast, actually animates per frame (preferred). Static: a frozen randomized LUT, labeled honestly. Animated: slow per-pixel geq, will warn on long clips.">?</span></label>
+              <select id="g-cc-mode" class="ctrl">
+                <option value="temporal" selected>Temporal Noise (animated, fast)</option>
+                <option value="animated">Animated Corruption (slow, per-frame geq)</option>
+                <option value="static">Color Corrupt (Static — honest)</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <label for="g-cc-low">Low Threshold <span class="tt" data-tip="Low end of the color band that gets corrupted.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-cc-low" class="ctrl slider" min="0" max="128" value="50" step="1" />
+                <span class="val-display" id="g-cc-low-val">50</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-cc-high">High Threshold <span class="tt" data-tip="High end of the color band that gets corrupted.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-cc-high" class="ctrl slider" min="128" max="255" value="200" step="1" />
+                <span class="val-display" id="g-cc-high-val">200</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-cc-spread">Spread <span class="tt" data-tip="How much each corrupted value can vary (or noise amplitude in Temporal mode).">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-cc-spread" class="ctrl slider" min="1" max="100" value="30" step="1" />
+                <span class="val-display" id="g-cc-spread-val">30</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <h4>F) Frame Amplify</h4>
+            <div class="control-row">
+              <label for="g-amp-enable">Enable <span class="tt" data-tip="Amplify inter-frame differences (amplify filter).">?</span></label>
+              <input type="checkbox" id="g-amp-enable" />
+            </div>
+            <div class="control-row">
+              <label for="g-amp-radius">Radius <span class="tt" data-tip="Frame radius for amplification.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-amp-radius" class="ctrl slider" min="1" max="10" value="1" step="1" />
+                <span class="val-display" id="g-amp-radius-val">1</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-amp-factor">Factor <span class="tt" data-tip="Amplification factor.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-amp-factor" class="ctrl slider" min="1" max="20" value="2" step="1" />
+                <span class="val-display" id="g-amp-factor-val">2</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-amp-threshold">Threshold <span class="tt" data-tip="Lower threshold (pixels with diff below this aren't amplified).">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-amp-threshold" class="ctrl slider" min="0" max="255" value="10" step="1" />
+                <span class="val-display" id="g-amp-threshold-val">10</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <h4>G) Deflicker</h4>
+            <div class="control-row">
+              <label for="g-deflicker-enable">Enable <span class="tt" data-tip="Smooth out flicker across frames (deflicker filter).">?</span></label>
+              <input type="checkbox" id="g-deflicker-enable" />
+            </div>
+            <div class="control-row">
+              <label for="g-deflicker-size">Size <span class="tt" data-tip="Sample window size.">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-deflicker-size" class="ctrl slider" min="2" max="60" value="5" step="1" />
+                <span class="val-display" id="g-deflicker-size-val">5</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <h4>H) Chromatic Aberration / Chroma Shift</h4>
+            <div class="control-row">
+              <label for="g-chroma-enable">Enable <span class="tt" data-tip="Split the R and B channels by a small offset (rgbashift filter). Falls back to geq channel-split if rgbashift is missing.">?</span></label>
+              <input type="checkbox" id="g-chroma-enable" />
+            </div>
+            <div class="control-row">
+              <label for="g-chroma-rh">Red H <span class="tt" data-tip="Red channel horizontal shift (-20..20 px).">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-chroma-rh" class="ctrl slider" min="-20" max="20" value="0" step="1" />
+                <span class="val-display" id="g-chroma-rh-val">0</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-chroma-rv">Red V <span class="tt" data-tip="Red channel vertical shift (-20..20 px).">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-chroma-rv" class="ctrl slider" min="-20" max="20" value="0" step="1" />
+                <span class="val-display" id="g-chroma-rv-val">0</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-chroma-bh">Blue H <span class="tt" data-tip="Blue channel horizontal shift (-20..20 px).">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-chroma-bh" class="ctrl slider" min="-20" max="20" value="0" step="1" />
+                <span class="val-display" id="g-chroma-bh-val">0</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="g-chroma-bv">Blue V <span class="tt" data-tip="Blue channel vertical shift (-20..20 px).">?</span></label>
+              <div class="slider-row">
+                <input type="range" id="g-chroma-bv" class="ctrl slider" min="-20" max="20" value="0" step="1" />
+                <span class="val-display" id="g-chroma-bv-val">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 20: Chroma Key (Green Screen) =========== -->
+      <details class="section" id="section-20">
+        <summary>
+          <span class="section-num">20</span>
+          <span class="section-title">Chroma Key (Green Screen)</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-20" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="chroma-enable">Enable <span class="tt" data-tip="Make the chosen key color transparent. Without a second input, the keyed area shows as black unless your output container supports alpha (e.g. WebM/VP9).">?</span></label>
+            <input type="checkbox" id="chroma-enable" />
+          </div>
+          <div class="control-row">
+            <label for="chroma-color">Key Color <span class="tt" data-tip="Color to remove (HTML hex).">?</span></label>
+            <input type="color" id="chroma-color" class="ctrl color-input" value="#00ff00" />
+          </div>
+          <div class="control-row">
+            <label for="chroma-similarity">Similarity <span class="tt" data-tip="Higher = more aggressive removal. 0.3 is a good start.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="chroma-similarity" class="ctrl slider" min="0.01" max="1" value="0.3" step="0.01" />
+              <span class="val-display" id="chroma-similarity-val">0.30</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="chroma-blend">Blend <span class="tt" data-tip="Edge softness 0-1. Higher = softer transition.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="chroma-blend" class="ctrl slider" min="0" max="1" value="0.1" step="0.01" />
+              <span class="val-display" id="chroma-blend-val">0.10</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 21: Compression & Bitrate =========== -->
+      <details class="section" id="section-21">
+        <summary>
+          <span class="section-num">21</span>
+          <span class="section-title">Compression &amp; Bitrate</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-21" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="vbitrate">Video Bitrate <span class="tt" data-tip="Target video bitrate.">?</span></label>
+            <div class="slider-row">
+              <input type="number" id="vbitrate" class="ctrl small-input" value="2000" min="1" step="100" />
+              <select id="vbitrate-unit" class="ctrl small-input">
+                <option value="k" selected>kbps</option>
+                <option value="M">Mbps</option>
+              </select>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="two-pass">Two-Pass Encoding <span class="tt" data-tip="Run two ffmpeg passes for better quality-to-size. Output filename gets '-passN' suffix.">?</span></label>
+            <input type="checkbox" id="two-pass" />
+          </div>
+          <div class="control-row">
+            <label for="maxrate">Max Bitrate <span class="tt" data-tip="Maximum bitrate (used with -bufsize).">?</span></label>
+            <input type="number" id="maxrate" class="ctrl small-input" value="4000" min="1" step="100" />
+          </div>
+          <div class="control-row">
+            <label for="bufsize">Buffer Size <span class="tt" data-tip="Decoder buffer size (used with -bufsize).">?</span></label>
+            <input type="number" id="bufsize" class="ctrl small-input" value="8000" min="1" step="100" />
+          </div>
+          <div class="control-row">
+            <label for="gopsize">GOP Size <span class="tt" data-tip="Keyframe interval (-g). 250 is a good default.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="gopsize" class="ctrl slider" min="1" max="300" value="250" step="1" />
+              <span class="val-display" id="gopsize-val">250</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 22: Metadata & Tagging =========== -->
+      <details class="section" id="section-22">
+        <summary>
+          <span class="section-num">22</span>
+          <span class="section-title">Metadata &amp; Tagging</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-22" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="strip-meta">Strip All Metadata <span class="tt" data-tip="Add -map_metadata -1 to drop all metadata.">?</span></label>
+            <input type="checkbox" id="strip-meta" />
+          </div>
+          <div class="control-row">
+            <label for="meta-title">Title <span class="tt" data-tip="Maps to -metadata title.">?</span></label>
+            <input type="text" id="meta-title" class="ctrl" value="" />
+          </div>
+          <div class="control-row">
+            <label for="meta-artist">Artist/Author <span class="tt" data-tip="Maps to -metadata artist.">?</span></label>
+            <input type="text" id="meta-artist" class="ctrl" value="" />
+          </div>
+          <div class="control-row">
+            <label for="meta-comment">Comment <span class="tt" data-tip="Maps to -metadata comment.">?</span></label>
+            <input type="text" id="meta-comment" class="ctrl" value="" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 23: Merge / Concatenate =========== -->
+      <details class="section" id="section-23">
+        <summary>
+          <span class="section-num">23</span>
+          <span class="section-title">Merge / Concatenate</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-23" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="merge-mode">Merge Mode <span class="tt" data-tip="Concat = sequential, Side-by-Side = hstack, Picture-in-Picture = overlay.">?</span></label>
+            <select id="merge-mode" class="ctrl">
+              <option value="concat" selected>Concatenate (sequential)</option>
+              <option value="hstack">Side-by-Side</option>
+              <option value="pip">Picture-in-Picture</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="merge-additional">Additional files (2–5) <span class="tt" data-tip="Add up to 5 extra media files. Drag to reorder.">?</span></label>
+            <p class="hint">Select 2+ files in the <strong>Media Bin</strong> — the composite toolbar appears there. (The old separate file picker is gone: two file systems in one app was a bug factory.)</p>
+          </div>
+          <div class="merge-list" id="merge-list" aria-live="polite">
+            <em class="muted">No extra files added.</em>
+          </div>
+          <div class="control-row">
+            <label for="merge-pip-x">PiP X position <span class="tt" data-tip="Used when mode is Picture-in-Picture.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="merge-pip-x" class="ctrl slider" min="0" max="1920" value="32" step="2" />
+              <span class="val-display" id="merge-pip-x-val">32</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="merge-pip-y">PiP Y position <span class="tt" data-tip="Used when mode is Picture-in-Picture.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="merge-pip-y" class="ctrl slider" min="0" max="1080" value="32" step="2" />
+              <span class="val-display" id="merge-pip-y-val">32</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 24: Stabilize =========== -->
+      <details class="section" id="section-24">
+        <summary>
+          <span class="section-num">24</span>
+          <span class="section-title">Stabilize</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-24" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="stab-shakiness">Shakiness <span class="tt" data-tip="How aggressively to compensate (1=light, 10=heavy). Maps to deshake=rx=RX:ry=RY where RX=RY=shakiness*8.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="stab-shakiness" class="ctrl slider" min="1" max="10" value="5" step="1" />
+              <span class="val-display" id="stab-shakiness-val">5</span>
+            </div>
+          </div>
+          <p class="muted small">If this build of FFmpeg does not include the deshake filter, the app will surface a friendly error and continue.</p>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 25: Deinterlace =========== -->
+      <details class="section" id="section-25">
+        <summary>
+          <span class="section-num">25</span>
+          <span class="section-title">Deinterlace</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-25" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="deint-mode">Mode <span class="tt" data-tip="yadif deinterlacing mode. yadif=1 doubles the output frame rate.">?</span></label>
+            <select id="deint-mode" class="ctrl">
+              <option value="0" selected>yadif (single-rate)</option>
+              <option value="1">yadif=1 (double-rate)</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 26: Pitch & Time (Audio) =========== -->
+      <details class="section" id="section-26">
+        <summary>
+          <span class="section-num">26</span>
+          <span class="section-title">Pitch &amp; Time (Audio)</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-26" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <h4 class="subgroup">Pitch</h4>
+          <div class="control-row">
+            <label for="pitch-semitones">Pitch Shift (semitones) <span class="tt" data-tip="Shift pitch without changing tempo: asetrate=SR*2^(N/12),aresample=SR,atempo=1/2^(N/12)">?</span></label>
+            <input type="range" id="pitch-semitones" min="-12" max="12" step="1" value="0" />
+            <span class="value-display" id="pitch-semitones-val">0</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            <button type="button" class="mini-btn pitch-preset" data-pitch="12">+12</button>
+            <button type="button" class="mini-btn pitch-preset" data-pitch="7">+7 (Chipmunk)</button>
+            <button type="button" class="mini-btn pitch-preset" data-pitch="-7">-7 (Deep)</button>
+            <button type="button" class="mini-btn pitch-preset" data-pitch="-12">-12</button>
+          </div>
+          <h4 class="subgroup">Tempo</h4>
+          <div class="control-row">
+            <label for="tempo-only">Tempo (no pitch) <span class="tt" data-tip="Speed up or slow down audio without pitch change. Uses atempo.">?</span></label>
+            <input type="range" id="tempo-only" min="0.5" max="2.0" step="0.05" value="1.0" />
+            <span class="value-display" id="tempo-only-val">1.00×</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 27: Channel Tools (Audio) =========== -->
+      <details class="section" id="section-27">
+        <summary>
+          <span class="section-num">27</span>
+          <span class="section-title">Channel Tools (Audio)</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-27" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label>Mode <span class="tt" data-tip="Audio channel routing operations.">?</span></label>
+            <select id="channel-mode" class="ctrl">
+              <option value="none" selected>— none —</option>
+              <option value="stereo2mono">Stereo → Mono</option>
+              <option value="mono2stereo">Mono → Stereo</option>
+              <option value="swap">Swap L / R</option>
+              <option value="left">Left Only</option>
+              <option value="right">Right Only</option>
+              <option value="karaoke">Karaoke / Vocal Remove</option>
+              <option value="8d">8D (Auto-Pan)</option>
+            </select>
+          </div>
+          <div class="control-row" id="row-8d-rate" hidden>
+            <label for="apulsator-hz">8D Rate (Hz) <span class="tt" data-tip="apulsator rate: cycles per second.">?</span></label>
+            <input type="range" id="apulsator-hz" min="0.01" max="1.0" step="0.01" value="0.08" />
+            <span class="value-display" id="apulsator-hz-val">0.08</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 28: Audio Dynamics =========== -->
+      <details class="section" id="section-28">
+        <summary>
+          <span class="section-num">28</span>
+          <span class="section-title">Audio Dynamics</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-28" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <h4 class="subgroup">Noise Gate</h4>
+          <div class="control-row">
+            <label for="gate-enable">Enable</label>
+            <input type="checkbox" id="gate-enable" />
+          </div>
+          <div class="control-row">
+            <label for="gate-thresh">Threshold (dB) <span class="tt" data-tip="Signals below this are attenuated. Range -60 to 0 dB.">?</span></label>
+            <input type="range" id="gate-thresh" min="-60" max="0" step="1" value="-40" />
+            <span class="value-display" id="gate-thresh-val">-40 dB</span>
+          </div>
+          <h4 class="subgroup">Compressor</h4>
+          <div class="control-row">
+            <label for="comp-enable">Enable</label>
+            <input type="checkbox" id="comp-enable" />
+          </div>
+          <div class="control-row">
+            <label for="comp-thresh">Threshold (dB)</label>
+            <input type="range" id="comp-thresh" min="-40" max="0" step="1" value="-20" />
+            <span class="value-display" id="comp-thresh-val">-20 dB</span>
+          </div>
+          <div class="control-row">
+            <label for="comp-ratio">Ratio</label>
+            <input type="range" id="comp-ratio" min="1" max="20" step="0.5" value="4" />
+            <span class="value-display" id="comp-ratio-val">4.0</span>
+          </div>
+          <div class="control-row">
+            <label for="comp-attack">Attack (ms)</label>
+            <input type="range" id="comp-attack" min="1" max="200" step="1" value="20" />
+            <span class="value-display" id="comp-attack-val">20 ms</span>
+          </div>
+          <div class="control-row">
+            <label for="comp-release">Release (ms)</label>
+            <input type="range" id="comp-release" min="10" max="1000" step="10" value="250" />
+            <span class="value-display" id="comp-release-val">250 ms</span>
+          </div>
+          <h4 class="subgroup">Limiter</h4>
+          <div class="control-row">
+            <label for="limit-enable">Enable</label>
+            <input type="checkbox" id="limit-enable" />
+          </div>
+          <div class="control-row">
+            <label for="limit-ceiling">Ceiling</label>
+            <input type="range" id="limit-ceiling" min="0.1" max="1.0" step="0.01" value="0.95" />
+            <span class="value-display" id="limit-ceiling-val">0.95</span>
+          </div>
+          <h4 class="subgroup">De-esser</h4>
+          <div class="control-row">
+            <label for="deess-enable">Enable</label>
+            <input type="checkbox" id="deess-enable" />
+          </div>
+          <div class="control-row">
+            <label for="deess-freq">Frequency (Hz)</label>
+            <input type="range" id="deess-freq" min="2000" max="10000" step="100" value="6000" />
+            <span class="value-display" id="deess-freq-val">6000 Hz</span>
+          </div>
+          <div class="control-row">
+            <label for="deess-reduce">Reduction (dB)</label>
+            <input type="range" id="deess-reduce" min="0" max="10" step="0.5" value="6" />
+            <span class="value-display" id="deess-reduce-val">6.0 dB</span>
+          </div>
+          <h4 class="subgroup">Expander</h4>
+          <div class="control-row">
+            <label for="exp-enable">Enable <span class="tt" data-tip="Expands dynamic range downward (boosts quiet parts vs the threshold).">?</span></label>
+            <input type="checkbox" id="exp-enable" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 29: Audio Visualization (Audio → Video) =========== -->
+      <details class="section" id="section-29">
+        <summary>
+          <span class="section-num">29</span>
+          <span class="section-title">Audio Visualization (Audio → Video)</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-29" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <p class="muted small">Turns an audio file into a music video. Headline feature.</p>
+          <div class="control-row">
+            <label for="viz-type">Type</label>
+            <select id="viz-type" class="ctrl">
+              <option value="showwaves" selected>Waveform (showwaves)</option>
+              <option value="showspectrum">Spectrum (showspectrum)</option>
+              <option value="showfreqs">Frequency Bars (showfreqs)</option>
+              <option value="showvolume">Volume Meter (showvolume)</option>
+              <option value="showcqt">CQT Spectrum (showcqt)</option>
+            </select>
+          </div>
+          <div class="control-row" id="row-viz-mode">
+            <label for="viz-mode">Waveform Mode</label>
+            <select id="viz-mode" class="ctrl">
+              <option value="line" selected>line</option>
+              <option value="point">point</option>
+              <option value="p2p">p2p (peak-to-peak)</option>
+              <option value="cline">cline (centered line)</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="viz-w">Width</label>
+            <input type="range" id="viz-w" min="320" max="1920" step="20" value="1280" />
+            <span class="value-display" id="viz-w-val">1280</span>
+          </div>
+          <div class="control-row">
+            <label for="viz-h">Height</label>
+            <input type="range" id="viz-h" min="180" max="1080" step="20" value="720" />
+            <span class="value-display" id="viz-h-val">720</span>
+          </div>
+          <div class="control-row">
+            <label for="viz-color">Color</label>
+            <input type="color" id="viz-color" value="#00d4ff" />
+          </div>
+          <div class="control-row" id="row-viz-colormap" hidden>
+            <label for="viz-colormap">Spectrum Colormap</label>
+            <select id="viz-colormap" class="ctrl">
+              <option value="intensity" selected>intensity</option>
+              <option value="rainbow">rainbow</option>
+              <option value="moreland">moreland</option>
+              <option value="nebulae">nebulae</option>
+              <option value="fire">fire</option>
+              <option value="fiery">fiery</option>
+              <option value="fruit">fruit</option>
+              <option value="cool">cool</option>
+              <option value="magma">magma</option>
+              <option value="green">green</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="viz-fps">FPS</label>
+            <select id="viz-fps" class="ctrl">
+              <option value="15">15</option>
+              <option value="24">24</option>
+              <option value="30" selected>30</option>
+              <option value="60">60</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="viz-bg-select">Background Image (optional) <span class="tt" data-tip="Optional 2nd file from the media bin. Creates an audiogram.">?</span></label>
+            <select id="viz-bg-select" class="ctrl">
+              <option value="">— none —</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 30: Zoom & Motion =========== -->
+      <details class="section" id="section-30">
+        <summary>
+          <span class="section-num">30</span>
+          <span class="section-title">Zoom &amp; Motion</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-30" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <h4 class="subgroup">Ken Burns (zoom + pan)</h4>
+          <div class="control-row">
+            <label for="kb-enable">Enable</label>
+            <input type="checkbox" id="kb-enable" />
+          </div>
+          <div class="control-row">
+            <label for="kb-zstart">Zoom Start (×)</label>
+            <input type="range" id="kb-zstart" min="1.0" max="3.0" step="0.05" value="1.0" />
+            <span class="value-display" id="kb-zstart-val">1.00×</span>
+          </div>
+          <div class="control-row">
+            <label for="kb-zend">Zoom End (×)</label>
+            <input type="range" id="kb-zend" min="1.0" max="3.0" step="0.05" value="1.3" />
+            <span class="value-display" id="kb-zend-val">1.30×</span>
+          </div>
+          <div class="control-row">
+            <label for="kb-dir">Pan Direction</label>
+            <select id="kb-dir" class="ctrl">
+              <option value="center" selected>center</option>
+              <option value="top-left">top-left</option>
+              <option value="top-right">top-right</option>
+              <option value="bottom-left">bottom-left</option>
+              <option value="bottom-right">bottom-right</option>
+            </select>
+          </div>
+          <h4 class="subgroup">Camera Shake</h4>
+          <div class="control-row">
+            <label for="shake-enable">Enable</label>
+            <input type="checkbox" id="shake-enable" />
+          </div>
+          <div class="control-row">
+            <label for="shake-intensity">Intensity</label>
+            <input type="range" id="shake-intensity" min="1" max="30" step="1" value="8" />
+            <span class="value-display" id="shake-intensity-val">8</span>
+          </div>
+          <div class="control-row">
+            <label for="shake-speed">Speed</label>
+            <input type="range" id="shake-speed" min="1" max="20" step="1" value="6" />
+            <span class="value-display" id="shake-speed-val">6</span>
+          </div>
+          <h4 class="subgroup">Rotation Spin</h4>
+          <div class="control-row">
+            <label for="spin-enable">Enable</label>
+            <input type="checkbox" id="spin-enable" />
+          </div>
+          <div class="control-row">
+            <label for="spin-speed">Speed (rad/s)</label>
+            <input type="range" id="spin-speed" min="0.1" max="3.0" step="0.1" value="1.0" />
+            <span class="value-display" id="spin-speed-val">1.0</span>
+          </div>
+          <h4 class="subgroup">Freeze Frame</h4>
+          <div class="control-row">
+            <label for="freeze-enable">Enable</label>
+            <input type="checkbox" id="freeze-enable" />
+          </div>
+          <div class="control-row">
+            <label for="freeze-time">Timestamp (s)</label>
+            <input type="number" id="freeze-time" min="0" step="0.1" value="1.0" />
+          </div>
+          <div class="control-row">
+            <label for="freeze-hold">Hold Duration (s)</label>
+            <input type="number" id="freeze-hold" min="0.1" step="0.1" value="2.0" />
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 31: Retro / CRT =========== -->
+      <details class="section" id="section-31">
+        <summary>
+          <span class="section-num">31</span>
+          <span class="section-title">Retro / CRT</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-31" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="crt-enable">CRT Curvature <span class="tt" data-tip="Barrel distortion via lenscorrection k1=0.15, k2=0.15.">?</span></label>
+            <input type="checkbox" id="crt-enable" />
+          </div>
+          <div class="control-row">
+            <label for="scan-enable">Scanlines <span class="tt" data-tip="geq with luminance modulation.">?</span></label>
+            <input type="checkbox" id="scan-enable" />
+          </div>
+          <div class="control-row">
+            <label for="scan-spacing">Spacing</label>
+            <input type="range" id="scan-spacing" min="2" max="10" step="1" value="3" />
+            <span class="value-display" id="scan-spacing-val">3</span>
+          </div>
+          <div class="control-row">
+            <label for="scan-opacity">Opacity</label>
+            <input type="range" id="scan-opacity" min="0" max="1" step="0.05" value="0.5" />
+            <span class="value-display" id="scan-opacity-val">0.50</span>
+          </div>
+          <div class="control-row">
+            <label for="interlace-enable">Interlace Artifact <span class="tt" data-tip="interlace then yadif=0 (comb artifacts).">?</span></label>
+            <input type="checkbox" id="interlace-enable" />
+          </div>
+          <div class="control-row">
+            <label for="chromableed-enable">Chroma Bleed</label>
+            <input type="checkbox" id="chromableed-enable" />
+          </div>
+          <div class="control-row">
+            <label for="chromableed-h">Horizontal</label>
+            <input type="range" id="chromableed-h" min="0" max="10" step="1" value="3" />
+            <span class="value-display" id="chromableed-h-val">3</span>
+          </div>
+          <div class="control-row">
+            <label for="chromableed-v">Vertical</label>
+            <input type="range" id="chromableed-v" min="0" max="10" step="1" value="0" />
+            <span class="value-display" id="chromableed-v-val">0</span>
+          </div>
+          <div class="control-row">
+            <label for="tracking-enable">Tracking Error</label>
+            <input type="checkbox" id="tracking-enable" />
+          </div>
+          <div class="control-row">
+            <label for="tracking-severity">Severity</label>
+            <input type="range" id="tracking-severity" min="1" max="50" step="1" value="10" />
+            <span class="value-display" id="tracking-severity-val">10</span>
+          </div>
+          <div class="control-row">
+            <label for="dropout-enable">Signal Dropout <span class="tt" data-tip="geq with random black frames.">?</span></label>
+            <input type="checkbox" id="dropout-enable" />
+          </div>
+          <div class="control-row">
+            <label for="dropout-freq">Frequency</label>
+            <input type="range" id="dropout-freq" min="0.001" max="0.1" step="0.005" value="0.02" />
+            <span class="value-display" id="dropout-freq-val">0.02</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- =========== SECTION 32: Frames & Stills =========== -->
+      <details class="section" id="section-32">
+        <summary>
+          <span class="section-num">32</span>
+          <span class="section-title">Frames &amp; Stills</span>
+          <label class="section-toggle" title="Enable this section">
+            <input type="checkbox" class="section-enable" id="enable-32" />
+            <span class="toggle-slider"></span>
+          </label>
+        </summary>
+        <div class="section-body">
+          <h4 class="subgroup">Extract Single Frame</h4>
+          <div class="control-row">
+            <label for="extract-frame-time">Timestamp (s)</label>
+            <input type="number" id="extract-frame-time" min="0" step="0.1" value="1.0" />
+          </div>
+          <div class="control-row">
+            <label for="extract-frame-format">Format</label>
+            <select id="extract-frame-format" class="ctrl">
+              <option value="jpg" selected>JPG</option>
+              <option value="png">PNG</option>
+            </select>
+          </div>
+          <button type="button" class="primary-btn" id="btn-extract-frame" title="Extract a single frame at the given time">Extract Frame</button>
+          <h4 class="subgroup">Extract All Frames</h4>
+          <div class="control-row">
+            <label for="extract-all-fps">FPS</label>
+            <input type="number" id="extract-all-fps" min="1" max="60" step="1" value="2" />
+          </div>
+          <button type="button" class="primary-btn" id="btn-extract-all" title="Extract all frames as PNGs and bundle as a ZIP">Extract All Frames (ZIP)</button>
+          <h4 class="subgroup">Extract Keyframes Only</h4>
+          <button type="button" class="primary-btn" id="btn-extract-keyframes" title="Extract only I-frames">Extract Keyframes (ZIP)</button>
+          <h4 class="subgroup">Contact Sheet (rows × cols)</h4>
+          <div class="control-row">
+            <label for="cs-rows">Rows</label>
+            <input type="number" id="cs-rows" min="1" max="20" step="1" value="4" />
+          </div>
+          <div class="control-row">
+            <label for="cs-cols">Columns</label>
+            <input type="number" id="cs-cols" min="1" max="20" step="1" value="4" />
+          </div>
+          <button type="button" class="primary-btn" id="btn-contact-sheet" title="Build a contact sheet">Build Contact Sheet</button>
+          <h4 class="subgroup">Frames → Video</h4>
+          <div class="control-row">
+            <label for="f2v-fps">Framerate</label>
+            <input type="number" id="f2v-fps" min="1" max="60" step="1" value="24" />
+          </div>
+          <button type="button" class="primary-btn" id="btn-frames-to-video" title="Build a video from a numbered image sequence in the bin">Build Video from Frames</button>
+          <p class="muted small">Add image files to the Media Bin (e.g. from a previous Extract All Frames run) to assemble them into a video.</p>
+        </div>
+      </details>
+    </aside>
+
+    <!-- ============================================================ CENTER: Preview -->
+    <section class="preview-column" id="preview-column">
+      <!--
+        PHASE 0.3: the Editor-tab media bin has been DELETED. The single
+        source of truth is now the Global Media Bin Drawer up under the
+        tab bar (see #global-bin-drawer). All bin operations
+        (add/remove/select/reorder/multi-select composite) write to the
+        global drawer only, so there is one render target and one state
+        object. No more desync.
+      -->
+
+      <div class="preview-header">
+        <span id="preview-label">Source Preview</span>
+        <span class="preview-meta" id="preview-meta"></span>
+        <div class="preview-header-right">
+          <!-- v4 PART B1: WebGL live preview toggle -->
+          <label class="webgl-toggle" title="WebGL live preview approximates the enabled filters in real time. Temporal effects still render on export.">
+            <input type="checkbox" id="webgl-live-toggle" checked />
+            <span>⚡ Live</span>
+          </label>
+        </div>
+      </div>
+      <div class="preview-wrapper is-empty" id="preview-wrapper">
+          <canvas id="live-canvas" class="live-canvas" hidden></canvas>
+          <div id="live-badge" class="live-badge" hidden></div>
+        <video id="video-preview" controls preload="metadata" crossorigin="anonymous"></video>
+        <!-- v4 PART B1: WebGL canvas overlay -->
+        <canvas id="webgl-preview-canvas" class="webgl-preview-canvas" aria-hidden="true"></canvas>
+        <div class="webgl-watermark" id="webgl-watermark" hidden>~approximate</div>
+        <div class="webgl-temporal-badge" id="webgl-temporal-badge" hidden>⚡ Live preview (temporal effects render on export)</div>
+        <div class="drop-overlay" id="drop-overlay">
+          <div class="drop-inner">
+            <div class="drop-icon">⬇</div>
+            <div class="drop-text">Drop media here or click to upload</div>
+            <div class="drop-sub">MP4, WebM, MKV, MP3, WAV, OGG, AAC, FLAC, GIF</div>
+          </div>
+        </div>
+        <input type="file" id="file-input" accept="video/*,audio/*,image/*" multiple hidden />
+      </div>
+      <!-- v4 PART B2: Beat detection strip + timeline ticks -->
+      <div class="beat-strip" id="beat-strip" hidden>
+        <div class="beat-strip-head">
+          <span class="beat-strip-label">🥁 BPM <strong id="beat-bpm">—</strong></span>
+          <button id="beat-detect-btn" class="mini-btn" type="button" title="Detect beats via spectral-flux onset analysis">Detect beats</button>
+          <span class="beat-strip-status" id="beat-strip-status"></span>
+        </div>
+        <canvas id="beat-ticks-canvas" class="beat-ticks-canvas"></canvas>
+      </div>
+      <!-- v4 PART B2: Sync Effect to Beats panel -->
+      <details class="section section-beatsync" id="section-beatsync">
+        <summary>
+          <span class="section-num">✦</span>
+          <span class="section-title">Sync Effect to Beats</span>
+        </summary>
+        <div class="section-body">
+          <div class="control-row">
+            <label for="bs-effect">Effect <span class="tt" data-tip="Which filter the beat-synced hits will toggle on. enable= expression is generated automatically.">?</span></label>
+            <select id="bs-effect" class="ctrl">
+              <option value="hue">Hue rotate (hue)</option>
+              <option value="eq">EQ (brightness/contrast/saturation)</option>
+              <option value="negate">Invert (negate)</option>
+              <option value="rgbashift">RGB shift (rgbashift)</option>
+              <option value="chromashift">Chromashift (chromashift)</option>
+              <option value="vignette">Vignette</option>
+              <option value="zoom">Zoom punch (scale+zoompan)</option>
+              <option value="shake">Camera shake</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="bs-trigger">Trigger <span class="tt" data-tip="Which detected onsets fire the effect.">?</span></label>
+            <select id="bs-trigger" class="ctrl">
+              <option value="1">Every beat</option>
+              <option value="2">Every 2nd beat</option>
+              <option value="4">Every 4th beat</option>
+              <option value="drops">Only on drops (top-25% energy onsets)</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <label for="bs-duration">Hit duration (ms) <span class="tt" data-tip="How long each beat-synced hit holds (50–500ms).">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="bs-duration" class="ctrl slider" min="50" max="500" value="120" step="10" />
+              <span class="val-display" id="bs-duration-val">120ms</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="bs-strength">Effect strength <span class="tt" data-tip="Amount of effect applied per hit (0–1). Hue uses 0–180 degrees.">?</span></label>
+            <div class="slider-row">
+              <input type="range" id="bs-strength" class="ctrl slider" min="0" max="1" value="0.5" step="0.05" />
+              <span class="val-display" id="bs-strength-val">0.50</span>
+            </div>
+          </div>
+          <div class="control-row">
+            <button id="bs-apply" class="primary-btn" type="button" title="Generate the enable= expression and merge it into the matching Editor section">Apply to Editor</button>
+            <button id="bs-clear" class="secondary-btn" type="button" title="Remove the beat-sync expression from the matching section">Clear</button>
+          </div>
+          <div class="control-row">
+            <em class="muted" id="bs-status" style="font-size: 11px;">Detect beats first, then apply.</em>
+          </div>
+        </div>
+      </details>
+
+      <!-- Time-range selector (custom two-handle) -->
+      <div class="range-selector" id="range-selector">
+        <div class="range-track" id="range-track">
+          <div class="range-active" id="range-active"></div>
+          <div class="range-handle" id="range-start" tabindex="0" aria-label="Trim start handle"></div>
+          <div class="range-handle" id="range-end" tabindex="0" aria-label="Trim end handle"></div>
+        </div>
+        <div class="range-times">
+          <span id="range-start-time">00:00</span>
+          <span id="range-mid-time">—</span>
+          <span id="range-end-time">00:00</span>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button id="btn-execute" class="primary-btn" type="button" disabled>Execute (Ctrl+Enter)</button>
+        <button id="btn-play" class="secondary-btn" type="button" disabled>Play/Pause (Space)</button>
+        <button id="btn-cancel" class="danger-btn hidden" type="button">Cancel (Esc)</button>
+      </div>
+    </section>
+
+    <!-- ============================================================ RIGHT: Log + Output -->
+    <aside class="right-column" id="right-column">
+      <div class="panel">
+        <div class="panel-header">
+          <span>Generated Command</span>
+          <button id="btn-copy-cmd" class="mini-btn" type="button" title="Copy to clipboard">Copy</button>
+        </div>
+        <pre id="command-preview" class="command-preview">ffmpeg ...</pre>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span>Output Info</span>
+        </div>
+        <div class="output-info" id="output-info">
+          <em>No output yet</em>
+        </div>
+        <button id="btn-download" class="primary-btn full-width" type="button" disabled>Download Output</button>
+      </div>
+
+      <div class="panel log-panel">
+        <div class="panel-header">
+          <span>Log</span>
+          <button id="btn-clear-log" class="mini-btn" type="button">Clear</button>
+        </div>
+        <div id="log-console" class="log-console" aria-live="polite"></div>
+      </div>
+    </aside>
+  </div>
+    </div>
+
+    <!-- =====================================================================
+         TAB: PREVIEW — dedicated player with Source/Output/Compare modes.
+         ===================================================================== -->
+    <div class="tab-content" id="tab-audio" role="tabpanel"></div>
+      <div class="tab-content" id="tab-tripcam" role="tabpanel"></div>
+      <div class="tab-content" id="tab-graph" role="tabpanel">
+        <div id="nodegraph-panel"></div>
+      </div>
+      <div class="tab-content" id="tab-preview" data-tab="preview" style="display:none">
+      <div class="preview-modes" id="preview-modes" role="tablist">
+        <button class="mode-btn active" data-mode="source"  type="button">Source</button>
+        <button class="mode-btn"        data-mode="output"  type="button">Output</button>
+        <button class="mode-btn"        data-mode="compare" type="button">Compare</button>
+      </div>
+
+      <div class="preview-stage" id="preview-stage">
+        <!-- Source mode -->
+        <div class="preview-mode preview-source active" id="pmode-source">
+          <video id="pv-source" controls preload="metadata"></video>
+        </div>
+        <!-- Output mode -->
+        <div class="preview-mode preview-output" id="pmode-output">
+          <video id="pv-output" controls preload="metadata"></video>
+        </div>
+        <!-- Compare mode -->
+        <div class="preview-mode preview-compare" id="pmode-compare">
+          <div class="compare-grid">
+            <div class="compare-cell">
+              <video id="pv-compare-a" controls preload="metadata"></video>
+              <div class="compare-label">Source</div>
+            </div>
+            <div class="compare-cell">
+              <video id="pv-compare-b" controls preload="metadata"></video>
+              <div class="compare-label">Output</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="waveform-wrap" class="waveform-wrap"></div>
+        <div id="lufs-meter" class="lufs-meter"></div>
+        <div id="hw-panel" class="hw-panel"></div>
+        <div class="preview-info" id="preview-info">
+        <div class="file-info" id="pv-file-info"><span class="file-info-empty">No file loaded</span></div>
+        <div class="waveform-bar" id="pv-waveform" hidden>
+          <div class="waveform-fill"></div>
+        </div>
+      </div>
+
+      <div class="preview-actions">
+        <button id="pv-btn-download" class="primary-btn" type="button" disabled>Download Output</button>
+        <button id="pv-btn-refresh"  class="secondary-btn" type="button">Refresh from Editor</button>
+      </div>
+
+      <div class="output-history" id="output-history">
+        <h3>Output History (this session)</h3>
+        <div class="output-history-list" id="output-history-list">
+          <em class="muted">No previous outputs yet.</em>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         TAB: AGENTS — custom tool cards.
+         ===================================================================== -->
+    <div class="tab-content" id="tab-agents" data-tab="agents" style="display:none">
+      <div class="agents-grid" id="agents-grid">
+        <!-- Agent cards injected by agents.js -->
+      </div>
+      <div class="connected-agents">
+        <h3>Connected Agents</h3>
+        <p class="muted">Your connected agent tools will appear here.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- =========================================================================
+       Global Action Bar (v4 PART A1) — fixed on every tab.
+       Mobile: fixed bottom; Desktop: docked in the top bar, right-aligned.
+       ========================================================================= -->
+  <div id="action-bar" class="action-bar-global" role="region" aria-label="Global action bar">
+    <button id="global-add-media" class="ab-btn primary" type="button" title="Add media (any tab)">
+      <span class="ab-icon">＋</span><span class="ab-label">Add Media</span>
+    </button>
+    <button id="ab-active-file" class="ab-active-file" type="button" title="Tap to jump to media bin">
+      <span class="ab-active-name" id="ab-active-name">No file selected</span>
+      <span class="ab-active-dur" id="ab-active-dur"></span>
+    </button>
+    <button id="ab-undo" class="ab-btn ghost" type="button" title="Undo (Ctrl+Z)" disabled>↶</button>
+    <button id="ab-redo" class="ab-btn ghost" type="button" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
+    <button id="global-run" class="ab-btn run" type="button" disabled title="Run (Ctrl+Enter)">
+      <span class="ab-icon">▶</span><span class="ab-label">Run</span>
+    </button>
+    <button id="global-cancel" class="ab-btn danger hidden" type="button" title="Cancel (Esc)">Cancel</button>
+    <div class="ab-progress" aria-hidden="true"><div class="ab-progress-fill" id="ab-progress-fill"></div></div>
+  </div>
+
+  <!-- =========================================================================
+       Mobile bottom status bar (visible only at <768px).
+       Shows: engine state • active file name • last output filename.
+       Updates live as state changes.
+       ========================================================================= -->
+  <div class="mobile-status-bar" id="mobile-status-bar" aria-live="polite">
+    <span class="msb-engine"><span class="msb-dot" id="msb-dot" data-state="red"></span><span id="msb-engine-text">Engine: Not loaded</span></span>
+    <span class="msb-file" id="msb-file-text">No file</span>
+    <span class="msb-output" id="msb-output-text">No output</span>
+  </div>
+
+  <!-- =========================================================================
+       Bottom: full-width progress bar + status
+       ========================================================================= -->
+  <footer class="bottom-bar">
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+    <div class="progress-meta">
+      <span id="progress-text">Idle</span>
+    </div>
+  </footer>
+
+  <!-- =========================================================================
+       Modal: keyboard shortcuts
+       ========================================================================= -->
+  <div id="shortcuts-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="shortcuts-title">Keyboard Shortcuts</h2>
+        <button class="modal-close" id="shortcuts-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <table class="shortcuts-table">
+          <tr><td><kbd>Space</kbd></td><td>Play / pause the preview</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Execute processing</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Download current output</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Undo (control-state)</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td><td>Reset all controls to defaults</td></tr>
+          <tr><td><kbd>Escape</kbd></td><td>Cancel current processing</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       Modal: general-purpose info/error
+       ========================================================================= -->
+  <div id="info-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="info-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="info-title">Info</h2>
+        <button class="modal-close" id="info-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body" id="info-body"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="webgl-preview.js"></script>
+  <script src="beat-detection.js"></script>
+  <script src="pipeline.js"></script>
+  <script src="workflows.js"></script>
+  <script src="workflows_v3.js"></script>
+  <script src="workflows_v4.js"></script>
+    <script src="workflows_v5.js"></script>
+    <script src="agents.js"></script>
+    <script src="storage.js"></script>
+    <script src="waveform.js"></script>
+    <script src="analysis.js"></script>
+    <script src="tools.js"></script>
+    <script src="performance.js"></script>
+    <script src="shader-plus.js"></script>
+    <script src="tripcam.js"></script>
+    <script src="tripcam-ui.js"></script>
+    <script src="hwaccel.js"></script>
+    <script src="opfs.js"></script>
+    <script src="datamosh.js"></script>
+    <script src="nodegraph.js"></script>
+    <script src="audio-engine.js"></script>
+    <script src="audio-studio.js"></script>
+    <script src="motion-mosh.js"></script>
+    <script src="audio-intel.js"></script>
+    <script src="clips.js"></script>
+    <script src="vj-mode.js"></script>
+    <script src="navigation.js"></script>
+</body>
+</html>
