@@ -9,6 +9,7 @@
     "test:5x": "node .test/roundtrip.mjs downscale-480p 5",
     "test:workflows": "node .test/workflows.mjs",
     "test:compositor": "node .test/compositor.mjs",
+    "test:shortcuts": "node .test/shortcuts.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

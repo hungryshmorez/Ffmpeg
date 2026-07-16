@@ -86,9 +86,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   the real Layer Compositor, and **reads the composited pixels back** — asserting the blend math
   ran (`screen(red, green)` → yellow), plus solo, mute, opacity and crossfade. Pixels, not bytes:
   a dead compositor leaves the canvas black and every check fails.
+- **`.test/shortcuts.mjs`** dispatches real `KeyboardEvent`s and reads the UI back: `?` opens the
+  cheat sheet (and it lists every VJ key), `Escape` closes it, `[`/`]` cycle tabs, `Alt+6` jumps
+  to VJ — asserting on observed state, never on "the handler exists".
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
-`test:workflows`, and `test:compositor` in real headless Chromium on every push and pull request.
+`test:workflows`, `test:compositor`, and `test:shortcuts` in real headless Chromium on every push
+and pull request.
 
 ---
 
@@ -132,6 +136,7 @@ All three are fixed and verified by the tests above.
 │   ├── roundtrip.mjs       # the 5x round trip (frames, not bytes)
 │   ├── workflows.mjs       # golden multi-workflow matrix + both audio branches
 │   ├── compositor.mjs      # layer compositor: composited pixels read back (blend/solo/mute/xfade)
+│   ├── shortcuts.mjs       # keyboard shortcuts: cheat sheet + tab nav, asserted on UI state
 │   └── server.mjs          # minimal COOP/COEP static server
 ├── .github/workflows/
 │   └── test.yml            # runs the tests on every push

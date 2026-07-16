@@ -2390,15 +2390,29 @@
         <button class="modal-close" id="shortcuts-close" type="button" aria-label="Close">×</button>
       </div>
       <div class="modal-body">
+        <h3 class="shortcuts-h">Global</h3>
         <table class="shortcuts-table">
+          <tr><td><kbd>?</kbd></td><td>Open / close this cheat sheet</td></tr>
           <tr><td><kbd>Space</kbd></td><td>Play / pause the preview</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Execute processing</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Download current output</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Undo (control-state)</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Redo</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td><td>Reset all controls to defaults</td></tr>
-          <tr><td><kbd>Escape</kbd></td><td>Cancel current processing</td></tr>
+          <tr><td><kbd>Escape</kbd></td><td>Close a modal · cancel processing</td></tr>
         </table>
+
+        <h3 class="shortcuts-h">Navigation</h3>
+        <table class="shortcuts-table">
+          <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Previous / next tab</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>8</kbd></td>
+              <td>Jump to a tab — Workflows, Editor, Preview, Studio, Trip&nbsp;Cam, VJ, Graph, Agents</td></tr>
+        </table>
+
+        <h3 class="shortcuts-h">VJ performance <small>— while the VJ tab is open</small></h3>
+        <p class="shortcuts-note"><strong>Hold</strong> a key for a stab ·
+           <strong>Shift</strong>+key to latch it on · <strong>TAP</strong> four times to set the tempo</p>
+        <table class="shortcuts-table"><tbody id="shortcuts-vj-body"></tbody></table>
       </div>
     </div>
   </div>

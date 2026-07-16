@@ -5484,7 +5484,7 @@ function bindAll() {
 
   // --- Shortcuts modal
   const sm = $('#shortcuts-modal');
-  $('#btn-shortcuts').addEventListener('click', () => sm.classList.remove('hidden'));
+  $('#btn-shortcuts').addEventListener('click', () => openShortcuts());
   $('#shortcuts-close').addEventListener('click', () => sm.classList.add('hidden'));
   sm.addEventListener('click', (e) => { if (e.target === sm) sm.classList.add('hidden'); });
   // --- Info modal
@@ -5587,6 +5587,16 @@ function bindAll() {
       cancelProcessing();
       e.preventDefault();
       return;
+    }
+    // "?" (Shift+/) toggles the cheat sheet — the top-bar button promises it.
+    if (!inField && e.key === '?') {
+      const sm = $('#shortcuts-modal');
+      sm.classList.contains('hidden') ? openShortcuts() : sm.classList.add('hidden');
+      e.preventDefault(); return;
+    }
+    // "[" / "]" cycle to the previous / next visible tab.
+    if (!inField && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === '[' || e.key === ']')) {
+      cycleTab(e.key === ']' ? 1 : -1); e.preventDefault(); return;
     }
     if (e.code === 'Space' && !inField) {
       togglePlay(); e.preventDefault(); return;
@@ -5933,12 +5943,50 @@ function bindTabs() {
   $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
-  // Keyboard: Alt+1..4 to switch
+  // Keyboard: Alt+1..8 to jump to a tab. Covers every tab (the old map stopped
+  // at 4 and missed Studio / Trip Cam / VJ / Graph). Skips tabs the current mode
+  // has hidden.
   document.addEventListener('keydown', (e) => {
     if (!e.altKey) return;
-    const map = { '1': 'editor', '2': 'workflows', '3': 'preview', '4': 'agents' };
-    if (map[e.key]) { e.preventDefault(); switchTab(map[e.key]); }
+    const map = { '1': 'workflows', '2': 'editor', '3': 'preview', '4': 'audio',
+                  '5': 'tripcam', '6': 'vj', '7': 'graph', '8': 'agents' };
+    const id = map[e.key];
+    if (!id) return;
+    const btn = document.querySelector(`.tab-btn[data-tab="${id}"]`);
+    if (btn && !btn.hidden) { e.preventDefault(); switchTab(id); }
   });
+}
+
+// --- Keyboard-shortcut helpers (#96) -----------------------------------------
+// Cycle among the tabs actually visible in the current mode.
+function cycleTab(dir) {
+  const btns = $$('.tab-btn').filter((b) => !b.hidden);
+  if (!btns.length) return;
+  let i = btns.findIndex((b) => b.classList.contains('active'));
+  if (i < 0) i = 0;
+  const next = btns[(i + dir + btns.length) % btns.length];
+  if (next) switchTab(next.dataset.tab);
+}
+
+// Fill the VJ section of the cheat sheet from the live trigger table, so the
+// documented keys can never drift from what vj-mode actually binds.
+function populateVjShortcuts() {
+  const body = document.getElementById('shortcuts-vj-body');
+  if (!body) return;
+  const T = window.FFVJ && window.FFVJ.TRIGGERS;
+  if (!T) {
+    body.innerHTML = '<tr><td colspan="2" class="muted small">Open the VJ tab once to load the performance keys.</td></tr>';
+    return;
+  }
+  body.innerHTML = Object.values(T).map((t) => {
+    const key = t.key === ' ' ? 'Space' : t.key.toUpperCase();
+    return `<tr><td><kbd>${key}</kbd></td><td>${t.label}</td></tr>`;
+  }).join('');
+}
+
+function openShortcuts() {
+  populateVjShortcuts();
+  document.getElementById('shortcuts-modal')?.classList.remove('hidden');
 }
 
 // =============================================================================

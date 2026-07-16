@@ -877,6 +877,11 @@ input[type=color] { padding: 2px; height: 30px; width: 50px; cursor: pointer; }
 .shortcuts-table { width: 100%; border-collapse: collapse; }
 .shortcuts-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .shortcuts-table td:first-child { width: 140px; }
+.shortcuts-h { font-size: 11px; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--accent); margin: 16px 0 6px; }
+.shortcuts-h:first-child { margin-top: 0; }
+.shortcuts-h small { text-transform: none; letter-spacing: 0; color: var(--muted, #888); font-weight: 400; }
+.shortcuts-note { font-size: 12px; color: var(--muted, #888); margin: 0 0 8px; }
 kbd {
   display: inline-block;
   background: var(--panel-2);

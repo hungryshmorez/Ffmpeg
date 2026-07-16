@@ -305,7 +305,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 93 | Workflow thumbnails | Show what "Bleach Bypass" does. | ⬜ | Pre-rendered thumbnails per workflow. — *M* |
 | 94 | Hover-preview a workflow on the canvas | Preview before committing. | ⬜ | Live preview on hover. — *M* |
 | 95 | Preferences panel | Default codec/quality/autosave/theme. | ⬜ | Settings store + panel. — *S–M* |
-| 96 | Keyboard shortcuts for everything + cheat sheet | Discoverable. | 🟡 | Shortcuts modal exists; complete coverage + the cheat sheet. — *S* |
+| 96 | Keyboard shortcuts for everything + cheat sheet | Discoverable. | ✅ | `?` toggles the sheet; `[`/`]` cycle tabs; `Alt+1‑8` jump to any tab (was 1‑4); the cheat sheet is grouped (Global / Navigation / VJ) and the VJ keys are auto-generated from `FFVJ.TRIGGERS` so they can't drift. `.test/shortcuts.mjs` drives the keyboard and reads UI state back (6/6). |
 
 ### Architecture (97–100)
 
@@ -332,7 +332,8 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 5. 🟡 Wire the **global-intensity slider** + **hot cues** back into `vj-mode.js` (dropped in v10.4's reduced copy). — *S each.*
 6. 🟡 Gate expensive shaders via `FFPerf.Perf.isAllowed()` and apply `FFPerf.scale` to the **WebGL editor preview** too. — *S–M.*
 7. 🟡 Default the **motion-vector overlay** on during mosh setup (#57). — *S.*
-8. 🟡 Complete **keyboard-shortcut coverage + cheat sheet** (#96). — *S.*
+8. ✅ **Keyboard-shortcut coverage + cheat sheet** (#96) — `?` toggle, `[`/`]` tab cycle, `Alt+1‑8`
+   jumps, grouped auto-generated cheat sheet; verified by `.test/shortcuts.mjs`.
 
 ### Phase C — The layer compositor & live deck (the big VJ surface)
 9. ✅ **Compositor UI** built + verified (`compositor-ui.js`, `.test/compositor.mjs`): layer strips,

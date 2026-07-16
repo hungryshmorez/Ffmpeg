@@ -49,3 +49,8 @@ jobs:
       # pixels back — blend modes, solo/mute, opacity, crossfade. Frames, not bytes.
       - name: Layer compositor
         run: npm run test:compositor
+
+      # Keyboard shortcuts: drives the keyboard and reads back UI state — cheat
+      # sheet open/close, VJ-key coverage, tab cycling, Alt+n jump.
+      - name: Keyboard shortcuts
+        run: npm run test:shortcuts
