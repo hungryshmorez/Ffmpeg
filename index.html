@@ -2438,7 +2438,14 @@
     <script src="clips.js"></script>
     <script src="vj-mode.js"></script>
     <script src="navigation.js"></script>
+    <!-- v10.4: restore the adaptive-quality / global-intensity / layer-compositor
+         module dropped from v10.4 (it was in v10.2). Self-contained; exposes
+         window.FFPerf and drives the #perf-hud below. -->
+    <script src="performance.js"></script>
     <!-- version stamp is set by app.js; we expose #ff-version for the UI -->
     <div id="ff-version" class="ff-version" aria-label="Build version"></div>
+    <!-- Adaptive-quality HUD: performance.js fills this with live fps / tier /
+         mem. It was never in the markup before, so the monitor ran blind. -->
+    <div id="perf-hud" class="perf-hud" aria-label="Performance monitor" hidden></div>
 </body>
 </html>

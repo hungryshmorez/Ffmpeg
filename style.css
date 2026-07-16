@@ -2539,3 +2539,39 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 .speed-curve-presets { display: flex; gap: 4px; margin-top: 4px; }
 .speed-curve-presets button { flex: 1; padding: 3px 6px; font-size: 10px; background: #1a1a1a; color: #ccc; border: 1px solid #333; border-radius: 2px; cursor: pointer; }
 .speed-curve-presets button:hover { background: #00d4ff; color: #000; }
+
+/* =============================================================================
+   Adaptive-quality HUD (performance.js). Restored with the v10.2 module; the
+   markup + styling never existed before, so the monitor had nowhere to draw.
+   Shown only while a live GPU canvas (trip cam / VJ) is on screen.
+   ========================================================================== */
+.perf-hud {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 9000;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(10, 12, 18, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font: 600 12px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  color: #cfd6e4;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+.perf-hud[hidden] { display: none; }
+.perf-hud .perf-fps.good { color: #44ff88; }
+.perf-hud .perf-fps.ok   { color: #ffcc00; }
+.perf-hud .perf-fps.bad  { color: #ff5566; }
+.perf-hud .perf-tier { color: #8fa0bd; }
+.perf-hud .perf-mem  { color: #6f7d97; }
+.perf-hud .perf-auto {
+  color: #00d4ff;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+}
