@@ -1,0 +1,46 @@
+# The test that can't lie, on every push (item #100).
+#
+# Runs the frames-not-bytes round trip and the golden workflow matrix in a real
+# headless Chromium. Everything the app needs is in the repo (the ffmpeg.wasm
+# cores under vendor/, the in-process COOP/COEP server inside the tests), so
+# there is nothing to stand up — check out, install, run.
+name: test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # No lockfile in the repo, so install (not ci). Only dep is playwright.
+      - name: Install deps
+        run: npm install
+
+      # Fetch the Chromium build that matches the pinned playwright. The tests
+      # use process.env.PW_EXEC when set and otherwise fall back to playwright's
+      # own browser resolution — which this provides.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Cheap syntax + changelog gate first (fails fast on a broken file).
+      - name: Verify
+        run: npm run verify
+
+      # The round trip: a real file in, a real DECODED video out, 5/5.
+      - name: Round trip (5x)
+        run: npm test
+
+      # Golden matrix: each workflow's signature actually landed in the output,
+      # plus both audio branches (no-audio -> -an guard, with-audio -> mux).
+      - name: Workflow matrix
+        run: npm run test:workflows
