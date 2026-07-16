@@ -24,7 +24,7 @@ datamosh, master audio, and perform live visuals, all client-side.
 | **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, 16-step sequencer, tap tempo, adaptive-quality load-shedding. |
 | **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code. |
 
-The build metadata is generated, not claimed: **30 JS modules · 186 workflows · 762/762
+The build metadata is generated, not claimed: **31 JS modules · 186 workflows · 808/808
 balanced CSS braces · 27 node-graph types · 11 trip-cam effects.** See
 [`scripts/generate-changelog.js`](./scripts/generate-changelog.js) and
 [`build-info.js`](./build-info.js) (the single source of truth).
@@ -71,6 +71,7 @@ npx playwright install chromium
 npm run verify         # fast: syntax + changelog gate
 npm test               # the round trip, 5x — a real file in, a real DECODED video out
 npm run test:workflows # golden matrix: each workflow's signature landed + both audio branches
+npm run test:compositor # layer compositor: two decoded clips stacked, composited PIXELS read back
 ```
 
 - **`.test/roundtrip.mjs`** boots the real app in headless Chromium (with an in-process
@@ -81,9 +82,13 @@ npm run test:workflows # golden matrix: each workflow's signature landed + both 
   landed (right resolution, right frame count), plus **both audio branches** — a video-only
   input (the `-an` guard fires) and a video+audio input (the split render's video/audio/mux
   passes all succeed and preserve the track).
+- **`.test/compositor.mjs`** opens the VJ tab, feeds two solid-colour clips into two layers of
+  the real Layer Compositor, and **reads the composited pixels back** — asserting the blend math
+  ran (`screen(red, green)` → yellow), plus solo, mute, opacity and crossfade. Pixels, not bytes:
+  a dead compositor leaves the canvas black and every check fails.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
-and `test:workflows` in real headless Chromium on every push and pull request.
+`test:workflows`, and `test:compositor` in real headless Chromium on every push and pull request.
 
 ---
 
@@ -126,6 +131,7 @@ All three are fixed and verified by the tests above.
 ├── .test/
 │   ├── roundtrip.mjs       # the 5x round trip (frames, not bytes)
 │   ├── workflows.mjs       # golden multi-workflow matrix + both audio branches
+│   ├── compositor.mjs      # layer compositor: composited pixels read back (blend/solo/mute/xfade)
 │   └── server.mjs          # minimal COOP/COEP static server
 ├── .github/workflows/
 │   └── test.yml            # runs the tests on every push
@@ -145,8 +151,9 @@ All three are fixed and verified by the tests above.
 | `datamosh.js`, `motion-mosh.js` | datamosh + SAD motion estimation |
 | `audio-engine.js`, `audio-studio.js`, `audio-intel.js` | Web Audio rack, studio UI, key/BPM/loudness intelligence |
 | `beat-detection.js`, `waveform.js` | energy-variance beat detection, waveform rendering |
-| `vj-mode.js` | MIDI learn, sequencer, tap tempo, hot cues, layer compositor |
-| `performance.js` | adaptive quality (FPS-driven load-shedding), global intensity, layer compositor + 16 blend modes |
+| `vj-mode.js` | MIDI learn, sequencer, tap tempo, hot cues, triggers/pads |
+| `performance.js` | adaptive quality (FPS-driven load-shedding), global intensity, `Compositor` engine + 16 blend modes |
+| `compositor-ui.js` | the Layer Compositor deck (layer strips, blend/opacity/solo/mute, crossfader, hot cues) over `FFPerf.Compositor` |
 | `nodegraph.js` | node-graph editor (27 node types) |
 | `clips.js` | clip library, take numbers, sequence export, video queue |
 | `workflows*.js` | the 186 workflow definitions across 16 categories |

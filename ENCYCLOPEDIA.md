@@ -70,6 +70,7 @@ by grep or `node -c`.
 | **Before/after wipe** (#92) | ✅ | draggable divider in Preview |
 | **Speed curve editor** (#42) | ✅ | 4-keyframe editor with presets |
 | **Adaptive quality** (Trippy Effects) | ✅ | `performance.js` restored, `#perf-hud` visible, trip-cam sheds resolution via `FFPerf.scale` |
+| **Layer compositor UI** (#1.4 / #9) | ✅ | `compositor-ui.js` drives `FFPerf.Compositor`; `.test/compositor.mjs` reads composited pixels back — screen blend → yellow, solo/mute, opacity, crossfade all assert on decoded frames (6/6) |
 
 **The three bugs that were actually blocking #1** (all fixed): the `instrumentFfmpeg`
 ms→s timeout that became a 30 ms abort; the split-render audio pass failing on video-only
@@ -125,10 +126,14 @@ several are present as engines but not fully wired into the UI.
 - **Hot cues** — stored jump points, click to jump / shift-click to set. 🟡 the engine logic
   exists; v10.4's reduced `vj-mode.js` dropped the `.vj-cues` wiring + markup.
   **To do:** restore the cue buttons + handlers. — *S.*
-- **Layer compositor** — 4 layers, 16 blend modes, opacity, solo, mute, crossfade. 🟡
-  `FFPerf.Compositor` + `BLEND_MODES` (16) exist; no UI panel drives it in v10.4.
-  **To do:** a compositor panel (layer strips, blend dropdown, opacity, solo/mute, crossfader).
-  — *L.*
+- **Layer compositor** — 4 layers, 16 blend modes, opacity, solo, mute, crossfade. ✅
+  `compositor-ui.js` is the deck over `FFPerf.Compositor`: four layer strips (load / Media-Bin /
+  demo source), a 16-mode blend dropdown, opacity, solo/mute, per-layer hot cues, a crossfader
+  and a master. Lives in the VJ tab below the pads. It composites *decoded frames* on a 2D
+  canvas (`globalCompositeOperation`), which is why `.test/compositor.mjs` can verify the blend
+  math headless (screen(red,green)→yellow, solo/mute/opacity/crossfade — 6/6, pixels not bytes).
+  **Still to do (extensions):** per-layer effect chains (#73), N-layer beyond 4 (#72), crossfade
+  curve options (#74). — *those are M–L each.*
 - **Energy-variance beat detection.** ✅ (`beat-detection.js`).
 
 ### 1.5 Aesthetic Audio — musical intelligence
@@ -330,8 +335,9 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 8. 🟡 Complete **keyboard-shortcut coverage + cheat sheet** (#96). — *S.*
 
 ### Phase C — The layer compositor & live deck (the big VJ surface)
-9. ⬜ Build the **compositor UI** (#1.4 / #72–74): layer strips, 16 blend modes, opacity, solo/mute,
-   crossfader with curve options, then per-layer effect chains and N-layer support.
+9. ✅ **Compositor UI** built + verified (`compositor-ui.js`, `.test/compositor.mjs`): layer strips,
+   16 blend modes, opacity, solo/mute, per-layer hot cues, crossfader, master. ⬜ Remaining:
+   crossfader curve options (#74), per-layer effect chains (#73), N-layer support (#72).
 10. ⬜ **Automation recording** (#76), **pattern banks** (#75), **beat-synced launching** (#78),
     **panic key** (#77), **MIDI clock in/out** (#69/#71), **second-screen output** (#80).
 

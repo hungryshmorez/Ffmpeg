@@ -12,8 +12,8 @@
   const BUILD = {
     version: 'v10.4.0',
     built:   '2026-07-14',
-    modules: 30,                  // mirrors ls *.js
-    cssBraces: { open: 774, close: 774 },
+    modules: 31,                  // mirrors ls *.js
+    cssBraces: { open: 808, close: 808 },
     pinnings: {
       '@ffmpeg/ffmpeg': '0.12.10',
       '@ffmpeg/util':   '0.12.1',

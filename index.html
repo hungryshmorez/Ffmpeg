@@ -2447,6 +2447,10 @@
          module dropped from v10.4 (it was in v10.2). Self-contained; exposes
          window.FFPerf and drives the #perf-hud below. -->
     <script src="performance.js"></script>
+    <!-- v10.4: the Layer Compositor deck — UI over FFPerf.Compositor (blend/
+         opacity/solo/mute/crossfade/hot-cues). The engine shipped in
+         performance.js with no surface driving it; this is that surface. -->
+    <script src="compositor-ui.js"></script>
     <!-- version stamp is set by app.js; we expose #ff-version for the UI -->
     <div id="ff-version" class="ff-version" aria-label="Build version"></div>
     <!-- Adaptive-quality HUD: performance.js fills this with live fps / tier /

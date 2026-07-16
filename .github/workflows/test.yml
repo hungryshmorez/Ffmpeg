@@ -44,3 +44,8 @@ jobs:
       # plus both audio branches (no-audio -> -an guard, with-audio -> mux).
       - name: Workflow matrix
         run: npm run test:workflows
+
+      # Layer compositor: stacks two decoded clips and reads the composited
+      # pixels back — blend modes, solo/mute, opacity, crossfade. Frames, not bytes.
+      - name: Layer compositor
+        run: npm run test:compositor
