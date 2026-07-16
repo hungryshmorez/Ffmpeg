@@ -910,8 +910,14 @@ void main() {
       const prog = this.programs[this.effect] || this.programs.datamosh;
       if (!prog) return;
 
-      const w = this.canvas.clientWidth  || 1280;
-      const h = this.canvas.clientHeight || 720;
+      // Adaptive quality (performance.js): render at a lower INTERNAL
+      // resolution when the frame rate drops and let CSS scale the canvas back
+      // up to its layout size. clientWidth/clientHeight are the CSS size and are
+      // unaffected by the backing-store size, so there's no feedback loop. This
+      // is the "shed resolution first" lever — the single biggest GPU saving.
+      const qScale = (window.FFPerf && +window.FFPerf.scale) || 1;
+      const w = Math.max(2, Math.round((this.canvas.clientWidth  || 1280) * qScale));
+      const h = Math.max(2, Math.round((this.canvas.clientHeight || 720) * qScale));
       if (this.canvas.width !== w || this.canvas.height !== h) {
         this.canvas.width = w; this.canvas.height = h;
         this._initTextures();
