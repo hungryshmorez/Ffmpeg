@@ -2591,3 +2591,15 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 .selftest-result.running { color: #ffcc00; border-color: rgba(255,204,0,.4); }
 .selftest-result.ok  { color: #44ff88; border-color: rgba(68,255,136,.4); background: rgba(68,255,136,.08); }
 .selftest-result.bad { color: #ff5566; border-color: rgba(255,85,102,.45); background: rgba(255,85,102,.10); }
+
+/* =============================================================================
+   VJ hot cues — stored jump points in the source (restored from v10.2).
+   ========================================================================== */
+.vj-cues { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+.vj-cues-l { font-size: 9px; color: #888; letter-spacing: 1px; font-weight: 700; }
+.vj-cues small { font-size: 9px; color: #555; margin-left: 6px; }
+.vj-cues kbd { background: #2a2a2a; padding: 0 3px; border-radius: 2px; }
+.vj-cue { width: 30px; height: 26px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px;
+  color: #666; font-size: 11px; font-weight: 700; cursor: pointer; }
+.vj-cue.set { border-color: #ffcc00; color: #ffcc00; }
+.vj-cue.hit { background: #ffcc00; color: #000; transform: scale(.9); }

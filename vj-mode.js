@@ -65,6 +65,8 @@
   let engine = null;            // the TripCam engine driving the visuals
   let chaos = null, sparkles = null;
   let mosher = null;            // the MotionMosher, when Datamosh is triggered
+  let srcVideoEl = null;        // the <video> feeding the engine — hot cues seek it
+  const cues = [];              // hot-cue jump points, per slot (seconds)
 
   // ===========================================================================
   // TRIGGERS
@@ -376,6 +378,15 @@
           </select>
         </div>
 
+        <div class="vj-cues">
+          <span class="vj-cues-l">HOT CUES</span>
+          <button type="button" class="vj-cue" data-c="0">1</button>
+          <button type="button" class="vj-cue" data-c="1">2</button>
+          <button type="button" class="vj-cue" data-c="2">3</button>
+          <button type="button" class="vj-cue" data-c="3">4</button>
+          <small>Click to jump · <kbd>Shift</kbd>+click to set</small>
+        </div>
+
         <div class="vj-pads" id="vj-pads"></div>
 
         <div class="vj-seq">
@@ -460,6 +471,27 @@
 
     document.getElementById('vj-source').addEventListener('change', (e) => setSource(e.target.value));
 
+    // HOT CUES — stored jump points in the source video. Click to jump,
+    // Shift+click to set the current position. This is what makes a source
+    // playable rather than just previewed. (File sources are seekable; live
+    // webcam/screen streams simply have nothing to seek.)
+    document.querySelector('.vj-cues')?.addEventListener('click', (e) => {
+      const b = e.target.closest('.vj-cue');
+      if (!b || !srcVideoEl) return;
+      const slot = +b.dataset.c;
+      if (e.shiftKey) {
+        cues[slot] = srcVideoEl.currentTime;
+        b.classList.add('set');
+        b.title = `${cues[slot].toFixed(2)}s`;
+        log(`cue ${slot + 1} = ${cues[slot].toFixed(2)}s`, 'ok');
+      } else if (cues[slot] != null) {
+        srcVideoEl.currentTime = cues[slot];
+        srcVideoEl.play().catch(() => {});
+        b.classList.add('hit');
+        setTimeout(() => b.classList.remove('hit'), 140);
+      }
+    });
+
     // MASTER — global intensity. One knob scales every effect param toward its
     // neutral value (0 = full bypass, 1 = as dialled). Backed by FFPerf.Master
     // (performance.js). pointerdown captures the current patch as the base so
@@ -543,6 +575,7 @@
       }
       await v.play();
       engine.setSource(v);
+      srcVideoEl = v;           // hot cues seek this element (file sources are seekable)
     } catch (e) { log(e.message, 'error'); }
   }
 
