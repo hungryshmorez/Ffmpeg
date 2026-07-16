@@ -623,6 +623,12 @@ function cancelAllBgJobs() {
 window.ff = ff;
 window.ffRun = ffRun;
 window.ffQueue = ffQueue;
+// EXPOSE THE STORE. `state` is a top-level `const`, so it never attached to
+// window — but 11 modules (analysis, audio-studio, clips, datamosh, nodegraph,
+// storage, tools, tripcam-ui, vj-mode, workflows_v4/v5) read `window.state`.
+// Without this line every one of those silently saw `undefined` and fell back
+// to "no file in the bin" / a no-op. This is the single reference they share.
+window.state = state;
 window.cancelAllBgJobs = cancelAllBgJobs;
 window.makeBgToken = makeBgToken;
 window.isBgAlive = isBgAlive;
