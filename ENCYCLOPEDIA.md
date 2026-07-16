@@ -1,0 +1,392 @@
+# FFmpeg Studio — Feature Encyclopedia & Integration Plan
+
+*What every feature is, what it was meant to be, where it stands today, and exactly what
+is left to do to fold all of it into one project.*
+
+This document is the planning bible. It merges three sources:
+
+1. **The six source apps** that were mined for features (SauceLab VJ, Trippy Effects,
+   Driftwave Vaporizer, Trippy Cam 2.0, Clip Studio, Datamosh Lab — plus Aesthetic Audio).
+2. **The "100 Ways" list** — the correctness/perf/audio/video/glitch/live/intelligence/UX/
+   architecture backlog.
+3. **The current build** (v10.4 at the repo root) and what has actually been verified.
+
+Status legend used throughout:
+
+| Badge | Meaning |
+|---|---|
+| ✅ **Done** | In the build and *verified by running it* (not assumed). |
+| 🟡 **Partial** | Code exists but is unwired, unverified, or only half the feature. |
+| 🔒 **Blocked** | Can't be finished/verified in the current environment (needs real hardware, a build toolchain, etc.). |
+| ⬜ **To do** | Not started. |
+
+Effort is a rough T-shirt size (S = hours, M = a day, L = multiple days, XL = a week+),
+and *Risk* flags how likely the change is to break the working app.
+
+---
+
+## Table of Contents
+
+- [Part 0 — Current verified state](#part-0--current-verified-state)
+- [Part 1 — The crown jewels (the six source apps)](#part-1--the-crown-jewels-the-six-source-apps)
+- [Part 2 — The 100 Ways, catalogued](#part-2--the-100-ways-catalogued)
+  - [Correctness & Trust (1–12)](#correctness--trust-112)
+  - [Performance (13–24)](#performance-1324)
+  - [Audio (25–40)](#audio-2540)
+  - [Video (41–56)](#video-4156)
+  - [Glitch & Mosh (57–68)](#glitch--mosh-5768)
+  - [Live & Performance (69–80)](#live--performance-6980)
+  - [Intelligence (81–88)](#intelligence-8188)
+  - [UX (89–96)](#ux-8996)
+  - [Architecture (97–100)](#architecture-97100)
+- [Part 3 — The integration roadmap (if we add ALL of them)](#part-3--the-integration-roadmap-if-we-add-all-of-them)
+- [Part 4 — Cross-cutting prerequisites](#part-4--cross-cutting-prerequisites)
+
+---
+
+## Part 0 — Current verified state
+
+Before planning the future, here is the honest present. Everything in this list is in the
+v10.4 build at the repo root and was confirmed by *executing it in a headless browser*, not
+by grep or `node -c`.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| **Round trip green 5/5** (#1) | ✅ | `.test/roundtrip.mjs` decodes real output frames (not bytes); 5/5 green |
+| **Playwright test that can't lie** (#100) | ✅ | Self-contained headless test, in-repo, `npm test` |
+| **Golden multi-workflow matrix** (#6, #7) | ✅ | `.test/workflows.mjs` — downscale-480p/360p, fps-24, + both audio branches; 4/4 |
+| **Frames not bytes** (#2) | ✅ | `assertRealVideo()` + tests assert decoded frame counts |
+| **Exit-code checks** (#3) | ✅ | split-render/fallback/pipeline all read `ff.exec()` rc |
+| **Command history** (#9) | ✅ | `state.commandHistory` (last 50) + copy button |
+| **Sentry-style error capture** (#10) | ✅ | `window.onerror` / `unhandledrejection` attach last 50 logs |
+| **Version stamp** (#11) | ✅ | `build-info.js` single source of truth → `#ff-version` |
+| **Changelog from code** (#12) | ✅ | `scripts/generate-changelog.js` reads the code |
+| **Lazy-load wasm core** (#22) | ✅ | boot defers the 30 MB core so the UI paints first |
+| **requestVideoFrameCallback** (#17) | ✅ | trip-cam engine uses rVFC for video sources |
+| **Demo clip button** (#91) | ✅ | `generateDemoClip()` — canvas + MediaRecorder |
+| **Time-stretch, keep pitch** (#34) | ✅ | `atempo` phase-vocoder chain at bounce |
+| **Spectrogram view** (#25) | ✅ | Audio Studio spectrogram tab |
+| **False-colour exposure** (#52) | ✅ | Preview colourist exposure view |
+| **Before/after wipe** (#92) | ✅ | draggable divider in Preview |
+| **Speed curve editor** (#42) | ✅ | 4-keyframe editor with presets |
+| **Adaptive quality** (Trippy Effects) | ✅ | `performance.js` restored, `#perf-hud` visible, trip-cam sheds resolution via `FFPerf.scale` |
+
+**The three bugs that were actually blocking #1** (all fixed): the `instrumentFfmpeg`
+ms→s timeout that became a 30 ms abort; the split-render audio pass failing on video-only
+inputs; and the `filename`/`outputFilename` field mismatch crashing the success path.
+
+---
+
+## Part 1 — The crown jewels (the six source apps)
+
+These are the substantial features mined from the source apps. Some are already in v10.4;
+several are present as engines but not fully wired into the UI.
+
+### 1.1 Datamosh Lab — motion & mosh
+
+**Hierarchical SAD block-matching motion estimation.**
+- *What it is:* a real motion estimator — it splits each frame into blocks and searches the
+  previous frame for the best match (sum-of-absolute-differences), coarse-to-fine. It is what
+  a video codec does internally.
+- *The vision:* datamosh that behaves like the real technique — smearing along genuine motion
+  vectors, not a shader approximation.
+- *Status:* ✅ in `motion-mosh.js` / `datamosh.js`. Retired the two older datamosh paths.
+- *To finish the family (see Glitch & Mosh 57–68):* directional bias, motion masking,
+  vector-amplification curve, bloom (repeat vectors), **datamosh between two clips**, persistent
+  vector recording, motion-vector overlay on by default. — *M–L each.*
+
+### 1.2 Trippy Cam 2.0 — reactive camera
+
+- **3-band audio reactivity** (bass/mid/treble with per-band gates). *Vision:* a kick and a
+  hi-hat move *different* parameters. ✅ present.
+- **`u_cameraRotation` on every shader** — device tilt / rotation as a performable parameter.
+  ✅ retrofitted onto all 11 shaders.
+- **Per-effect defaults** — each effect starts from its own good patch. ✅.
+- **`u_displacementMapStrength`**. ✅.
+- *Deliberately skipped:* face tracking (a stub returning hardcoded coordinates — no model).
+
+### 1.3 Trippy Effects — the load-shedding stack
+
+- **Adaptive quality** — monitors FPS and sheds load automatically (resolution first, then
+  expensive shaders). ✅ restored (`performance.js`) and given teeth: trip-cam now renders at
+  `FFPerf.scale`. **To do:** also gate expensive shaders via `FFPerf.Perf.isAllowed()` and wire
+  the WebGL editor preview to the same scale. — *S–M.*
+- **Global intensity master** — one knob toward neutral over everything. 🟡 `FFPerf.Master`
+  exists; the vj-mode slider that drives it was dropped from v10.4's reduced `vj-mode.js`.
+  **To do:** restore `#vj-master` slider + wiring. — *S.*
+- **Auto-glitch / chaos engine** — 8 glitch types firing on a random schedule. ✅ present.
+- **Real CPU pixel sort** (sorts runs, visibly different from the shader approximation). ✅.
+- **Sparkle particles with gravity**, emitted on the treble. ✅.
+
+### 1.4 SauceLab VJ — the performance deck
+
+- **MIDI learn, keyboard (hold=stab, shift=latch), 16-step sequencer, tap tempo, beat-sync.**
+  ✅ present in `vj-mode.js`.
+- **Hot cues** — stored jump points, click to jump / shift-click to set. 🟡 the engine logic
+  exists; v10.4's reduced `vj-mode.js` dropped the `.vj-cues` wiring + markup.
+  **To do:** restore the cue buttons + handlers. — *S.*
+- **Layer compositor** — 4 layers, 16 blend modes, opacity, solo, mute, crossfade. 🟡
+  `FFPerf.Compositor` + `BLEND_MODES` (16) exist; no UI panel drives it in v10.4.
+  **To do:** a compositor panel (layer strips, blend dropdown, opacity, solo/mute, crossfader).
+  — *L.*
+- **Energy-variance beat detection.** ✅ (`beat-detection.js`).
+
+### 1.5 Aesthetic Audio — musical intelligence
+
+- **Key detection** (chromagram + Krumhansl-Schmuckler) and **BPM + beat positions.** ✅
+  (`audio-intel.js`, `beat-detection.js`).
+- **Semantic macros** (MELT / MUFFLE / WASH / SLUSH / VINTAGE). ✅.
+- **Musical intervals instead of semitones.** ✅.
+
+### 1.6 Clip Studio — the library & queue
+
+- **Clip library, take numbers, drag-to-reorder, audio bed, sequence export.** ✅ (`clips.js`).
+- **Video queue** — batch a list of clips through the shader pipeline. ✅.
+- **Countdown-timer recording, debug panel.** ✅.
+
+### 1.7 Driftwave — the audio rack
+
+- **Real-time Web Audio rack** (23 params, 12 presets). ✅ (`audio-engine.js`, `audio-studio.js`).
+- **20 ffmpeg mastering templates.** ✅ (workflows).
+
+### 1.8 Deliberately left out (and why)
+
+| Thing | Why it was skipped |
+|---|---|
+| Face tracking (Trippy Cam) | A stub — hardcoded coordinates, no model. |
+| Neural effects (Trippy Effects, 784 lines) | No TensorFlow anywhere; the name is aspirational. |
+| Trippy chatbot (410 lines) | A rhyming assistant — charming, not a media tool. |
+| Video cube (THREE.js) | A presentation effect, 600 KB for one look. |
+| Scroll-reactive effects | Meaningless in an editor. |
+| Trippy Cam's smaller shader variants | The Clip Studio versions already ported are more developed. |
+
+---
+
+## Part 2 — The 100 Ways, catalogued
+
+Each entry: **what it is → what it was meant to be → status → what's left → effort/risk.**
+
+### Correctness & Trust (1–12)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 1 | Round trip 5/5 | The one fact that gates everything: a file goes in, a real video comes out, five times. | ✅ | — |
+| 2 | Assert on frames, never bytes | A 1-frame file is ~20 KB and passes every byte check. Decode and count frames. | ✅ | — |
+| 3 | Check `exec()` exit code everywhere | `ff.exec()` *resolves* on failure; ignoring rc is how a failed pass looked "done". | ✅ | Keep grepping new call sites in review. |
+| 4 | Every `await ff.*` has a timeout | A pending promise makes no sound. | ✅ | `ffRun`'s queue timeout guards all calls. |
+| 5 | Zero-setting workflow hard-blocks | A workflow that applies nothing must refuse, loudly. | ✅ | Audit any new silent no-op paths. |
+| 6 | Verify the signature filter ran | If `downscale-480p` produced no scale, fail. | ✅ | `.test/workflows.mjs` asserts signatures; consider an in-app pre-run assert too. |
+| 7 | Golden-file tests | Hash/measure output of known workflows; drift = regression. | 🟡 | Matrix measures frames/res; add stable perceptual hashes for a fixed clip. — *M* |
+| 8 | In-UI self-test panel | A button that runs encoder smoke tests and reports **frames**. | ⬜ | Surface `assertRealVideo` + selftests in a panel. — *S* |
+| 9 | Copyable command history | You can't debug what you can't see. | ✅ | — |
+| 10 | Sentry-style error capture | Attach the last 50 log lines to every thrown error. | ✅ | — |
+| 11 | Version-stamp the build | "Which version is deployed?" should never be a question. | ✅ | — |
+| 12 | Changelog from code | Counts generated, not claimed. | ✅ | — |
+
+### Performance (13–24)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 13 | Ship the WebCodecs path | Direct GPU/ASIC encode — 10–50× over wasm. | 🔒 | Path is written + routed; **can't verify here** (headless Chromium has no H.264 enc/dec). Make it codec-adaptive (VP9/AV1 fallback), verify the encode half on real Chrome. — *M* |
+| 14 | OffscreenCanvas + Worker for shaders | Get WebGL off the main thread. | ⬜ | Move `TripEngine` render into a worker with an OffscreenCanvas. — *L, Risk: M* |
+| 15 | Motion estimation in a Worker | Block matching is embarrassingly parallel; it currently blocks the UI. | ⬜ | Worker harness + transferable frames. — *L* |
+| 16 | WASM SIMD for the SAD loop | The inner loop is pure integer math — the biggest mosher win. | 🔒 | Needs an emcc/wat2wasm build pipeline + benchmarking. — *L* |
+| 17 | `requestVideoFrameCallback` everywhere | Process each video frame exactly once. | ✅ | Extend rVFC to the WebGL editor preview too. — *S* |
+| 18 | Half-res motion est., full-res apply | Vectors don't need pixel precision. | ⬜ | Estimate at ½ scale, upscale vectors. — *M* |
+| 19 | Cache compiled shader programs | We recompile 11 shaders per canvas. | ⬜ | Program cache keyed by source, shared across engine instances. — *S–M* |
+| 20 | Texture pooling | `_initTextures()` reallocates + GCs. | ⬜ | Pool + reuse GL textures. — *M* |
+| 21 | Parallel segment encoding | Split at keyframes, encode N segments in a worker pool, concat. | ⬜ | Worker pool + concat demux. — *XL* |
+| 22 | Lazy-load the wasm core | 30 MB shouldn't download if you only came for the Audio Studio. | ✅ | — |
+| 23 | Preload core on Editor hover | Warm the core before it's needed. | ⬜ | Prefetch on hover/intent. — *S* |
+| 24 | A real memory budget | MEMFS + GPU + VideoFrames + AudioBuffers compete; show one number. | 🟡 | MEMFS gauge exists; unify GPU/audio into one budget readout. — *M* |
+
+### Audio (25–40)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 25 | Spectrogram view | Spot a problem frequency a waveform hides. | ✅ | — |
+| 26 | Stem separation | Naive mid/side or band-split → usable acapella/instrumental. | ⬜ | Band-split + mid/side extraction UI. — *M* |
+| 27 | Sidechain compression to the kick | The most-requested production effect. | ⬜ | Key detection → sidechain node. — *M* |
+| 28 | Multiband compression (3-band + GR meters) | Standard mastering. | ⬜ | 3 crossover bands + gain-reduction meters. — *L* |
+| 29 | Limiter with lookahead | Not just `alimiter`. | ⬜ | Lookahead limiter node. — *M* |
+| 30 | Mid/side EQ | Widen highs, mono the bass. | ⬜ | M/S matrix around the EQ. — *M* |
+| 31 | Stereo width + correlation meter | See when you've gone out of phase. | ⬜ | Width control + correlation meter. — *M* |
+| 32 | Automatic gain staging | Warn when the rack clips into the reverb. | ⬜ | Inter-node level checks + warnings. — *S–M* |
+| 33 | A/B vs a reference track, loudness-matched | Honest comparison. | ⬜ | Reference load + LUFS-match + toggle. — *M* |
+| 34 | Time-stretch, keep pitch (phase vocoder) | `speed` shouldn't shift pitch. | ✅ | — |
+| 35 | Pitch correction / snap to detected key | You already detect the key. | ⬜ | Pitch-snap using the chromagram key. — *L* |
+| 36 | Beat-grid quantised chopping | Slice on beats, rearrange, repeat. | 🟡 | Beat grid exists; add the chop/rearrange UI. — *M* |
+| 37 | Granular / stutter on the beat grid | Beat-driven stutter. | ⬜ | Granular engine keyed to beats. — *M* |
+| 38 | Convolution reverb from a user IR | Not just the generated one. | ⬜ | IR file upload → convolver node. — *S–M* |
+| 39 | Transient shaper (attack/sustain) | Shape the punch. | ⬜ | Envelope-follower transient node. — *M* |
+| 40 | Export stems (dry/reverb/delay) | Separate files. | ⬜ | Render each bus separately. — *M* |
+
+### Video (41–56)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 41 | Optical-flow frame interpolation | Real slow-mo, not frame duplication. | ⬜ | `minterpolate` path or flow-based interp. — *L* |
+| 42 | Speed ramping with a draggable curve | Not one multiplier. | ✅ | — |
+| 43 | Motion blur on speed-up | 4× timelapse shouldn't strobe. | ⬜ | Frame-blend on decimation. — *M* |
+| 44 | Stabilisation that works | You have motion vectors — average global motion, counter it. | ⬜ | Global-motion estimate from the mosher's vectors → counter-transform. — *L* |
+| 45 | Auto-reframe (track subject) | Crop toward motion for vertical. | ⬜ | Dominant-motion tracker → crop path. — *L* |
+| 46 | Rolling-shutter / jello (sim + correct) | Both directions. | ⬜ | Row-time skew model. — *L* |
+| 47 | Real film grain (plate-based) | Not procedural noise. | ⬜ | Grain-plate overlay library. — *M* |
+| 48 | Halation & bloom (physical pass) | Proper light bleed. | ⬜ | Threshold → blur → screen. — *M* |
+| 49 | Lens distortion + CA profiles | Named-lens profiles. | ⬜ | Profile table + `lenscorrection`/CA shader. — *M* |
+| 50 | Deflicker for timelapse | Even out exposure flicker. | ⬜ | `deflicker` filter surfaced. — *S* |
+| 51 | Vectorscope + waveform monitor | Real colour scopes. | ⬜ | Canvas scopes from the preview frame. — *M* |
+| 52 | False-colour exposure view | See over/under exposure. | ✅ | — |
+| 53 | Curves editor with a draggable spline | Not preset names. | 🟡 | Speed-curve editor exists; reuse the spline widget for colour curves. — *M* |
+| 54 | HSL secondary qualifiers | Grade just skin / just sky. | ⬜ | Qualifier UI → keyed mask. — *L* |
+| 55 | Power windows / masks | Grade part of the frame. | ⬜ | Shape masks → per-region grade. — *L* |
+| 56 | Frame-blend vs optical-flow toggle | Choose retime method. | ⬜ | Toggle on the speed panel. — *S* |
+
+### Glitch & Mosh (57–68)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 57 | Motion-vector overlay on by default | Dial in a mosh while seeing the field. | 🟡 | Overlay is written; default it on during mosh setup. — *S* |
+| 58 | Directional mosh | Bias vectors along one axis (horizontal smear = the classic). | ⬜ | Axis bias on the vector field. — *S–M* |
+| 59 | Mosh masking | Only mosh where motion exceeds a threshold. | ⬜ | Threshold mask on vector magnitude. — *M* |
+| 60 | Vector amplification curve | Non-linear response — ignore small, explode large. | ⬜ | Curve applied to vector magnitude. — *S* |
+| 61 | Bloom mode (repeat vectors N×) | Smear further. | ⬜ | Iterate the displacement N times. — *S* |
+| 62 | **Datamosh between TWO clips** | Take A's vectors, apply to B — the *actual* classic technique. | ⬜ | Two-input pipeline: estimate on A, apply to B. — *L* |
+| 63 | Persistent vector recording | Capture a motion field once, replay over anything. | ⬜ | Serialize/replay vector fields. — *M* |
+| 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ⬜ | Masked, angled sort. — *M* |
+| 65 | True DCT manipulation | Corrupt DCT blocks at coefficient level. | 🔒 | Needs coefficient-level decode (custom codec work). — *XL* |
+| 66 | Databend mode | Corrupt raw bytes of any file and try to decode. | ⬜ | Byte-corruptor + tolerant decode. — *M* |
+| 67 | Feedback with geometric transforms | Zoom+rotate per iteration — the infinite tunnel. | ⬜ | Per-iteration transform in the feedback shader. — *S–M* |
+| 68 | Optical-flow-driven displacement | Use the motion field as a displacement map. | ⬜ | Flow field → displacement shader. — *M* |
+
+### Live & Performance (69–80)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 69 | MIDI clock sync (slave) | Play with anyone. | ⬜ | Sync sequencer to incoming MIDI clock. — *M* |
+| 70 | Ableton Link | Networked tempo. | 🔒 | No browser Link without a bridge. — *L* |
+| 71 | MIDI output | Send clock/notes so lights follow. | ⬜ | MIDI-out from the sequencer. — *S–M* |
+| 72 | More than 4 layers + mixer strip | Real mixer. | ⬜ | Extend the compositor (1.4) to N layers. — *L* |
+| 73 | Per-layer effect chains | Each layer its own shader stack. | ⬜ | Effect chain per layer. — *L* |
+| 74 | Crossfader with curve selection | Linear / constant-power / sharp. | 🟡 | Compositor has crossfade; add curve options. — *S* |
+| 75 | Pattern banks (8, switch on the bar) | Recall sequencer patterns. | ⬜ | Save/recall + bar-quantised switch. — *M* |
+| 76 | Automation recording | Record knob moves, play back. | ⬜ | Param automation lanes. — *L* |
+| 77 | Panic key (instant reset) | Non-negotiable on stage. | ⬜ | Global reset-everything hotkey. — *S* |
+| 78 | Beat-synced clip launching | Clips start on the next bar. | ⬜ | Quantise launches to the beat grid. — *M* |
+| 79 | NDI / virtual-camera output | Feed OBS/Zoom. | 🔒 | No browser NDI/virtual-cam without a native bridge. — *XL* |
+| 80 | Second-screen / projector output | Full-screen visuals on an external display. | ⬜ | Present the canvas to a second window/screen. — *M* |
+
+### Intelligence (81–88)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 81 | Whisper.wasm | Auto-subtitles, transcript, filler-word cutting. | ⬜ | Bundle whisper.wasm; transcript → subtitle/cut UI. — *XL* |
+| 82 | Auto-detect interesting moments | Energy + scene cuts + motion → highlight reel. | 🟡 | Have the signals; add the scoring + reel assembler. — *L* |
+| 83 | Auto-sync an edit to the beat grid | You have both halves already. | ⬜ | Cut-on-beat assembler. — *M* |
+| 84 | Shot-type classification | Wide/medium/close by subject size. | 🔒 | Needs a model (face/subject detector). — *L* |
+| 85 | Auto colour-match across clips | You have the LUT generator; run it clip-to-clip. | 🟡 | Wire the LUT generator into a batch clip-to-clip pass. — *M* |
+| 86 | Auto loop-point detection | Find the two most similar frames for seamless GIFs. | ⬜ | Frame-similarity search. — *M* |
+| 87 | Content-aware fill | Remove objects (WebGPU compute). | 🔒 | WebGPU inpainting — research-grade. — *XL* |
+| 88 | Suggest a workflow from content | "Talking head → Silence Trim + Loudnorm." | ⬜ | Heuristics over the probe metadata. — *M* |
+
+### UX (89–96)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 89 | Undo/redo across the WHOLE app | Not just the editor. | 🟡 | Form controls are captured app-wide already; **custom state** (audio-studio knobs, trip-cam params, node graph) needs a per-module `capture()/restore()` hook registered with the undo stack. — *L* |
+| 90 | Real onboarding tour | Four dismissible, `localStorage`-gated steps. | ⬜ | Tour component. — *S–M* |
+| 91 | Demo clip button | Evaluate with zero friction. | ✅ | — |
+| 92 | Before/after wipe on every effect | Not just the preview tab. | ✅ (preview) | Extend the wipe to inline effect previews. — *M* |
+| 93 | Workflow thumbnails | Show what "Bleach Bypass" does. | ⬜ | Pre-rendered thumbnails per workflow. — *M* |
+| 94 | Hover-preview a workflow on the canvas | Preview before committing. | ⬜ | Live preview on hover. — *M* |
+| 95 | Preferences panel | Default codec/quality/autosave/theme. | ⬜ | Settings store + panel. — *S–M* |
+| 96 | Keyboard shortcuts for everything + cheat sheet | Discoverable. | 🟡 | Shortcuts modal exists; complete coverage + the cheat sheet. — *S* |
+
+### Architecture (97–100)
+
+| # | Feature | What it is / the vision | Status | What's left |
+|---|---|---|---|---|
+| 97 | Split `app.js` | ~6.5k lines → five files. | ⬜ | Extract engine / commands / UI / state / workflows. — *L, Risk: M* |
+| 98 | Single source of truth for state | `state`, `S`, `G`, `REC`, `macroValues` don't know about each other. | ⬜ | One store; migrate modules onto it. — *XL, Risk: H* |
+| 99 | A real event bus | Replace `CustomEvent` on `window` + `window.FFX?.y()`. | ⬜ | Typed event bus. — *L* |
+| 100 | Automated browser tests in CI | The one test that can't lie, on every commit. | ✅ | Test + matrix exist; **add the CI workflow file** to run them on push. — *S* |
+
+---
+
+## Part 3 — The integration roadmap (if we add ALL of them)
+
+Doing everything is a program, not a task. Ordered so each phase de-risks the next.
+
+### Phase A — Lock the foundation (mostly done)
+1. ✅ Round trip 5/5, frames-not-bytes, exit codes, error capture, version stamp, changelog.
+2. ✅ Playwright test + golden matrix.
+3. ⬜ **#100 CI file** — add `.github/workflows/test.yml` running `npm test` + `npm run test:workflows` on push. *(This is the single highest-leverage remaining item: it makes every phase below cheaper by catching regressions automatically.)*
+4. ⬜ **#8 self-test panel** — expose the smoke tests in-app.
+
+### Phase B — Finish what's already half-built (fast wins)
+5. 🟡 Wire the **global-intensity slider** + **hot cues** back into `vj-mode.js` (dropped in v10.4's reduced copy). — *S each.*
+6. 🟡 Gate expensive shaders via `FFPerf.Perf.isAllowed()` and apply `FFPerf.scale` to the **WebGL editor preview** too. — *S–M.*
+7. 🟡 Default the **motion-vector overlay** on during mosh setup (#57). — *S.*
+8. 🟡 Complete **keyboard-shortcut coverage + cheat sheet** (#96). — *S.*
+
+### Phase C — The layer compositor & live deck (the big VJ surface)
+9. ⬜ Build the **compositor UI** (#1.4 / #72–74): layer strips, 16 blend modes, opacity, solo/mute,
+   crossfader with curve options, then per-layer effect chains and N-layer support.
+10. ⬜ **Automation recording** (#76), **pattern banks** (#75), **beat-synced launching** (#78),
+    **panic key** (#77), **MIDI clock in/out** (#69/#71), **second-screen output** (#80).
+
+### Phase D — The mosh/glitch family (build on the SAD estimator)
+11. ⬜ Directional mosh, masking, amplification curve, bloom (#58–61) — small, share the vector field.
+12. ⬜ **Datamosh between two clips** (#62) + persistent vector recording (#63) — the headline.
+13. ⬜ Feedback transforms (#67), flow displacement (#68), masked pixel sort (#64), databend (#66).
+
+### Phase E — Audio depth
+14. ⬜ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),
+    gain-staging warnings (#32), A/B reference (#33), transient shaper (#39), stems (#40).
+15. ⬜ Beat-grid chopping (#36), granular (#37), pitch-snap to key (#35), user IR reverb (#38),
+    stem separation (#26).
+
+### Phase F — Video/colour depth
+16. ⬜ Colour tools: vectorscope/waveform (#51), curves spline (#53), HSL qualifiers (#54),
+    power windows (#55), auto colour-match (#85).
+17. ⬜ Motion tools: optical-flow interp (#41), stabilisation from vectors (#44), auto-reframe (#45),
+    motion blur (#43), deflicker (#50), film grain (#47), halation/bloom (#48), lens profiles (#49).
+
+### Phase G — Intelligence
+18. ⬜ Highlight detection (#82), auto beat-sync edit (#83), loop-point detection (#86),
+    workflow suggestion (#88). Then the model-dependent ones (Whisper #81, shot classification #84,
+    content-aware fill #87) as they become feasible.
+
+### Phase H — Performance & architecture (do continuously, verify each step)
+19. ⬜ Shader program cache (#19), texture pooling (#20), half-res estimation (#18),
+    OffscreenCanvas worker (#14), motion estimation in a worker (#15), WASM SIMD (#16),
+    parallel segment encoding (#21), unified memory budget (#24), preload-on-hover (#23).
+20. ⬜ Refactors, gated behind the CI from Phase A: split `app.js` (#97), single state store (#98),
+    event bus (#99). **Do these last** — highest blast radius; they only pay off once tests guard them.
+
+### Environment-blocked (need real hardware or a native bridge, not solvable in-repo)
+- **#13 WebCodecs** end-to-end (no H.264 in the test browser; works on real Chrome).
+- **#16 WASM SIMD** (needs emcc/wat2wasm toolchain + benchmarking).
+- **#65 DCT manipulation, #70 Ableton Link, #79 NDI/virtual-cam, #84/#87 model-based.**
+
+---
+
+## Part 4 — Cross-cutting prerequisites
+
+Some things everything else leans on. Build these once, reuse everywhere.
+
+1. **CI (#100 file).** Nothing below is safe without it. One `.github/workflows/test.yml`.
+2. **A single state store (#98).** Undo/redo across the app (#89), automation recording (#76),
+   pattern banks (#75), and preferences (#95) *all* need one authoritative, serializable state.
+   Every one of those is cheaper after #98 and painful before it.
+3. **A worker + OffscreenCanvas harness (#14).** Motion-in-worker (#15), parallel encode (#21),
+   and keeping the compositor smooth all reuse it.
+4. **The vector-field as a first-class object (#63).** Directional/masked/amplified mosh (#58–60),
+   two-clip mosh (#62), stabilisation (#44), and flow displacement (#68) all consume it.
+5. **A spline widget.** The speed-curve editor (#42, done) already has one — reuse it for colour
+   curves (#53), automation lanes (#76), and vector-amplification curves (#60).
+
+> **The single most important next step is Phase A #3 — the CI file.** Every expensive bug in
+> this project existed because something reported success without verifying it. The round trip is
+> green and the tests exist; wiring them to run on every commit is what stops the next regression
+> from hiding.
