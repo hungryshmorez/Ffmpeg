@@ -7,6 +7,7 @@
     "test": "node .test/roundtrip.mjs downscale-480p 5",
     "test:1x": "node .test/roundtrip.mjs downscale-480p 1",
     "test:5x": "node .test/roundtrip.mjs downscale-480p 5",
+    "test:workflows": "node .test/workflows.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },
