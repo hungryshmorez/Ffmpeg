@@ -14,14 +14,19 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = Number(process.env.PORT || 8150), BASE = `http://localhost:${PORT}`;
 const T={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.css':'text/css','.json':'application/json','.png':'image/png','.ttf':'font/ttf'};
 
-// seed: 2s / 30fps / 640x360 → 60 frames, video-only.
-const SEED = ['-f','lavfi','-i','testsrc=duration=2:size=640x360:rate=30','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-y','seed.mp4'];
+// Two deterministic seeds:
+//   V  = video-only  (testsrc)              → exercises the no-audio -an guard
+//   AV = video+audio (testsrc + 440Hz sine) → exercises the split render's
+//        video/audio/mux passes (the path my round-trip fix reworked)
+const SEED_V  = ['-f','lavfi','-i','testsrc=duration=2:size=640x360:rate=30','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-y','seed.mp4'];
+const SEED_AV = ['-f','lavfi','-i','testsrc=duration=2:size=640x360:rate=30','-f','lavfi','-i','sine=frequency=440:duration=2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-c:a','aac','-shortest','-y','seed.mp4'];
 
-// Each row: { id, check(r) } where r = { frames, w, h, bytes }.
+// Each row: { id, seed, check(r) } where r = { frames, w, h, bytes, hasAudio }.
 const MATRIX = [
-  { id:'downscale-480p', desc:'scale to 480p', check:r => r.h===480 && r.frames>=45 },
-  { id:'downscale-360p', desc:'scale to 360p', check:r => r.h===360 && r.frames>=45 },
-  { id:'fps-24',         desc:'retime to 24fps', check:r => r.frames>=40 && r.frames<=52 },
+  { id:'downscale-480p', seed:SEED_V,  desc:'480p, no-audio input (-an guard)', check:r => r.h===480 && r.frames>=45 && r.hasAudio===false },
+  { id:'downscale-360p', seed:SEED_V,  desc:'360p', check:r => r.h===360 && r.frames>=45 },
+  { id:'fps-24',         seed:SEED_V,  desc:'retime to 24fps', check:r => r.frames>=40 && r.frames<=52 },
+  { id:'downscale-480p', seed:SEED_AV, desc:'480p, WITH audio (video+audio+mux)', check:r => r.h===480 && r.frames>=45 && r.hasAudio===true },
 ];
 
 const srv=http.createServer(async(rq,rs)=>{try{let p=rq.url.split('?')[0];if(p==='/')p='/index.html';const f=normalize(join(ROOT,p));const d=await readFile(f);rs.writeHead(200,{'Content-Type':T[extname(f)]||'application/octet-stream','Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'});rs.end(d);}catch{rs.writeHead(404).end();}});
@@ -36,6 +41,8 @@ try {
   let pass=0;
   for (const wf of MATRIX) {
     const r = await pg.evaluate(async ({id, SEED}) => {
+      // reset the media bin so a prior run's input can't leak in
+      state.mediaBin = []; state.activeMediaId = null;
       await ff.exec(SEED,{raw:true});
       const seed=await ff.readFile('seed.mp4');
       const dt=new DataTransfer(); dt.items.add(new File([seed],'seed.mp4',{type:'video/mp4'}));
@@ -51,8 +58,9 @@ try {
       state.ffmpeg.off('log',g); try{await ff.deleteFile('__v.mp4');}catch{}
       const fr=[...buf.matchAll(/frame=\s*(\d+)/g)]; const frames=fr.length?+fr[fr.length-1][1]:0;
       const m=buf.match(/,\s*(\d+)x(\d+)/); const w=m?+m[1]:0, h=m?+m[2]:0;
-      return { bytes, frames, w, h };
-    }, { id: wf.id, SEED });
+      const hasAudio=/Stream\s+#\d+:\d+.*?:\s*Audio:/i.test(buf);
+      return { bytes, frames, w, h, hasAudio };
+    }, { id: wf.id, SEED: wf.seed });
     const ok = !r.err && wf.check(r);
     if (ok) { pass++; say(`[${wf.id}] PASS — ${wf.desc}: ${r.frames}f ${r.w}x${r.h} ${r.bytes}B`); }
     else say(`[${wf.id}] FAIL — ${JSON.stringify(r)}`);
