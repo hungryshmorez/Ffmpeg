@@ -2055,8 +2055,13 @@ async function addOutputToBin({ blob, name, mime, ext, sourceName, workflowName,
   renderMediaBin();
   updateBinCount();
   // Update the active output to point at the new media (so the download
-  // button works against the new output).
-  if (state.outputBlobUrl) {
+  // button works against the new output). Only revoke the previous output URL
+  // if it was a transient preview — NOT if it belongs to a bin entry. Since
+  // every addOutputToBin aliases outputBlobUrl to a bin entry's blobUrl,
+  // unconditionally revoking it killed the URL of the previous clip, so batch
+  // producers (scene split, video queue, batch apply) left every clip but the
+  // last with a dead blobUrl (broken playback/download/thumbnail).
+  if (state.outputBlobUrl && !state.mediaBin.some((mm) => mm.blobUrl === state.outputBlobUrl)) {
     try { URL.revokeObjectURL(state.outputBlobUrl); } catch (_) {}
   }
   state.outputBlobUrl = media.blobUrl;

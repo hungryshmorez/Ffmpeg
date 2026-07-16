@@ -72,6 +72,7 @@ by grep or `node -c`.
 | **Adaptive quality** (Trippy Effects) | ✅ | `performance.js` restored, `#perf-hud` visible, trip-cam sheds resolution via `FFPerf.scale` |
 | **Layer compositor UI** (#1.4 / #9) | ✅ | `compositor-ui.js` drives `FFPerf.Compositor`; `.test/compositor.mjs` reads composited pixels back — screen blend → yellow, solo/mute, opacity, crossfade all assert on decoded frames (6/6) |
 | **TRUE datamosh + motion mosh reachable** (#1.1) | ✅ | The v4/v5 "new engine" workflows were counted but never merged into the catalog, never dispatched (`wf.run()`), and `addBlobToBin` was undefined so output vanished. All three fixed; `.test/workflows-v4v5.mjs` drives the real card click and decodes the bin output — bloom's frames > source (P-frames duplicated), motion mosh is a decodable video |
+| **Compress-to-target + scene split** | ✅ | Same missing `addBlobToBin` dropped these too. Compress also used a two-pass `/dev/null` encode ffmpeg.wasm can't do (empty file) and bailed on a missing `<video>` duration — now single-pass, audio-guarded, ffmpeg-probe fallback. Fixed a batch-producer bug where `addOutputToBin` revoked live bin-entry blob URLs. `.test/bin-features.mjs` decodes both out of the bin (5/5) |
 
 **The three bugs that were actually blocking #1** (all fixed): the `instrumentFfmpeg`
 ms→s timeout that became a 30 ms abort; the split-render audio pass failing on video-only

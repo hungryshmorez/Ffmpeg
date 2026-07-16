@@ -60,3 +60,8 @@ jobs:
       # the Media Bin (bloom duplicates frames; motion mosh is a real video).
       - name: New-engine workflows (v4/v5)
         run: npm run test:workflows-v4v5
+
+      # Compress-to-target + scene split: the other addBlobToBin surfaces —
+      # decode the produced clips out of the bin (real frames, under target size).
+      - name: Media-bin producers
+        run: npm run test:bin-features

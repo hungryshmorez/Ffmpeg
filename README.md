@@ -94,10 +94,14 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   in the Media Bin**: bloom's output has *more* decoded frames than the source (P-frames were
   duplicated), and the motion mosh output is a genuinely decodable video. These were unreachable
   before — counted in build-info but never merged into the catalog, dispatched, or added to the bin.
+- **`.test/bin-features.mjs`** exercises the other "produce a clip → bin" surfaces that the missing
+  `addBlobToBin` had silently broken: **compress-to-target** (decodes to real frames, lands under
+  the size budget) and the **scene splitter** (three clips, each decodable). It also guards the
+  fix that batch producers no longer leave every clip but the last with a revoked blob URL.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
-`test:workflows`, `test:compositor`, `test:shortcuts`, and `test:workflows-v4v5` in real headless
-Chromium on every push and pull request.
+`test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, and
+`test:bin-features` in real headless Chromium on every push and pull request.
 
 ---
 
@@ -143,6 +147,7 @@ All three are fixed and verified by the tests above.
 │   ├── compositor.mjs      # layer compositor: composited pixels read back (blend/solo/mute/xfade)
 │   ├── shortcuts.mjs       # keyboard shortcuts: cheat sheet + tab nav, asserted on UI state
 │   ├── workflows-v4v5.mjs  # TRUE datamosh + motion mosh reachable: real card click → decoded bin output
+│   ├── bin-features.mjs    # compress-to-target + scene split: decoded clips out of the Media Bin
 │   └── server.mjs          # minimal COOP/COEP static server
 ├── .github/workflows/
 │   └── test.yml            # runs the tests on every push

@@ -322,21 +322,35 @@
   async function encodeToTargetSize(targetMB, opts = {}) {
     const m = window.state?.inputFile;
     if (!m) { window.logToConsole?.('warn', 'No file selected.'); return null; }
-    const dur = m.durationSec || 0;
-    if (!dur) { window.logToConsole?.('error', 'Unknown duration — cannot compute a bitrate budget.'); return null; }
+    let dur = m.durationSec || 0;
+    // The upload-time duration is read from a <video>/<audio> element, which can
+    // come back empty — a codec the browser can't decode, or a probe timeout.
+    // Fall back to the ffmpeg probe, which reads the container directly and is
+    // the ground truth the rest of the pipeline already trusts.
+    // A single probe also tells us whether there IS an audio stream, which the
+    // encode below needs (running -c:a aac on a silent input errors out — the
+    // same trap the split renderer hit). Ensure it has run.
+    if (((!dur || !isFinite(dur)) || m._hasAudioStream === undefined) && typeof window.analyzeMedia === 'function') {
+      try { await window.analyzeMedia(m.virtualName); dur = m.durationSec || dur; } catch (_) {}
+    }
+    if (!dur || !isFinite(dur)) { window.logToConsole?.('error', 'Unknown duration — cannot compute a bitrate budget.'); return null; }
 
-    const b = budget(targetMB, dur, opts.audioKbps || 128);
-    window.logToConsole?.('', `[target] ${targetMB} MB over ${dur.toFixed(1)}s → ~${b.videoKbps} kbps video + ${b.audioKbps} kbps audio (est. ${b.estMB.toFixed(1)} MB)`);
+    const wantAudio = m._hasAudioStream !== false && m.hasAudio !== false;
+    const aud = wantAudio ? ['-c:a', 'aac', '-b:a', `${opts.audioKbps || 128}k`] : ['-an'];
+    const b = budget(targetMB, dur, wantAudio ? (opts.audioKbps || 128) : 0);
+    window.logToConsole?.('', `[target] ${targetMB} MB over ${dur.toFixed(1)}s → ~${b.videoKbps} kbps video${wantAudio ? ` + ${b.audioKbps} kbps audio` : ' (no audio)'} (est. ${b.estMB.toFixed(1)} MB)`);
 
     const out = 'target.mp4';
     const vf = opts.vf ? ['-vf', opts.vf] : [];
 
-    // Two-pass gives a far more accurate landing than a single CBR pass.
-    await window.ff.exec(['-i', m.virtualName, ...vf, '-c:v', 'libx264', '-preset', 'ultrafast',
-      '-b:v', `${b.videoKbps}k`, '-pass', '1', '-an', '-f', 'mp4', '-y', '/dev/null']).catch(() => {});
-    await window.ff.exec(['-i', m.virtualName, ...vf, '-c:v', 'libx264', '-preset', 'ultrafast',
-      '-b:v', `${b.videoKbps}k`, '-pass', '2', '-c:a', 'aac', '-b:a', `${b.audioKbps}k`,
-      '-pix_fmt', 'yuv420p', '-y', out]);
+    // Single-pass, bitrate-constrained. Two-pass needs a /dev/null target and a
+    // pass-log file that ffmpeg.wasm's MEMFS does not provide — it silently wrote
+    // an EMPTY file. maxrate+bufsize lands close, and the CRF binary-search below
+    // mops up any overshoot.
+    await window.ff.exec(['-i', m.virtualName, ...vf, '-c:v', 'libx264', '-preset', 'veryfast',
+      '-b:v', `${b.videoKbps}k`, '-maxrate', `${Math.round(b.videoKbps * 1.45)}k`,
+      '-bufsize', `${Math.round(b.videoKbps * 2)}k`,
+      ...aud, '-pix_fmt', 'yuv420p', '-y', out]);
 
     let data = await window.ff.readFile(out);
     let mb = data.length / 1024 / 1024;
@@ -347,8 +361,8 @@
     while (mb > targetMB && tries < 3) {
       const crf = Math.round((lo + hi) / 2);
       window.logToConsole?.('', `[target] overshoot — retrying at CRF ${crf}`);
-      await window.ff.exec(['-i', m.virtualName, ...vf, '-c:v', 'libx264', '-preset', 'ultrafast',
-        '-crf', String(crf), '-c:a', 'aac', '-b:a', `${b.audioKbps}k`, '-pix_fmt', 'yuv420p', '-y', out]);
+      await window.ff.exec(['-i', m.virtualName, ...vf, '-c:v', 'libx264', '-preset', 'veryfast',
+        '-crf', String(crf), ...aud, '-pix_fmt', 'yuv420p', '-y', out]);
       data = await window.ff.readFile(out);
       mb = data.length / 1024 / 1024;
       if (mb > targetMB) lo = crf + 1; else hi = crf - 1;
