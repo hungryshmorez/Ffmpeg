@@ -1225,6 +1225,13 @@ function getAllBuiltInWorkflows() {
     // v3 PART D: 70 new workflows 111-180 (loaded from workflows_v3.js).
     // Resolved lazily at call time so the script order does not matter.
     ...(window.WORKFLOWS_V3 || []),
+    // v4/v5: the "new engine" workflows — TRUE bitstream datamosh, colour match,
+    // the hardware path (v4) and real-time motion-vector datamosh (v5). These
+    // were counted in build-info (the "186") but never merged here, so their
+    // cards never rendered and their run() engines were unreachable. They
+    // dispatch through wf.run() (see the card handler below), not a filter chain.
+    ...(window.WORKFLOWS_V4 || []),
+    ...(window.WORKFLOWS_V5 || []),
   ];
 }
 
@@ -1462,6 +1469,16 @@ function renderWorkflows() {
         const custom = (typeof loadCustomWorkflows === 'function') ? loadCustomWorkflows() : [];
         const wf = getAllBuiltInWorkflows().concat(custom).find(w => w.id === id);
         if (!wf) return;
+        // v4/v5 workflows call a JS engine directly (TRUE datamosh, motion mosh,
+        // colour match, hardware path) rather than emitting a filter chain. They
+        // must dispatch through run() BEFORE the category routing below, which
+        // only knows how to run pipelineStep/filter workflows.
+        if (typeof wf.run === 'function') {
+          if (!state.inputFile) { logToConsole('warn', 'Load a file first, then run this workflow.'); switchTab('editor'); return; }
+          try { await wf.run(); }
+          catch (e) { logToConsole('error', `${wf.name} failed: ${e && e.message || e}`); }
+          return;
+        }
         if (wf.category === 'audio-mastering' && typeof runAudioMasteringWorkflow === 'function') {
           await runAudioMasteringWorkflow(wf);
           return;

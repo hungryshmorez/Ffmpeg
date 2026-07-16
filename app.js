@@ -2090,6 +2090,34 @@ async function addOutputToBin({ blob, name, mime, ext, sourceName, workflowName,
   return id;
 }
 
+// -----------------------------------------------------------------------------
+// addBlobToBin — compatibility shim.
+// -----------------------------------------------------------------------------
+// datamosh.js, motion-mosh.js, tools.js, analysis.js and the hardware workflows
+// all call addBlobToBin(blob, name, mime) — a positional helper that was NEVER
+// actually defined. Bare calls would ReferenceError; the `window.addBlobToBin?.()`
+// calls silently short-circuited, so every one of those features produced a blob
+// and then dropped it on the floor (nothing reached the Media Bin). Route the
+// positional signature to the real addOutputToBin, inferring an extension from
+// the MIME type so the MEMFS virtual name is correct.
+async function addBlobToBin(blob, name, mime, opts = {}) {
+  mime = mime || (blob && blob.type) || 'video/mp4';
+  let ext = opts.ext;
+  if (!ext) {
+    if (/webm/i.test(mime)) ext = 'webm';
+    else if (/(quicktime|mov)/i.test(mime)) ext = 'mov';
+    else if (/gif/i.test(mime)) ext = 'gif';
+    else if (/wav/i.test(mime)) ext = 'wav';
+    else if (/(mpeg3|mp3|mpeg)/i.test(mime) && mime.startsWith('audio')) ext = 'mp3';
+    else if (/ogg/i.test(mime)) ext = 'ogg';
+    else if (mime.startsWith('audio/')) ext = 'mp3';
+    else if (mime.startsWith('image/')) ext = (mime.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    else ext = 'mp4';
+  }
+  return addOutputToBin({ blob, name, mime, ext, ...opts });
+}
+window.addBlobToBin = addBlobToBin;
+
 function refreshVizBgSelect() {
   const sel = document.getElementById('viz-bg-select');
   if (!sel) return;
@@ -6960,6 +6988,13 @@ async function applyAndRunWorkflow(workflowId) {
   if (!state.inputFile) {
     logToConsole('warn', 'No file loaded. Load a file first, then click Apply & Run.');
     switchTab('editor');
+    return;
+  }
+  // A workflow that carries its own JS engine (v4/v5) runs that, not the
+  // generic command builder.
+  if (typeof wf.run === 'function') {
+    try { await wf.run(); }
+    catch (e) { logToConsole('error', `${wf.name} failed: ${e && e.message || e}`); }
     return;
   }
   // Special-case workflows: extract-frame and boomerang have dedicated

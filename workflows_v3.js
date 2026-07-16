@@ -488,7 +488,7 @@ const RETRO_ANALOG_WORKFLOWS = [
     settings: { 'enable-8': true, 'ccm-rr': 1.2, 'ccm-rg': 0.4, 'ccm-rb': 0.0, 'ccm-gr': 0.8, 'ccm-gg': 0.4, 'ccm-gb': 0.0, 'ccm-br': 0.4, 'ccm-bg': 0.0, 'ccm-bb': 0.0, 'enable-7': true, 'eq-saturation': 1.4, 'eq-contrast': 1.1 },
   },
   {
-    id: 'night-vision',
+    id: 'night-vision-phosphor',
     name: 'Night Vision (Green Phosphor)',
     category: 'retro-analog',
     description: 'Green-channel boost + grain + vignette + slight blur. Night-vision goggles look.',

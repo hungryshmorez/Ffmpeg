@@ -71,6 +71,7 @@ by grep or `node -c`.
 | **Speed curve editor** (#42) | ✅ | 4-keyframe editor with presets |
 | **Adaptive quality** (Trippy Effects) | ✅ | `performance.js` restored, `#perf-hud` visible, trip-cam sheds resolution via `FFPerf.scale` |
 | **Layer compositor UI** (#1.4 / #9) | ✅ | `compositor-ui.js` drives `FFPerf.Compositor`; `.test/compositor.mjs` reads composited pixels back — screen blend → yellow, solo/mute, opacity, crossfade all assert on decoded frames (6/6) |
+| **TRUE datamosh + motion mosh reachable** (#1.1) | ✅ | The v4/v5 "new engine" workflows were counted but never merged into the catalog, never dispatched (`wf.run()`), and `addBlobToBin` was undefined so output vanished. All three fixed; `.test/workflows-v4v5.mjs` drives the real card click and decodes the bin output — bloom's frames > source (P-frames duplicated), motion mosh is a decodable video |
 
 **The three bugs that were actually blocking #1** (all fixed): the `instrumentFfmpeg`
 ms→s timeout that became a 30 ms abort; the split-render audio pass failing on video-only
@@ -91,7 +92,12 @@ several are present as engines but not fully wired into the UI.
   a video codec does internally.
 - *The vision:* datamosh that behaves like the real technique — smearing along genuine motion
   vectors, not a shader approximation.
-- *Status:* ✅ in `motion-mosh.js` / `datamosh.js`. Retired the two older datamosh paths.
+- *Status:* ✅ in `motion-mosh.js` / `datamosh.js`, and now actually **reachable**: the TRUE
+  bitstream datamosh (v4) and real-time motion-vector datamosh (v5) workflows were dead —
+  missing from `getAllBuiltInWorkflows()`, never dispatched through `wf.run()`, and dropping
+  their output because `addBlobToBin` was never defined. Also fixed a `renderFile` hang (it
+  relied on `requestVideoFrameCallback` to detect end-of-video; now it also honours the video's
+  `ended`/`pause` events + a stall watchdog). Verified by `.test/workflows-v4v5.mjs`.
 - *To finish the family (see Glitch & Mosh 57–68):* directional bias, motion masking,
   vector-amplification curve, bloom (repeat vectors), **datamosh between two clips**, persistent
   vector recording, motion-vector overlay on by default. — *M–L each.*

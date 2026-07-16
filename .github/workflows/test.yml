@@ -54,3 +54,9 @@ jobs:
       # sheet open/close, VJ-key coverage, tab cycling, Alt+n jump.
       - name: Keyboard shortcuts
         run: npm run test:shortcuts
+
+      # v4/v5 "new engine" workflows: drives the real card click for TRUE
+      # bitstream datamosh and motion-vector datamosh, and decodes what lands in
+      # the Media Bin (bloom duplicates frames; motion mosh is a real video).
+      - name: New-engine workflows (v4/v5)
+        run: npm run test:workflows-v4v5

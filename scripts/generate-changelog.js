@@ -90,6 +90,18 @@ function countWorkflows() {
     const p = path.join(APP, f);
     if (!fs.existsSync(p)) continue;
     const src = fs.readFileSync(p, 'utf8');
+    // v5 builds each workflow from a _mosh(...) factory call, so the single
+    // literal id inside the factory is a template — not one workflow per call.
+    // Count the factory invocations instead, and attribute them to the factory's
+    // fixed category. (Otherwise the "total" undercounts v5 by six.)
+    const factory = (src.match(/^\s*_mosh\(/gm) || []).length;
+    if (factory) {
+      total += factory;
+      const catm = src.match(/category: '([^']+)'/);
+      const cat = catm ? catm[1] : 'video-glitch-pipelines';
+      byCat[cat] = (byCat[cat] || 0) + factory;
+      continue;
+    }
     const ids = src.match(/^\s{4}id: '[^']+'/gm) || [];
     total += ids.length;
     const catMatches = src.match(/^\s{2,8}category: '[^']+'/gm) || [];

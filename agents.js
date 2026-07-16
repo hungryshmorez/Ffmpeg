@@ -573,6 +573,13 @@ function bindAgentDatamoshDealer() {
 async function runVideoGlitchPipeline(wf) {
   if (!state.ffmpeg) { showInfo('Engine', 'Engine not ready yet.'); return; }
   if (!state.inputFile) { showInfo('No File', 'Load a file first.'); return; }
+  // v5 motion-mosh workflows are category video-glitch-pipelines but drive a JS
+  // engine via run() instead of a pipelineSteps chain — honour that first.
+  if (typeof wf.run === 'function') {
+    try { await wf.run(); }
+    catch (e) { logToConsole('error', `${wf.name} failed: ${e && e.message || e}`); }
+    return;
+  }
   if (typeof analyzeMedia === 'function') {
     try { await analyzeMedia(state.inputFile.virtualName); } catch (_) {}
   }

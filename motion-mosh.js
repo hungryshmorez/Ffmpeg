@@ -342,10 +342,33 @@
     await v.play();
 
     await new Promise((res) => {
+      // Terminate on the source's own end signals, not just the rVFC loop. The
+      // last requestVideoFrameCallback fires slightly BEFORE `ended` flips true,
+      // so it schedules one more callback that never arrives (no further frames
+      // are presented) — and the render hangs forever. This is worse for a
+      // MediaRecorder-encoded clip whose container duration is unknown. Listening
+      // for 'ended'/'pause' (plus a stall watchdog) guarantees we stop.
+      let done = false;
+      const finish = () => { if (done) return; done = true; cleanup(); res(); };
+      const onEnd = () => finish();
+      let lastT = -1, stalls = 0;
+      const watchdog = setInterval(() => {
+        if (v.ended || v.paused) return finish();
+        if (v.currentTime === lastT) { if (++stalls >= 8) finish(); }   // ~800ms with no progress
+        else { lastT = v.currentTime; stalls = 0; }
+      }, 100);
+      const cleanup = () => {
+        clearInterval(watchdog);
+        v.removeEventListener('ended', onEnd);
+        v.removeEventListener('pause', onEnd);
+      };
+      v.addEventListener('ended', onEnd);
+      v.addEventListener('pause', onEnd);
       const step = async () => {
-        if (v.ended || v.paused) return res();
+        if (done) return;
+        if (v.ended || v.paused) return finish();
         await m.processFrame(v);
-        onProgress?.(v.currentTime / v.duration, m.fps);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), m.fps);
         v.requestVideoFrameCallback
           ? v.requestVideoFrameCallback(step)
           : requestAnimationFrame(step);

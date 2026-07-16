@@ -17,14 +17,14 @@ datamosh, master audio, and perform live visuals, all client-side.
 
 | Area | Highlights |
 |---|---|
-| **Convert & compress** | 186 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
+| **Convert & compress** | 193 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
 | **Colour & video** | false-colour exposure, speed ramping with a draggable curve, before/after wipe, node graph (27 node types). |
 | **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors), auto-glitch/chaos engine, CPU pixel sort. |
 | **Audio studio** | real-time Web Audio rack (23 knobs, 12 presets, 7 modules), spectrogram, phase-vocoder time-stretch (keeps pitch), key/BPM detection, semantic macros. |
 | **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, 16-step sequencer, tap tempo, adaptive-quality load-shedding. |
 | **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code. |
 
-The build metadata is generated, not claimed: **31 JS modules · 186 workflows · 808/808
+The build metadata is generated, not claimed: **31 JS modules · 193 workflows · 812/812
 balanced CSS braces · 27 node-graph types · 11 trip-cam effects.** See
 [`scripts/generate-changelog.js`](./scripts/generate-changelog.js) and
 [`build-info.js`](./build-info.js) (the single source of truth).
@@ -89,10 +89,15 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/shortcuts.mjs`** dispatches real `KeyboardEvent`s and reads the UI back: `?` opens the
   cheat sheet (and it lists every VJ key), `Escape` closes it, `[`/`]` cycle tabs, `Alt+6` jumps
   to VJ — asserting on observed state, never on "the handler exists".
+- **`.test/workflows-v4v5.mjs`** drives the real **Apply & Run** card click for the "new engine"
+  workflows (TRUE bitstream datamosh, real-time motion-vector datamosh) and **decodes what lands
+  in the Media Bin**: bloom's output has *more* decoded frames than the source (P-frames were
+  duplicated), and the motion mosh output is a genuinely decodable video. These were unreachable
+  before — counted in build-info but never merged into the catalog, dispatched, or added to the bin.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
-`test:workflows`, `test:compositor`, and `test:shortcuts` in real headless Chromium on every push
-and pull request.
+`test:workflows`, `test:compositor`, `test:shortcuts`, and `test:workflows-v4v5` in real headless
+Chromium on every push and pull request.
 
 ---
 
@@ -137,6 +142,7 @@ All three are fixed and verified by the tests above.
 │   ├── workflows.mjs       # golden multi-workflow matrix + both audio branches
 │   ├── compositor.mjs      # layer compositor: composited pixels read back (blend/solo/mute/xfade)
 │   ├── shortcuts.mjs       # keyboard shortcuts: cheat sheet + tab nav, asserted on UI state
+│   ├── workflows-v4v5.mjs  # TRUE datamosh + motion mosh reachable: real card click → decoded bin output
 │   └── server.mjs          # minimal COOP/COEP static server
 ├── .github/workflows/
 │   └── test.yml            # runs the tests on every push
@@ -161,7 +167,7 @@ All three are fixed and verified by the tests above.
 | `compositor-ui.js` | the Layer Compositor deck (layer strips, blend/opacity/solo/mute, crossfader, hot cues) over `FFPerf.Compositor` |
 | `nodegraph.js` | node-graph editor (27 node types) |
 | `clips.js` | clip library, take numbers, sequence export, video queue |
-| `workflows*.js` | the 186 workflow definitions across 16 categories |
+| `workflows*.js` | the 193 workflow definitions across 16 categories |
 | `storage.js`, `opfs.js` | autosave + OPFS persistence |
 | `navigation.js`, `tools.js`, `analysis.js`, `agents.js` | tab nav, misc tools, analysis, agent helpers |
 
