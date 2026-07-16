@@ -148,6 +148,7 @@
     <button class="tab-btn"        data-tab="agents"    type="button" role="tab" aria-controls="tab-agents">🤖 Agents</button>
         <button type="button" class="tab-btn" data-tab="tripcam" role="tab">🌀 Trip Cam</button>
         <button type="button" class="tab-btn" data-tab="graph" role="tab">⛓️ Graph</button>
+        <button type="button" class="tab-btn" data-tab="vj" role="tab" aria-controls="tab-vj">🎚 VJ</button>
   </nav>
 
   <!-- =========================================================================
@@ -2239,6 +2240,8 @@
          ===================================================================== -->
     <div class="tab-content" id="tab-audio" role="tabpanel"></div>
       <div class="tab-content" id="tab-tripcam" role="tabpanel"></div>
+      <!-- Live performance mode — filled by vj-mode.js FFVJ.build() on first open. -->
+      <div class="tab-content" id="tab-vj" role="tabpanel" style="display:none"></div>
       <div class="tab-content" id="tab-graph" role="tabpanel">
         <div id="nodegraph-panel"></div>
       </div>

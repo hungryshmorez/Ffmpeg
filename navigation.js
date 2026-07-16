@@ -46,6 +46,7 @@
         { id: 'workflows', label: '📋 Workflows', hint: 'One-click recipes for video' },
         { id: 'editor',    label: '✂️ Editor',    hint: 'Every control, 32 sections' },
         { id: 'tripcam',   label: '🌀 Trip Cam',  hint: 'Real-time GPU glitch + webcam' },
+        { id: 'vj',        label: '🎚 VJ',        hint: 'Live performance — MIDI, sequencer, hot cues' },
         { id: 'graph',     label: '⛓️ Graph',     hint: 'Build a filter chain visually' },
         { id: 'preview',   label: '▶ Preview',    hint: 'Compare source and output' },
         { id: 'agents',    label: '🤖 Agents',    hint: 'Batch, chains, history' },

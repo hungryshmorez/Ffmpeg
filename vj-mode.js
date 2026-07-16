@@ -362,6 +362,18 @@
             <option value="full-chaos">Full Chaos</option>
           </select>
           <button type="button" id="vj-chaos" class="mini-btn">🎲 Auto-Glitch</button>
+          <label class="vj-bpm-wrap" title="Global intensity — one knob toward neutral over every effect">
+            <input type="range" id="vj-master" min="0" max="1" step="0.01" value="1">
+            <span>MASTER</span>
+          </label>
+          <select id="vj-quality" class="ctrl" title="Render quality — Auto sheds resolution when the frame rate drops">
+            <option value="auto">⚡ Quality: Auto</option>
+            <option value="ultra">Ultra</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="potato">Minimum</option>
+          </select>
         </div>
 
         <div class="vj-pads" id="vj-pads"></div>
@@ -447,6 +459,28 @@
     });
 
     document.getElementById('vj-source').addEventListener('change', (e) => setSource(e.target.value));
+
+    // MASTER — global intensity. One knob scales every effect param toward its
+    // neutral value (0 = full bypass, 1 = as dialled). Backed by FFPerf.Master
+    // (performance.js). pointerdown captures the current patch as the base so
+    // the drag lerps from there; pointerup releases it.
+    const mst = document.getElementById('vj-master');
+    if (mst && window.FFPerf?.Master) {
+      mst.addEventListener('pointerdown', () => { if (engine) window.FFPerf.Master.capture(engine); });
+      mst.addEventListener('input', (e) => { if (engine) window.FFPerf.Master.set(+e.target.value, engine); });
+      mst.addEventListener('pointerup', () => window.FFPerf.Master.release());
+    }
+
+    // QUALITY — Auto lets the adaptive monitor shed load when FPS drops; the
+    // named tiers lock a fixed quality. Backed by FFPerf.Perf (performance.js).
+    const q = document.getElementById('vj-quality');
+    if (q && window.FFPerf?.Perf) {
+      q.addEventListener('change', (e) => {
+        const v = e.target.value;
+        if (v === 'auto') { window.FFPerf.Perf.auto = true; log('Quality: Auto — it sheds load if the frame rate drops.', 'ok'); }
+        else { window.FFPerf.Perf.setTier(v); log(`Quality locked to ${v}.`, 'ok'); }
+      });
+    }
 
     document.getElementById('vj-route').addEventListener('change', async (e) => {
       const v = e.target.value;
