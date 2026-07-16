@@ -2575,3 +2575,19 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
   padding: 1px 5px;
   font-size: 10px;
 }
+
+/* =============================================================================
+   #8 — Self-test result chip (topbar). Reports DECODED FRAMES, colour-coded.
+   ========================================================================== */
+.selftest-result {
+  font: 600 12px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #2a3550);
+  white-space: nowrap;
+  letter-spacing: .01em;
+}
+.selftest-result[hidden] { display: none; }
+.selftest-result.running { color: #ffcc00; border-color: rgba(255,204,0,.4); }
+.selftest-result.ok  { color: #44ff88; border-color: rgba(68,255,136,.4); background: rgba(68,255,136,.08); }
+.selftest-result.bad { color: #ff5566; border-color: rgba(255,85,102,.45); background: rgba(255,85,102,.10); }

@@ -559,6 +559,51 @@ async function assertRealVideo(outName, expectFrames, expectDurSec) {
   return { frames, durSec, bytes };
 }
 
+// =============================================================================
+// #8 — ON-DEMAND SELF-TEST PANEL
+// -----------------------------------------------------------------------------
+// The same encoder smoke test the boot runs, but on a button, reporting the
+// only number that matters: DECODED FRAMES. Encodes 90 frames of testsrc with
+// libx264 (the real path) and mpeg4 (the control), decodes each, and passes
+// only if the frame count is real. A 1-frame file is ~20 KB and would sail past
+// any byte check — this refuses to be fooled by it.
+// =============================================================================
+async function runSelfTest() {
+  const btn = document.getElementById('btn-selftest');
+  const out = document.getElementById('selftest-result');
+  if (!state.engineReady) { logToConsoleThrottled('warn', 'Engine not ready — try again in a moment.'); return; }
+  if (state.isProcessing) { logToConsole('warn', 'Busy — run the self-test after the current render.'); return; }
+
+  if (btn) { btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = '🩺 Testing…'; }
+  if (out) { out.hidden = false; out.className = 'selftest-result running'; out.textContent = 'running…'; }
+  logToConsole('', '[selftest] encoding 90 frames of testsrc and counting DECODED frames…');
+
+  const EXPECT = 90;
+  const CASES = [
+    { codec: 'libx264', args: ['-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p'], file: '__selftest_x264.mp4' },
+    { codec: 'mpeg4',   args: ['-c:v', 'mpeg4', '-q:v', '5'],                                       file: '__selftest_mpeg4.mp4' },
+  ];
+  const results = [];
+  for (const c of CASES) {
+    try {
+      await ff.exec(['-f', 'lavfi', '-i', 'testsrc=duration=3:size=320x240:rate=30', ...c.args, '-y', c.file]);
+      const a = await assertRealVideo(c.file, EXPECT, 3);
+      results.push({ codec: c.codec, frames: a.frames, ok: a.frames >= EXPECT * 0.9 });
+    } catch (e) {
+      results.push({ codec: c.codec, frames: 0, ok: false, err: (e && e.message) || String(e) });
+    }
+    try { await ff.deleteFile(c.file); } catch (_) {}
+  }
+
+  const allOk = results.every(r => r.ok);
+  const summary = results.map(r => `${r.codec} ${r.frames}f ${r.ok ? '✓' : '✗'}`).join(' · ');
+  logToConsole(allOk ? 'ok' : 'error', `[selftest] ${allOk ? 'PASS' : 'FAIL'} — ${summary}`);
+  if (out) { out.className = 'selftest-result ' + (allOk ? 'ok' : 'bad'); out.textContent = summary; }
+  if (btn) { btn.disabled = false; btn.textContent = btn.dataset.label || '🩺 Self-test'; }
+  return { ok: allOk, results };
+}
+window.runSelfTest = runSelfTest;
+
 const _bgJobs = new Set();
 function makeBgToken() {
   const token = Symbol('bg');
@@ -5427,6 +5472,9 @@ function bindAll() {
       if (btn) { btn.disabled = false; btn.textContent = '⚡ Test WebCodecs path'; }
     }
   });
+
+  // --- #8 self-test button
+  $('#btn-selftest')?.addEventListener('click', () => { runSelfTest(); });
 
   // --- Shortcuts modal
   const sm = $('#shortcuts-modal');
