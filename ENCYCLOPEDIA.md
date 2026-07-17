@@ -274,7 +274,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 65 | True DCT manipulation | Corrupt DCT blocks at coefficient level. | 🔒 | Needs coefficient-level decode (custom codec work). — *XL* |
 | 66 | Databend mode | Corrupt raw bytes of any file and try to decode. | ✅ | `databendBytes` pokes the AVI frame-data region (header-safe, deterministic); `databend()` remuxes with error concealment. Workflow "🧨 Databend". `.test/databend.mjs` decodes the wreckage to real frames. |
 | 67 | Feedback with geometric transforms | Zoom+rotate per iteration — the infinite tunnel. | ✅ | `FeedbackTunnel` keeps a persistent buffer, re-draws it zoomed+rotated over an opaque black bg and faded by `decay` each frame, then composites the new frame — detail spirals outward forever. `renderFeedback` runs it offline → Media Bin. Workflows "🌀 Feedback Tunnel" / "🌪️ Feedback Vortex". `.test/feedback.mjs` verifies zoom-spread, decay, and rotation deterministically on the buffer. |
-| 68 | Optical-flow-driven displacement | Use the motion field as a displacement map. | ⬜ | Flow field → displacement shader. — *M* |
+| 68 | Optical-flow-driven displacement | Use the motion field as a displacement map. | ✅ | `MotionMosher.displaceByFlow` samples the same picture through the block-grid flow field, bilinearly interpolated per pixel — a smooth liquid warp where the scene moves, not a datamosh tear. `renderFlowDisplace` estimates each frame's flow and warps that frame → Media Bin. Workflows "💧 Flow Warp — Liquid / 🔥 Heat Haze / 🌊 Riptide". `.test/flow-displace.mjs` verifies the shift-by-dx·scale, scale linearity, zero-field identity, and spatially-varying warp deterministically. |
 
 ### Live & Performance (69–80)
 
@@ -357,7 +357,7 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 ### Phase D — The mosh/glitch family (build on the SAD estimator)
 11. ⬜ Directional mosh, masking, amplification curve, bloom (#58–61) — small, share the vector field.
 12. ⬜ **Datamosh between two clips** (#62) + persistent vector recording (#63) — the headline.
-13. ⬜ Flow displacement (#68). ✅ masked pixel sort (#64), databend (#66), feedback transforms (#67).
+13. ✅ masked pixel sort (#64), databend (#66), feedback transforms (#67), flow displacement (#68).
 
 ### Phase E — Audio depth
 14. ⬜ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),

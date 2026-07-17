@@ -85,4 +85,38 @@ window.WORKFLOWS_V5 = [
     { blockSize: 24, motionRadius: 6, motionStrength: 1.2, persistence: 0.97, bloomIterations: 4, iFrameInterval: 0 },
     'Applies each frame’s displacement four times over, pushing the picture outward and blooming with every pass.',
     '🌸', ['bloom', 'repeat', 'push', 'expand']),
-];
+
+  // --- optical-flow displacement (#68) — the field warps its OWN frame ---
+  (() => {
+    const flow = (name, params, desc, icon, tags) => ({
+      id: `flow-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      name: `Flow Warp — ${name}`,
+      category: 'video-glitch-pipelines',
+      description: desc,
+      tags: ['flow', 'displacement', 'warp', 'optical', ...tags],
+      icon, slow: true,
+      run: () => {
+        const m = window.state?.inputFile;
+        if (!m) return window.logToConsole?.('warn', 'No file selected.');
+        return window.FFMosh.renderFlowDisplace(m, params, (p) => {
+          window.setProgress?.(p);
+          window.setProgressText?.(`Flow warp — ${Math.round(p * 100)}%`);
+        });
+      },
+    });
+    return [
+      flow('Liquid',
+        { blockSize: 16, motionRadius: 12, threshold: 1, scale: 3 },
+        'Uses each frame’s own optical flow as a displacement map — the picture warps like liquid exactly where the scene moves, and stays sharp where it’s still. Not a datamosh tear; a smooth bilinear warp.',
+        '💧', ['liquid', 'smooth']),
+      flow('Heat Haze',
+        { blockSize: 24, motionRadius: 8, threshold: 2, scale: 1.5 },
+        'A gentler flow warp — subtle shimmer that ripples the moving parts like heat off tarmac.',
+        '🔥', ['haze', 'shimmer', 'subtle']),
+      flow('Riptide',
+        { blockSize: 12, motionRadius: 16, threshold: 0, scale: 6 },
+        'Small blocks, long search, heavy scale — the whole frame is dragged into the current. Everything that moves smears violently.',
+        '🌊', ['extreme', 'drag', 'current']),
+    ];
+  })(),
+].flat();

@@ -411,6 +411,39 @@
       return out;
     }
 
+    // -------------------------------------------------------------------------
+    // OPTICAL-FLOW DISPLACEMENT (#68) — use the motion field as a per-pixel
+    // DISPLACEMENT MAP. Unlike _apply (which drags whole blocks of the WRONG
+    // picture, tearing), this samples the SAME picture through a smoothly
+    // bilinear-interpolated flow so it warps like liquid where the scene moves,
+    // and stays put where it's still. `scale` exaggerates the warp.
+    // -------------------------------------------------------------------------
+    displaceByFlow(cur, vec, cols, rows, w, h, opts = {}) {
+      const scale = opts.scale ?? 1;
+      const bs = this.p.blockSize;
+      const out = new Uint8ClampedArray(cur.length);
+      const clamp = (v, m) => (v < 0 ? 0 : v > m ? m : v);
+      const at = (gx, gy, c) => vec[(gy * cols + gx) * 2 + c];
+      const lerp = (a, b, t) => a + (b - a) * t;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          // sample the block-grid field bilinearly at this pixel
+          const fx = x / bs - 0.5, fy = y / bs - 0.5;
+          const bx0 = Math.floor(fx), by0 = Math.floor(fy);
+          const tx = fx - bx0, ty = fy - by0;
+          const gx0 = clamp(bx0, cols - 1), gx1 = clamp(bx0 + 1, cols - 1);
+          const gy0 = clamp(by0, rows - 1), gy1 = clamp(by0 + 1, rows - 1);
+          const dx = lerp(lerp(at(gx0, gy0, 0), at(gx1, gy0, 0), tx), lerp(at(gx0, gy1, 0), at(gx1, gy1, 0), tx), ty);
+          const dy = lerp(lerp(at(gx0, gy0, 1), at(gx1, gy0, 1), tx), lerp(at(gx0, gy1, 1), at(gx1, gy1, 1), tx), ty);
+          const sx = clamp(Math.round(x - dx * scale), w - 1);
+          const sy = clamp(Math.round(y - dy * scale), h - 1);
+          const d = (y * w + x) * 4, s = (sy * w + sx) * 4;
+          out[d] = cur[s]; out[d + 1] = cur[s + 1]; out[d + 2] = cur[s + 2]; out[d + 3] = 255;
+        }
+      }
+      return out;
+    }
+
     reset() {
       this.prevY = null; this.accum = null; this.vec = null;
       this.frameNo = 0; this.moshing = false;
@@ -493,6 +526,62 @@
     await window.addBlobToBin?.(blob, `${media.name} [MOTION MOSH].${ext}`, type);
     window.logToConsole?.('ok',
       `[mosh] rendered ${(blob.size / 1024 / 1024).toFixed(1)} MB → Media Bin`);
+    return blob;
+  }
+
+  // ===========================================================================
+  // FLOW DISPLACEMENT (#68) — estimate each frame's optical flow and use it as a
+  // per-pixel displacement map on THAT SAME frame. The scene warps like liquid
+  // where it moves and stays sharp where it's still. Offline → Media Bin.
+  // ===========================================================================
+
+  async function renderFlowDisplace(media, params, onProgress) {
+    const p = Object.assign({ blockSize: 16, motionRadius: 12, threshold: 1, scale: 3 }, params || {});
+    const v = document.createElement('video');
+    v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const src = document.createElement('canvas'); src.width = w; src.height = h;
+    const sctx = src.getContext('2d', { willReadFrequently: true });
+    const m = new MotionMosher(cv); m.setParams(p);
+
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))(
+      'video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        sctx.drawImage(v, 0, 0, w, h);
+        const cur = sctx.getImageData(0, 0, w, h);
+        const field = m.captureField(v);   // null on the priming frame
+        if (field) {
+          const out = m.displaceByFlow(cur.data, field.vec, field.cols, field.rows, w, h, { scale: p.scale });
+          ctx.putImageData(new ImageData(out, w, h), 0, 0);
+        } else {
+          ctx.putImageData(cur, 0, 0);
+        }
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [FLOW WARP].${ext}`, type);
+    window.logToConsole?.('ok', `[flow] displaced ${(blob.size / 1024 / 1024).toFixed(1)} MB → Media Bin`);
     return blob;
   }
 
@@ -695,6 +784,6 @@
     return { w: o.w, h: o.h, blockSize: o.blockSize, cols: o.cols, rows: o.rows, frames, name: o.name };
   }
 
-  window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips,
+  window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips, renderFlowDisplace,
     recordVectors, replayVectors, serializeVectors, deserializeVectors };
 })();

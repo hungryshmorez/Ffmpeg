@@ -21,6 +21,7 @@
     "test:databend": "node .test/databend.mjs",
     "test:pixelsort": "node .test/pixelsort.mjs",
     "test:feedback": "node .test/feedback.mjs",
+    "test:flow-displace": "node .test/flow-displace.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

@@ -110,3 +110,9 @@ jobs:
       # fades the buffer, rotate moves the trail — verified on the buffer pixels.
       - name: Feedback tunnel
         run: npm run test:feedback
+
+      # Flow displacement (#68): the motion field warps its own frame as a
+      # bilinear displacement map — a uniform field shifts an edge by dx*scale,
+      # zero leaves it be, a varying field warps the halves differently.
+      - name: Flow displacement
+        run: npm run test:flow-displace
