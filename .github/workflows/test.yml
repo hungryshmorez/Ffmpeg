@@ -80,3 +80,8 @@ jobs:
       # horizontal page overflow and that taps switch/reach tabs.
       - name: Mobile + iPad layout
         run: npm run test:mobile
+
+      # VJ panic: latch triggers + sequencer + master, then PANIC (button and
+      # the "0" key) must reset everything.
+      - name: VJ panic
+        run: npm run test:panic

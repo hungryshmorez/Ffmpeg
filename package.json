@@ -15,6 +15,7 @@
     "test:audio-studio": "node .test/audio-studio.mjs",
     "test:clips": "node .test/clips.mjs",
     "test:mobile": "node .test/mobile.mjs",
+    "test:panic": "node .test/panic.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

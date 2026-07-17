@@ -139,6 +139,11 @@
       if (!document.getElementById('tab-vj')?.classList.contains('active')) return;
       if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
 
+      // PANIC — kill everything instantly (the "0" key or the PANIC button).
+      // Non-negotiable on stage: latched effects, sequencer, chaos, strobe and
+      // mosh all drop at once and the patch returns to neutral.
+      if (e.key === '0') { panic(); e.preventDefault(); return; }
+
       const id = keyToId[e.key.toLowerCase()];
       if (!id || e.repeat) return;
       e.preventDefault();
@@ -247,6 +252,34 @@
     for (const id of [...S.active]) release(id);
   }
 
+  // ===========================================================================
+  // PANIC — kill everything, instantly. The one control a live tool can't ship
+  // without: latched/held triggers, the sequencer, chaos, strobe and mosh all
+  // drop at once and the patch snaps back to neutral. Bound to the "0" key and
+  // the PANIC button.
+  // ===========================================================================
+  function panic() {
+    for (const id of [...S.active, ...S.held]) release(id);   // release every trigger
+    S.active.clear(); S.held.clear();
+    if (S.playing) stop();                                    // stop the sequencer
+    try { chaos?.stop(); } catch (_) {}                        // kill the chaos engine
+    S.strobeOn = false;
+    document.getElementById('vj-chaos')?.classList.remove('active');
+    if (engine) {                                             // neutral patch
+      try {
+        engine.setParams(window.TripCam?.DEFAULTS || {});
+        engine.freeze?.(false);
+      } catch (_) {}
+    }
+    try { window.FFPerf?.Master?.release?.(); } catch (_) {}
+    try { mosher?.forceIFrame?.(); } catch (_) {}             // drop any mosh
+    const mst = document.getElementById('vj-master');
+    if (mst) mst.value = '1';                                 // master intensity → full
+    document.querySelectorAll('.vj-pad.lit').forEach((p) => p.classList.remove('lit'));
+    document.querySelectorAll('.vj-step.now').forEach((s) => s.classList.remove('now'));
+    log('PANIC — all effects reset.', 'ok');
+  }
+
   function tick() {
     if (!S.playing) return;
 
@@ -343,6 +376,7 @@
       <div class="vj-deck">
         <div class="vj-transport">
           <button type="button" id="vj-play" class="vj-play">▶</button>
+          <button type="button" id="vj-panic" class="vj-panic" title="Reset everything (0)">⏹ PANIC</button>
           <button type="button" id="vj-tap"  class="mini-btn">TAP</button>
           <label class="vj-bpm-wrap">
             <input type="range" id="vj-bpm" min="40" max="220" value="120">
@@ -424,6 +458,9 @@
     }).join('');
 
     bind();
+    bindKeys();          // hold = stab, shift = latch, "0" = panic — this was
+                         // defined but never called, so the whole VJ keyboard
+                         // (the core live-performance ergonomics) was dead.
     monitorFPS();
     loadMap();
     initMIDI();
@@ -450,6 +487,7 @@
     });
 
     document.getElementById('vj-play').addEventListener('click', play);
+    document.getElementById('vj-panic').addEventListener('click', panic);
     document.getElementById('vj-tap').addEventListener('click', tap);
     document.getElementById('vj-sync').addEventListener('click', syncToAudio);
 
@@ -585,7 +623,7 @@
   }
   function renderMappings() { /* mappings render into the learn button title */ }
 
-  window.FFVJ = { build, TRIGGERS, fire, release, S };
+  window.FFVJ = { build, TRIGGERS, fire, release, panic, S };
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('[data-tab="vj"]')?.addEventListener('click', build);

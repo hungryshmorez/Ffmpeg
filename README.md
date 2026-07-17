@@ -109,11 +109,14 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/mobile.mjs`** loads the app in **touch-emulated** contexts at phone, iPad-portrait and
   iPad-landscape sizes and asserts the page never scrolls sideways (across every tab) and that real
   taps switch tabs and reach off-screen ones.
+- **`.test/panic.mjs`** latches VJ triggers, runs the sequencer and pulls the master down, then hits
+  **PANIC** (both the button and the `0` key) and asserts everything reset — no live tool ships
+  without a panic. (Also caught that the VJ keyboard was never bound.)
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, and `test:mobile` in real headless Chromium on every push and
-pull request.
+`test:audio-studio`, `test:clips`, `test:mobile`, and `test:panic` in real headless Chromium on
+every push and pull request.
 
 ---
 

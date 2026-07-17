@@ -2453,6 +2453,10 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 .vj-transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .vj-play{width:40px;height:40px;border-radius:50%;border:0;background:#00d4ff;color:#000;
   font-size:15px;cursor:pointer;font-weight:700}
+.vj-panic{background:#2a0d0d;border:1px solid #ff4444;color:#ff5555;border-radius:6px;
+  padding:8px 12px;font-size:11px;font-weight:800;letter-spacing:.5px;cursor:pointer}
+.vj-panic:hover{background:#ff4444;color:#fff}
+.vj-panic:active{transform:scale(.95)}
 .vj-bpm-wrap{display:flex;align-items:center;gap:6px;font-size:10px;color:#888}
 .vj-bpm-wrap input{width:110px}
 .vj-bpm-wrap span{color:#00d4ff;font-family:ui-monospace,monospace;font-weight:700;min-width:26px}
