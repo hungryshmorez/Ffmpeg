@@ -926,6 +926,10 @@ kbd {
     justify-content: flex-start;
     text-align: left;
   }
+  /* On phones the verbose engine text wraps to ~4 lines and just duplicates the
+     bottom status bar. Keep the coloured status dot; drop the prose + MEMFS
+     readout so the header doesn't eat half the first screen on every tab. */
+  #status-text, #memfs-gauge { display: none; }
   .app-grid {
     grid-template-columns: 1fr;
     height: auto;
