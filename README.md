@@ -102,10 +102,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   Audio engine, and **bounces it two ways** — direct WAV and MP3 with two-pass loudness
   normalisation — decoding each result back to **PCM samples** (the audio equivalent of frames,
   not bytes).
+- **`.test/clips.mjs`** adds two clips to the Clip Studio library and runs **`exportSequence`**,
+  then decodes the concatenated output — the frame count equals the sum of the clips, proving the
+  concat ran (not just that a file appeared).
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-and `test:audio-studio` in real headless Chromium on every push and pull request.
+`test:audio-studio`, and `test:clips` in real headless Chromium on every push and pull request.
 
 ---
 
@@ -153,6 +156,7 @@ All three are fixed and verified by the tests above.
 │   ├── workflows-v4v5.mjs  # TRUE datamosh + motion mosh reachable: real card click → decoded bin output
 │   ├── bin-features.mjs    # compress-to-target + scene split: decoded clips out of the Media Bin
 │   ├── audio-studio.mjs    # loadFromBin → Web Audio bounce (WAV + MP3/loudnorm) → decoded PCM samples
+│   ├── clips.mjs           # Clip Studio exportSequence: concat of two clips → decoded frame count
 │   └── server.mjs          # minimal COOP/COEP static server
 ├── .github/workflows/
 │   └── test.yml            # runs the tests on every push

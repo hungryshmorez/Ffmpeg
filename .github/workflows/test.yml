@@ -70,3 +70,8 @@ jobs:
       # samples (WAV direct + MP3 with two-pass loudnorm).
       - name: Audio Studio bounce
         run: npm run test:audio-studio
+
+      # Clip Studio: add clips to the library, export the sequence, and decode
+      # the concatenated result (frame count = sum of the clips).
+      - name: Clip sequence export
+        run: npm run test:clips
