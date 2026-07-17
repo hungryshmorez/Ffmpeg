@@ -270,7 +270,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 61 | Bloom mode (repeat vectors N×) | Smear further. | ✅ | `bloomIterations` re-applies the displacement N×; preset "Bloom Push". Test asserts 4× displaces further than 1×. |
 | 62 | **Datamosh between TWO clips** | Take A's vectors, apply to B — the *actual* classic technique. | ✅ | `MotionMosher.moshAcross` estimates on the motion clip and applies to the picture clip; `FFMosh.renderTwoClips` records it. UI: select 2 bin clips → "🌀 Datamosh A→B". Core verified deterministically + end-to-end (`.test/mosh-family.mjs`, `.test/datamosh2.mjs`). |
 | 63 | Persistent vector recording | Capture a motion field once, replay over anything. | ✅ | `recordVectors` captures a clip's fields; `serializeVectors`/`deserializeVectors` round-trip them (Int16, saved to localStorage); `replayVectors` applies them to any clip. UI: 🔴 Record Motion / ▶ Apply Motion. Verified deterministically + end-to-end (record 27 fields → replay onto another clip). |
-| 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ⬜ | Masked, angled sort. — *M* |
+| 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ✅ | `sortBands` sorts only contiguous runs whose luma/hue is inside a `[lo,hi]` band (out-of-band pixels untouched); `pixelSortMasked` runs it along any angle (rotate → sort → rotate back); `renderPixelSort` applies it per-frame → Media Bin. Workflows "🌈 Pixel Sort — Masked" / "📐 Pixel Sort — Diagonal". `.test/pixelsort.mjs` verifies mask selectivity, run ordering, and angle deterministically. |
 | 65 | True DCT manipulation | Corrupt DCT blocks at coefficient level. | 🔒 | Needs coefficient-level decode (custom codec work). — *XL* |
 | 66 | Databend mode | Corrupt raw bytes of any file and try to decode. | ✅ | `databendBytes` pokes the AVI frame-data region (header-safe, deterministic); `databend()` remuxes with error concealment. Workflow "🧨 Databend". `.test/databend.mjs` decodes the wreckage to real frames. |
 | 67 | Feedback with geometric transforms | Zoom+rotate per iteration — the infinite tunnel. | ⬜ | Per-iteration transform in the feedback shader. — *S–M* |
@@ -357,7 +357,7 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 ### Phase D — The mosh/glitch family (build on the SAD estimator)
 11. ⬜ Directional mosh, masking, amplification curve, bloom (#58–61) — small, share the vector field.
 12. ⬜ **Datamosh between two clips** (#62) + persistent vector recording (#63) — the headline.
-13. ⬜ Feedback transforms (#67), flow displacement (#68), masked pixel sort (#64), databend (#66).
+13. ⬜ Feedback transforms (#67), flow displacement (#68). ✅ masked pixel sort (#64), databend (#66).
 
 ### Phase E — Audio depth
 14. ⬜ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),

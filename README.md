@@ -124,10 +124,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/databend.mjs`** runs the **Databend** card (corrupt the raw bytes, decode through the
   damage) and asserts the wrecked stream still **decodes to real frames** — plus a deterministic
   unit check that the corruptor pokes bytes and leaves the container header intact.
+- **`.test/pixelsort.mjs`** verifies the **masked / angled pixel sort** deterministically: a
+  hand-built row proves out-of-band pixels are left untouched and in-band runs come back sorted
+  (asc + desc), and a 90° pass proves the angle actually rotates the sort axis.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, and `test:databend` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, and `test:pixelsort` in real headless Chromium on
 every push and pull request.
 
 ---

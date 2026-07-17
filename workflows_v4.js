@@ -42,6 +42,40 @@ window.WORKFLOWS_V4 = [
     run: () => window.FFDatamosh.databend({ rate: 0.0008 }),
   },
 
+  // ---- MASKED / ANGLED PIXEL SORT ----
+  {
+    id: 'pixel-sort-masked',
+    name: 'Pixel Sort — Masked',
+    category: 'video-glitch-pipelines',
+    description: 'Sorts only the pixels whose brightness falls inside a mid-tone band, leaving shadows and highlights intact — the selective look, not the whole-frame smear. A real per-frame sort applied to every frame.',
+    tags: ['pixelsort', 'sort', 'glitch', 'mask', 'band'],
+    icon: '🌈', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderPixelSort(m, { lo: 0.25, hi: 0.85, mode: 'brightness', angle: 0, order: 'asc' }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Pixel sorting — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'pixel-sort-diagonal',
+    name: 'Pixel Sort — Diagonal',
+    category: 'video-glitch-pipelines',
+    description: 'The masked sort, run along a 45° axis so the streaks fall on the diagonal instead of the scanline. Rotate → sort the band → rotate back.',
+    tags: ['pixelsort', 'sort', 'glitch', 'diagonal', 'angle'],
+    icon: '📐', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderPixelSort(m, { lo: 0.2, hi: 0.9, mode: 'brightness', angle: 45, order: 'asc' }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Pixel sorting — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- AUTO COLOUR MATCH ----
   {
     id: 'color-match',
