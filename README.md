@@ -127,10 +127,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/pixelsort.mjs`** verifies the **masked / angled pixel sort** deterministically: a
   hand-built row proves out-of-band pixels are left untouched and in-band runs come back sorted
   (asc + desc), and a 90° pass proves the angle actually rotates the sort axis.
+- **`.test/feedback.mjs`** verifies the **feedback tunnel** deterministically on the buffer: a
+  central square spreads outward under zoom>1, the buffer fades under decay when nothing is added,
+  and a non-zero rotation lands the trail somewhere different.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, and `test:pixelsort` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, and `test:feedback` in real headless Chromium on
 every push and pull request.
 
 ---

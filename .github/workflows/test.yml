@@ -105,3 +105,8 @@ jobs:
       # untouched, in-band runs come back sorted, and the angle changes the frame.
       - name: Pixel sort (masked/angled)
         run: npm run test:pixelsort
+
+      # Feedback tunnel (#67): zoom>1 spreads a central detail outward, decay
+      # fades the buffer, rotate moves the trail — verified on the buffer pixels.
+      - name: Feedback tunnel
+        run: npm run test:feedback

@@ -273,7 +273,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ✅ | `sortBands` sorts only contiguous runs whose luma/hue is inside a `[lo,hi]` band (out-of-band pixels untouched); `pixelSortMasked` runs it along any angle (rotate → sort → rotate back); `renderPixelSort` applies it per-frame → Media Bin. Workflows "🌈 Pixel Sort — Masked" / "📐 Pixel Sort — Diagonal". `.test/pixelsort.mjs` verifies mask selectivity, run ordering, and angle deterministically. |
 | 65 | True DCT manipulation | Corrupt DCT blocks at coefficient level. | 🔒 | Needs coefficient-level decode (custom codec work). — *XL* |
 | 66 | Databend mode | Corrupt raw bytes of any file and try to decode. | ✅ | `databendBytes` pokes the AVI frame-data region (header-safe, deterministic); `databend()` remuxes with error concealment. Workflow "🧨 Databend". `.test/databend.mjs` decodes the wreckage to real frames. |
-| 67 | Feedback with geometric transforms | Zoom+rotate per iteration — the infinite tunnel. | ⬜ | Per-iteration transform in the feedback shader. — *S–M* |
+| 67 | Feedback with geometric transforms | Zoom+rotate per iteration — the infinite tunnel. | ✅ | `FeedbackTunnel` keeps a persistent buffer, re-draws it zoomed+rotated over an opaque black bg and faded by `decay` each frame, then composites the new frame — detail spirals outward forever. `renderFeedback` runs it offline → Media Bin. Workflows "🌀 Feedback Tunnel" / "🌪️ Feedback Vortex". `.test/feedback.mjs` verifies zoom-spread, decay, and rotation deterministically on the buffer. |
 | 68 | Optical-flow-driven displacement | Use the motion field as a displacement map. | ⬜ | Flow field → displacement shader. — *M* |
 
 ### Live & Performance (69–80)
@@ -357,7 +357,7 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 ### Phase D — The mosh/glitch family (build on the SAD estimator)
 11. ⬜ Directional mosh, masking, amplification curve, bloom (#58–61) — small, share the vector field.
 12. ⬜ **Datamosh between two clips** (#62) + persistent vector recording (#63) — the headline.
-13. ⬜ Feedback transforms (#67), flow displacement (#68). ✅ masked pixel sort (#64), databend (#66).
+13. ⬜ Flow displacement (#68). ✅ masked pixel sort (#64), databend (#66), feedback transforms (#67).
 
 ### Phase E — Audio depth
 14. ⬜ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),

@@ -490,6 +490,91 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5c. FEEDBACK WITH GEOMETRIC TRANSFORMS (#67) — the infinite tunnel. A
+  //     persistent buffer is re-drawn each frame ZOOMED + ROTATED and faded by
+  //     `decay`, then the new frame is composited on top. Because last frame's
+  //     picture is scaled a little every step, any detail spirals outward (or
+  //     inward) forever — the classic video-feedback tunnel, done offline on a
+  //     2-D canvas so it's deterministic and headless-verifiable.
+  // ===========================================================================
+
+  class FeedbackTunnel {
+    constructor(w, h, opts = {}) {
+      this.w = w; this.h = h;
+      this.p = Object.assign({ zoom: 1.04, rotate: 0.02, decay: 0.9, mix: 0.7, hueShift: 0, blend: 'lighter' }, opts);
+      const mk = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+      this.buf = mk(); this.bctx = this.buf.getContext('2d', { willReadFrequently: true });
+      this.tmp = mk(); this.tctx = this.tmp.getContext('2d', { willReadFrequently: true });
+    }
+    /** Feed one drawable frame (canvas / video / image); returns the buffer canvas. */
+    push(frame) {
+      const { zoom, rotate, decay, mix, hueShift, blend } = this.p;
+      const t = this.tctx, w = this.w, h = this.h;
+      // Opaque black background so `decay` fades the picture toward black in RGB
+      // (fading via alpha alone leaves RGB at full and never darkens).
+      t.globalCompositeOperation = 'source-over'; t.globalAlpha = 1; t.filter = 'none';
+      t.fillStyle = '#000'; t.fillRect(0, 0, w, h);
+      // last frame, decayed + transformed about the centre
+      t.save();
+      t.globalAlpha = Math.max(0, Math.min(1, decay));
+      if (hueShift) t.filter = `hue-rotate(${hueShift}deg)`;
+      t.translate(w / 2, h / 2); t.rotate(rotate); t.scale(zoom, zoom); t.translate(-w / 2, -h / 2);
+      t.drawImage(this.buf, 0, 0, w, h);
+      t.restore();
+      // the new frame, added on top
+      if (frame) {
+        t.save();
+        t.globalAlpha = Math.max(0, Math.min(1, mix));
+        t.globalCompositeOperation = blend;
+        t.drawImage(frame, 0, 0, w, h);
+        t.restore();
+      }
+      this.bctx.clearRect(0, 0, w, h);
+      this.bctx.drawImage(this.tmp, 0, 0);
+      return this.buf;
+    }
+    read() { return this.bctx.getImageData(0, 0, this.w, this.h); }
+  }
+
+  /** Offline render: run a clip through the feedback tunnel → Media Bin. */
+  async function renderFeedback(media, opts = {}, onProgress) {
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(960, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const tunnel = new FeedbackTunnel(w, h, opts);
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        const out = tunnel.push(v);
+        ctx.drawImage(out, 0, 0, w, h);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [FEEDBACK].${ext}`, type);
+    window.logToConsole?.('ok', `[feedback] tunnel → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 6. SPARKLE / PARTICLE OVERLAY — with gravity. Drawn on top of the shader.
   // ===========================================================================
 
@@ -547,6 +632,7 @@ vec2 _rotTC(vec2 tc, float a) {
     Rotation, injectRotation,
     ChaosEngine, CHAOS_DEFAULTS, GLITCH,
     EFFECT_DEFAULTS, applyEffectDefaults,
-    pixelSort, pixelSortMasked, sortBands, renderPixelSort, Sparkles,
+    pixelSort, pixelSortMasked, sortBands, renderPixelSort,
+    FeedbackTunnel, renderFeedback, Sparkles,
   };
 })();

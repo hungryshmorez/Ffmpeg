@@ -76,6 +76,40 @@ window.WORKFLOWS_V4 = [
     },
   },
 
+  // ---- FEEDBACK TUNNEL ----
+  {
+    id: 'feedback-tunnel',
+    name: 'Feedback Tunnel',
+    category: 'video-glitch-pipelines',
+    description: 'The infinite video-feedback tunnel. Each frame re-draws the last one zoomed and rotated a touch, fading as it goes, so any detail spirals outward forever. Runs offline over the whole clip.',
+    tags: ['feedback', 'tunnel', 'zoom', 'rotate', 'trippy', 'psychedelic'],
+    icon: '🌀', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderFeedback(m, { zoom: 1.03, rotate: 0.015, decay: 0.9, mix: 0.75, blend: 'lighter' }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Feedback tunnel — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'feedback-vortex',
+    name: 'Feedback Vortex',
+    category: 'video-glitch-pipelines',
+    description: 'The tunnel wound tighter — stronger zoom, faster spin, longer trails. Everything gets pulled into the swirl.',
+    tags: ['feedback', 'vortex', 'spiral', 'zoom', 'rotate', 'trippy'],
+    icon: '🌪️', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderFeedback(m, { zoom: 1.06, rotate: 0.05, decay: 0.94, mix: 0.6, blend: 'lighter' }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Feedback vortex — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- AUTO COLOUR MATCH ----
   {
     id: 'color-match',
