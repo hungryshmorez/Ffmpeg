@@ -268,7 +268,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 59 | Mosh masking | Only mosh where motion exceeds a threshold. | ✅ | `_maskLowMotion` shows the clean frame in low-motion blocks; preset "Masked Mosh". Unit-tested. |
 | 60 | Vector amplification curve | Non-linear response — ignore small, explode large. | ✅ | `amplify` power curve on vector magnitude; preset "Amplified Chaos". Test asserts the field magnitude shifts. |
 | 61 | Bloom mode (repeat vectors N×) | Smear further. | ✅ | `bloomIterations` re-applies the displacement N×; preset "Bloom Push". Test asserts 4× displaces further than 1×. |
-| 62 | **Datamosh between TWO clips** | Take A's vectors, apply to B — the *actual* classic technique. | ⬜ | Two-input pipeline: estimate on A, apply to B. — *L* |
+| 62 | **Datamosh between TWO clips** | Take A's vectors, apply to B — the *actual* classic technique. | ✅ | `MotionMosher.moshAcross` estimates on the motion clip and applies to the picture clip; `FFMosh.renderTwoClips` records it. UI: select 2 bin clips → "🌀 Datamosh A→B". Core verified deterministically + end-to-end (`.test/mosh-family.mjs`, `.test/datamosh2.mjs`). |
 | 63 | Persistent vector recording | Capture a motion field once, replay over anything. | ⬜ | Serialize/replay vector fields. — *M* |
 | 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ⬜ | Masked, angled sort. — *M* |
 | 65 | True DCT manipulation | Corrupt DCT blocks at coefficient level. | 🔒 | Needs coefficient-level decode (custom codec work). — *XL* |

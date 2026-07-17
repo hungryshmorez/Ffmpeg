@@ -139,8 +139,41 @@ try {
       maskKeepsMoving = outB[0] === 255 && outB[1] === 0;              // stayed red
     }
 
+    // #62 two-clip datamosh core: moshAcross applies the MOTION clip's motion to
+    // the PICTURE clip's pixels. Motion clip shifts (4,4); picture is a static
+    // horizontal gradient. With motion, the gradient is dragged (differs); with
+    // zero motion it's left alone.
+    let acrossApplied = false, acrossIsPicture = false, dmoved = 0, dstill = 0;
+    {
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      const gctx = cv.getContext('2d');
+      const grad = gctx.createImageData(W, H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4; const v = Math.round(x * 255 / W);
+        grad.data[i] = v; grad.data[i + 1] = v; grad.data[i + 2] = v; grad.data[i + 3] = 255;
+      }
+      const picture = grad.data;
+      const run2 = (motionA, motionB) => {
+        const m = new window.FFMosh.MotionMosher(cv);
+        m.setParams({ blockSize: 16, motionRadius: 16, threshold: 0, bloomIterations: 1 });
+        m.moshAcross(motionA, picture.slice(), W, H);            // prime prevY
+        return m.moshAcross(motionB, picture.slice(), W, H);     // apply
+      };
+      const moved = run2(A, B);                    // A→B is a (4,4) shift
+      dmoved = diff(Array.from(moved), Array.from(picture));
+      acrossApplied = dmoved > 50;                 // motion dragged the picture
+      // The result must carry the PICTURE's content (the smooth gradient),
+      // displaced — NOT the motion clip's noisy pixels. Mean adjacent-pixel
+      // delta across a central row: a gradient is smooth (~2), noise is ~85.
+      let sm = 0, n = 0; const y = (H / 2) | 0;
+      for (let x = 1; x < W; x++) { sm += Math.abs(moved[(y * W + x) * 4] - moved[(y * W + x - 1) * 4]); n++; }
+      dstill = +(sm / n).toFixed(1);               // reuse field for "smoothness"
+      acrossIsPicture = dstill < 20;               // picture content, not motion noise
+    }
+
     return {
-      maskShowsClean, maskKeepsMoving,
+      maskShowsClean, maskKeepsMoving, acrossApplied, acrossIsPicture,
+      dbgAcross: { dmoved, smoothness: dstill },
       baseHasMotion: col0Mag(base.vec) > 1,
       baseHasY: anyY(base.vec),
       horizNoY: !anyY(horiz.vec),
@@ -155,10 +188,12 @@ try {
   ok('#60 amplification: the curve boosts the field magnitude', r.ampBoosted, `base=${r.dbg.baseCol} amp=${r.dbg.ampCol}`);
   ok('#61 bloom: 4 iterations displace further than 1', r.bloomDiffers, `${r.dbg.bloomDiff} px differ`);
   ok('#59 masking: still block → clean, moving block → smear', r.maskShowsClean && r.maskKeepsMoving);
+  ok('#62 two-clip: motion clip drags the picture clip', r.acrossApplied, `${r.dbgAcross.dmoved} px moved`);
+  ok('#62 two-clip: output carries the picture (not motion pixels)', r.acrossIsPicture, `smoothness=${r.dbgAcross.smoothness}`);
 
   const passed = checks.filter(Boolean).length;
   durable(`==== ${passed}/${checks.length} checks passed ====`);
-  code = passed === checks.length && checks.length === 5 ? 0 : 1;
+  code = passed === checks.length && checks.length === 7 ? 0 : 1;
 } catch (e) {
   durable('FATAL: ' + (e.message || String(e)));
   code = 1;

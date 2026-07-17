@@ -90,3 +90,8 @@ jobs:
       # motion-vector field, verified deterministically on the field + pixels.
       - name: Mosh family
         run: npm run test:mosh-family
+
+      # Two-clip datamosh (#62): select two clips → "Datamosh A→B" → a decodable
+      # video lands in the bin (clip A's motion applied to clip B's picture).
+      - name: Two-clip datamosh
+        run: npm run test:datamosh2

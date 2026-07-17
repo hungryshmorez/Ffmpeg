@@ -365,6 +365,27 @@
       c.restore();
     }
 
+    // -------------------------------------------------------------------------
+    // MOSH ACROSS — the classic two-clip datamosh (#62). Estimate the motion on
+    // one clip and apply it to ANOTHER's pixels: clip A's movement drives clip
+    // B's imagery. The estimator and the apply already compose — this just feeds
+    // them from different frames. `pictureData` is the accumulated picture to
+    // drag; returns the new one.
+    // -------------------------------------------------------------------------
+    moshAcross(motionSource, pictureData, w, h) {
+      this._work.width = w; this._work.height = h;
+      this._wctx.drawImage(motionSource, 0, 0, w, h);
+      const curY = this._luma(this._wctx.getImageData(0, 0, w, h));
+      if (!this.prevY) { this.prevY = curY; this.vec = null; return pictureData; }
+      const { vec, cols, rows } = this._estimate(curY, this.prevY, w, h);
+      this.prevY = curY; this.vec = vec;
+      let out = this._apply(pictureData, vec, cols, rows, w, h);
+      const iters = Math.max(1, this.p.bloomIterations | 0);
+      for (let it = 1; it < iters; it++) out = this._apply(out, vec, cols, rows, w, h);
+      if (this.p.motionMask) this._maskLowMotion(out, pictureData, vec, cols, rows, w, h);
+      return out;
+    }
+
     reset() {
       this.prevY = null; this.accum = null; this.vec = null;
       this.frameNo = 0; this.moshing = false;
@@ -450,5 +471,79 @@
     return blob;
   }
 
-  window.FFMosh = { MotionMosher, DEFAULTS, renderFile };
+  // ===========================================================================
+  // TWO-CLIP DATAMOSH (#62) — clip A's motion, clip B's pixels. Play both in
+  // step; each frame, estimate A's motion and drag B's accumulated picture along
+  // it, blending a trace of B back in for persistence. Records → Media Bin.
+  // ===========================================================================
+  async function renderTwoClips(motionMedia, pictureMedia, params, onProgress) {
+    const load = (src) => {
+      const v = document.createElement('video');
+      v.src = src; v.muted = true; v.playsInline = true;
+      return new Promise((r) => { v.onloadedmetadata = () => r(v); setTimeout(() => r(v), 5000); });
+    };
+    const mv = await load(motionMedia.blobUrl);
+    const pv = await load(pictureMedia.blobUrl);
+
+    const w = Math.min(960, pv.videoWidth || mv.videoWidth || 640);
+    const h = Math.round(w * ((pv.videoHeight || 360) / (pv.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const m = new MotionMosher(cv); m.setParams(params);
+
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))(
+      'video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+
+    // Seed the accumulator with clip B's first frame.
+    ctx.drawImage(pv, 0, 0, w, h);
+    let accum = ctx.getImageData(0, 0, w, h).data;
+    const k = (params.persistence != null) ? params.persistence : 0.9;
+
+    rec.start(200);
+    await Promise.all([mv.play().catch(() => {}), pv.play().catch(() => {})]);
+
+    await new Promise((res) => {
+      let finished = false;
+      const finish = () => { if (finished) return; finished = true; clearInterval(watchdog); res(); };
+      // stop when EITHER clip ends (or stalls) — the mosh only lasts as long as
+      // there's both motion and picture to combine.
+      let lastP = -1, stalls = 0;
+      const watchdog = setInterval(() => {
+        if (mv.ended || pv.ended) return finish();
+        if (pv.currentTime === lastP) { if (++stalls >= 8) finish(); } else { lastP = pv.currentTime; stalls = 0; }
+      }, 100);
+      const step = () => {
+        if (finished) return;
+        if (mv.ended || pv.ended) return finish();
+        ctx.drawImage(pv, 0, 0, w, h);
+        const pic = ctx.getImageData(0, 0, w, h).data;
+        let moshed = m.moshAcross(mv, accum, w, h);
+        for (let i = 0; i < moshed.length; i += 4) {
+          moshed[i]     = moshed[i]     * k + pic[i]     * (1 - k);
+          moshed[i + 1] = moshed[i + 1] * k + pic[i + 1] * (1 - k);
+          moshed[i + 2] = moshed[i + 2] * k + pic[i + 2] * (1 - k);
+        }
+        accum = moshed;
+        ctx.putImageData(new ImageData(new Uint8ClampedArray(accum), w, h), 0, 0);
+        onProgress?.(pv.currentTime / (pv.duration || pv.currentTime || 1), m.fps);
+        pv.requestVideoFrameCallback ? pv.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      pv.requestVideoFrameCallback ? pv.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${pictureMedia.name} ✕ ${motionMedia.name} [DATAMOSH A→B].${ext}`, type);
+    window.logToConsole?.('ok', `[mosh] two-clip datamosh → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips };
 })();

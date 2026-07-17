@@ -2180,6 +2180,28 @@ function moveBinItem(id, dir) {
 }
 window.moveBinItem = moveBinItem;
 
+// #62 — datamosh between two clips: the first selected clip's MOTION is applied
+// to the second's PIXELS. Drives FFMosh.renderTwoClips, which records straight
+// into the bin.
+async function runTwoClipDatamosh() {
+  const sel = state.mediaBin.filter((m) => binSelected.has(m.id));
+  if (sel.length !== 2) { showInfo('Datamosh A→B', 'Select exactly 2 video clips: the first supplies the motion, the second the picture.'); return; }
+  if (!sel.every((m) => m.hasVideo || m.type === 'video')) { showInfo('Datamosh A→B', 'Both selections must be video.'); return; }
+  if (!window.FFMosh?.renderTwoClips) { showInfo('Datamosh A→B', 'Motion mosh engine not loaded.'); return; }
+  const [motion, picture] = sel;
+  logToConsole('', `[mosh] datamosh: motion=${motion.name} → picture=${picture.name}`);
+  try {
+    setProgressText?.('Two-clip datamosh…');
+    await window.FFMosh.renderTwoClips(motion, picture,
+      { blockSize: 16, motionRadius: 8, motionStrength: 1.3, persistence: 0.94, threshold: 12 },
+      (p) => setProgress?.(p));
+    logToConsole('ok', '[mosh] two-clip datamosh complete → Media Bin');
+  } catch (e) {
+    logToConsole('error', `[mosh] datamosh failed: ${e && e.message || e}`);
+    showInfo('Datamosh A→B', `Failed: ${e && e.message || e}`);
+  }
+}
+
 async function runBinComposite(mode) {
   if (binSelected.size < 2) {
     showInfo('Select files', 'Check 2+ bin cards to use multi-file composites.');
@@ -2373,6 +2395,7 @@ function bindMediaBin() {
     'bin-op-pip':    () => runBinComposite('pip'),
     'bin-op-merge':  () => runBinComposite('merge'),
     'bin-op-batch':  () => runBinBatchApply(),
+    'bin-op-datamosh': () => runTwoClipDatamosh(),
   };
   for (const [id, fn] of Object.entries(ops)) {
     const b = document.getElementById(id);

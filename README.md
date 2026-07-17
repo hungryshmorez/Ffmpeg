@@ -114,12 +114,16 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   without a panic. (Also caught that the VJ keyboard was never bound.)
 - **`.test/mosh-family.mjs`** feeds a shifted texture through the `MotionMosher` and asserts the new
   shaping params act on the vector field / pixels **deterministically** (no MediaRecorder):
-  directional bias zeroes an axis, amplification bends the magnitude, bloom displaces further, and
-  masking shows the clean frame where motion is weak.
+  directional bias zeroes an axis, amplification bends the magnitude, bloom displaces further,
+  masking shows the clean frame where motion is weak, and the two-clip `moshAcross` drags the
+  picture with the motion clip's field.
+- **`.test/datamosh2.mjs`** drives the headline **two-clip datamosh** UI end-to-end — two VP9 clips
+  into the bin, select both, click "Datamosh A→B" — and plays the result back to prove it's a real
+  decodable video (clip A's motion on clip B's picture).
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, and `test:mosh-family` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, and `test:datamosh2` in real headless Chromium on
 every push and pull request.
 
 ---
