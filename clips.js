@@ -66,6 +66,17 @@
     render(); updateBadge();
   }
 
+  /** Reorder by one position. Touch-accessible alternative to the native drag
+      (HTML5 drag-and-drop never fires on iOS/mobile), so clips can be sequenced
+      on a tablet too. dir = -1 earlier, +1 later. */
+  function move(id, dir) {
+    const i = clips.findIndex((c) => c.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= clips.length) return;
+    [clips[i], clips[j]] = [clips[j], clips[i]];
+    render();
+  }
+
   function clear() {
     if (clips.length && !confirm(`Delete all ${clips.length} clips? This cannot be undone.`)) return;
     clips.forEach((c) => URL.revokeObjectURL(c.blobUrl));
@@ -214,7 +225,9 @@
             <span class="clip-dur">${c.durationSec ? c.durationSec.toFixed(1) + 's' : '—'}</span>
           </div>
           <div class="clip-acts">
-            <button type="button" class="mini-btn" data-a="play" data-id="${c.id}">▶</button>
+            <button type="button" class="mini-btn" data-a="earlier" data-id="${c.id}" title="Move earlier" aria-label="Move earlier">◀</button>
+            <button type="button" class="mini-btn" data-a="later"   data-id="${c.id}" title="Move later" aria-label="Move later">▶</button>
+            <button type="button" class="mini-btn" data-a="play" data-id="${c.id}">⏯</button>
             <button type="button" class="mini-btn" data-a="bin"  data-id="${c.id}">→ Bin</button>
             <button type="button" class="mini-btn danger" data-a="del" data-id="${c.id}">✕</button>
           </div>
@@ -288,9 +301,11 @@
       if (b) {
         const { a, id } = b.dataset;
         if (a === 'del') remove(id);
+        if (a === 'earlier') move(id, -1);
+        if (a === 'later') move(id, +1);
         if (a === 'bin') {
           const c = clips.find((x) => x.id === id);
-          if (c) window.addBlobToBin?.(c.blob, `${c.name}.webm`, 'video/webm');
+          if (c) window.addBlobToBin?.(c.blob, c.name, c.blob.type || 'video/webm');
         }
         if (a === 'play') {
           const v = b.closest('.clip-card').querySelector('video');
@@ -308,7 +323,7 @@
     render();
   }
 
-  window.FFClips = { add, remove, clear, build, render, clips: () => clips, exportSequence };
+  window.FFClips = { add, remove, move, clear, build, render, clips: () => clips, exportSequence };
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('[data-tab="clips"]')?.addEventListener('click', build);

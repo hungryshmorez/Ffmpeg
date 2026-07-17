@@ -64,9 +64,13 @@ try {
   await page.waitForFunction(() => typeof state !== 'undefined' && state.engineReady === true, { timeout: 120000 });
   durable('[boot] engine ready');
 
-  // Build two 1s / 30fps H.264 clips with the wasm core and add them to the
-  // Clip Studio library (their duration is clean, so concat timestamps behave).
+  // The Clip Studio tab was orphaned (no nav button / container); open it and
+  // confirm it builds, then add two 1s / 30fps H.264 clips (clean duration, so
+  // concat timestamps behave) and confirm they render as cards.
   const added = await page.evaluate(async () => {
+    document.querySelector('[data-tab="clips"]')?.click();   // switchTab + build
+    await new Promise((r) => setTimeout(r, 200));
+    const built = !!document.getElementById('clips-grid');
     async function clip(name, size) {
       await ff.exec(['-f', 'lavfi', '-i', `testsrc=duration=1:size=${size}:rate=30`,
         '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-y', name], { raw: true });
@@ -75,13 +79,26 @@ try {
       try { await ff.deleteFile(name); } catch (_) {}
       return blob;
     }
-    const a = await clip('a.mp4', '320x180');
-    const b = await clip('b.mp4', '320x180');
-    window.FFClips.add(a, 'Take A');
-    window.FFClips.add(b, 'Take B');
-    return window.FFClips.clips().length;
+    window.FFClips.add(await clip('a.mp4', '320x180'), 'Take A');
+    window.FFClips.add(await clip('b.mp4', '320x180'), 'Take B');
+    const cards = document.querySelectorAll('#clips-grid .clip-card').length;
+    return { built, count: window.FFClips.clips().length, cards, firstId: window.FFClips.clips()[0].id };
   });
-  ok('two clips added to the library', added === 2, `${added} clips`);
+  ok('Clips tab is reachable and builds', added.built);
+  ok('two clips added and rendered as cards', added.count === 2 && added.cards === 2, `${added.count} clips · ${added.cards} cards`);
+
+  // Touch-accessible reorder: tapping "move later" on the first clip must swap
+  // order (native HTML5 drag never fires on iOS/mobile).
+  const reordered = await page.evaluate(async (firstId) => {
+    const btn = document.querySelector(`#clips-grid .clip-card[data-id="${firstId}"] [data-a="later"]`);
+    if (!btn) return { ok: false, err: 'no reorder button' };
+    btn.click();
+    await new Promise((r) => setTimeout(r, 100));
+    return { ok: true, nowFirst: window.FFClips.clips()[0].id, movedId: firstId };
+  }, added.firstId);
+  ok('reorder button moves a clip (touch-accessible)',
+    reordered.ok && reordered.nowFirst !== reordered.movedId,
+    reordered.err || `${reordered.movedId} → position 2`);
 
   const binBefore = await page.evaluate(() => (window.state.mediaBin || []).length);
 
@@ -111,7 +128,7 @@ try {
 
   const passed = checks.filter(Boolean).length;
   durable(`==== ${passed}/${checks.length} checks passed ====`);
-  code = passed === checks.length && checks.length === 3 ? 0 : 1;
+  code = passed === checks.length && checks.length === 5 ? 0 : 1;
 } catch (e) {
   durable('FATAL: ' + (e.message || String(e)));
   code = 1;

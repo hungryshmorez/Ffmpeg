@@ -77,7 +77,7 @@ try {
 
     // No horizontal page scroll on any tab.
     const overflow = await page.evaluate(() => {
-      const tabs = ['workflows', 'editor', 'preview', 'audio', 'tripcam', 'vj', 'graph', 'agents'];
+      const tabs = ['workflows', 'editor', 'preview', 'audio', 'tripcam', 'vj', 'clips', 'graph', 'agents'];
       let worst = 0, worstTab = '';
       for (const t of tabs) {
         window.switchTab?.(t);

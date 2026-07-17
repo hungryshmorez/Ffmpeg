@@ -102,9 +102,9 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   Audio engine, and **bounces it two ways** — direct WAV and MP3 with two-pass loudness
   normalisation — decoding each result back to **PCM samples** (the audio equivalent of frames,
   not bytes).
-- **`.test/clips.mjs`** adds two clips to the Clip Studio library and runs **`exportSequence`**,
-  then decodes the concatenated output — the frame count equals the sum of the clips, proving the
-  concat ran (not just that a file appeared).
+- **`.test/clips.mjs`** opens the (newly un-orphaned) **Clips tab**, adds two clips, reorders one
+  with the touch-accessible move button, then runs **`exportSequence`** and decodes the output —
+  the frame count equals the sum of the clips, proving the concat ran (not just that a file appeared).
 - **`.test/mobile.mjs`** loads the app in **touch-emulated** contexts at phone, iPad-portrait and
   iPad-landscape sizes and asserts the page never scrolls sideways (across every tab) and that real
   taps switch tabs and reach off-screen ones.
@@ -185,7 +185,7 @@ All three are fixed and verified by the tests above.
 | `performance.js` | adaptive quality (FPS-driven load-shedding), global intensity, `Compositor` engine + 16 blend modes |
 | `compositor-ui.js` | the Layer Compositor deck (layer strips, blend/opacity/solo/mute, crossfader, hot cues) over `FFPerf.Compositor` |
 | `nodegraph.js` | node-graph editor (27 node types) |
-| `clips.js` | clip library, take numbers, sequence export, video queue |
+| `clips.js` | Clip Studio (its own tab): clip library, take numbers, touch/drag reorder, sequence export |
 | `workflows*.js` | the 193 workflow definitions across 16 categories |
 | `storage.js`, `opfs.js` | autosave + OPFS persistence |
 | `navigation.js`, `tools.js`, `analysis.js`, `agents.js` | tab nav, misc tools, analysis, agent helpers |
