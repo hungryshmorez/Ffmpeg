@@ -85,3 +85,8 @@ jobs:
       # the "0" key) must reset everything.
       - name: VJ panic
         run: npm run test:panic
+
+      # Mosh family: directional / masking / amplification / bloom shaping of the
+      # motion-vector field, verified deterministically on the field + pixels.
+      - name: Mosh family
+        run: npm run test:mosh-family

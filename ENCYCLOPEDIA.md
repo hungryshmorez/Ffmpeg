@@ -264,10 +264,10 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | # | Feature | What it is / the vision | Status | What's left |
 |---|---|---|---|---|
 | 57 | Motion-vector overlay on by default | Dial in a mosh while seeing the field. | 🟡 | Overlay is written; default it on during mosh setup. — *S* |
-| 58 | Directional mosh | Bias vectors along one axis (horizontal smear = the classic). | ⬜ | Axis bias on the vector field. — *S–M* |
-| 59 | Mosh masking | Only mosh where motion exceeds a threshold. | ⬜ | Threshold mask on vector magnitude. — *M* |
-| 60 | Vector amplification curve | Non-linear response — ignore small, explode large. | ⬜ | Curve applied to vector magnitude. — *S* |
-| 61 | Bloom mode (repeat vectors N×) | Smear further. | ⬜ | Iterate the displacement N times. — *S* |
+| 58 | Directional mosh | Bias vectors along one axis (horizontal smear = the classic). | ✅ | `directionX/Y` axis bias in `_estimate`; presets "Horizontal Smear" / "Vertical Drip". `.test/mosh-family.mjs` asserts `directionY=0` zeroes every Y. |
+| 59 | Mosh masking | Only mosh where motion exceeds a threshold. | ✅ | `_maskLowMotion` shows the clean frame in low-motion blocks; preset "Masked Mosh". Unit-tested. |
+| 60 | Vector amplification curve | Non-linear response — ignore small, explode large. | ✅ | `amplify` power curve on vector magnitude; preset "Amplified Chaos". Test asserts the field magnitude shifts. |
+| 61 | Bloom mode (repeat vectors N×) | Smear further. | ✅ | `bloomIterations` re-applies the displacement N×; preset "Bloom Push". Test asserts 4× displaces further than 1×. |
 | 62 | **Datamosh between TWO clips** | Take A's vectors, apply to B — the *actual* classic technique. | ⬜ | Two-input pipeline: estimate on A, apply to B. — *L* |
 | 63 | Persistent vector recording | Capture a motion field once, replay over anything. | ⬜ | Serialize/replay vector fields. — *M* |
 | 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ⬜ | Masked, angled sort. — *M* |

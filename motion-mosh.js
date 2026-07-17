@@ -44,6 +44,14 @@
     jpegArtifacts: false, // re-encode each frame as low-quality JPEG → blocking artifacts
     jpegQuality: 0.35,
     denoise: false,
+    // --- mosh-family shaping (all default to neutral) ---
+    directionX: 1,        // #58 directional mosh: axis bias. {1,0} = horizontal smear
+    directionY: 1,        //     (the classic), {0,1} = vertical, {1,1} = free.
+    amplify: 1,           // #60 vector-amplification curve exponent. >1 ignores small
+                          //     motion and explodes large; <1 flattens.
+    bloomIterations: 1,   // #61 bloom: apply the displacement N times (further smear).
+    motionMask: false,    // #59 masking: low-motion blocks show the CLEAN frame instead
+    maskMotion: 2,        //     of the smear. maskMotion = magnitude cutoff (px).
   };
 
   class MotionMosher {
@@ -148,7 +156,24 @@
           const i = (by * cols + bx) * 2;
           // Below threshold = no real motion. Leave the block still.
           if (best < this.p.threshold) { vec[i] = 0; vec[i + 1] = 0; }
-          else { vec[i] = bestDx; vec[i + 1] = bestDy; }
+          else {
+            let vx = bestDx, vy = bestDy;
+            // #60 amplification: reshape the magnitude non-linearly. amplify>1
+            // suppresses small motion and exaggerates large; <1 flattens.
+            const amp = this.p.amplify;
+            if (amp !== 1) {
+              const mag = Math.hypot(vx, vy);
+              if (mag > 0) {
+                const rr = Math.max(2, this.p.motionRadius);
+                const shaped = Math.pow(Math.min(1, mag / rr), amp) * rr;
+                const k = shaped / mag;
+                vx *= k; vy *= k;
+              }
+            }
+            // #58 directional mosh: scale each axis (kill one for a pure smear).
+            vx *= this.p.directionX; vy *= this.p.directionY;
+            vec[i] = vx; vec[i + 1] = vy;
+          }
 
           totalSAD += best; blocks++;
         }
@@ -196,6 +221,30 @@
         }
       }
       return out;
+    }
+
+    // -------------------------------------------------------------------------
+    // MASK — where the motion vector is weak, overwrite the block with the CLEAN
+    // current frame, so quiet areas stay sharp and only motion tears (#59).
+    // -------------------------------------------------------------------------
+    _maskLowMotion(out, cur, vec, cols, rows, w, h) {
+      const bs = this.p.blockSize;
+      const cut = this.p.maskMotion;
+      for (let by = 0; by < rows; by++) {
+        for (let bx = 0; bx < cols; bx++) {
+          const i = (by * cols + bx) * 2;
+          if (Math.hypot(vec[i], vec[i + 1]) >= cut) continue;   // moving → keep the smear
+          const x0 = bx * bs, y0 = by * bs;
+          const bw = Math.min(bs, w - x0), bh = Math.min(bs, h - y0);
+          for (let y = 0; y < bh; y++) {
+            let p = ((y0 + y) * w + x0) * 4;
+            for (let x = 0; x < bw; x++) {
+              out[p] = cur[p]; out[p + 1] = cur[p + 1]; out[p + 2] = cur[p + 2]; out[p + 3] = 255;
+              p += 4;
+            }
+          }
+        }
+      }
     }
 
     // -------------------------------------------------------------------------
@@ -254,6 +303,11 @@
         // THE MOSH: apply THIS frame's motion vectors to the OLD picture.
         let moshed = this._apply(this.accum, vec, cols, rows, w, h);
 
+        // #61 bloom: re-apply the same displacement N times so the smear pushes
+        // further out with each pass.
+        const iters = Math.max(1, this.p.bloomIterations | 0);
+        for (let it = 1; it < iters; it++) moshed = this._apply(moshed, vec, cols, rows, w, h);
+
         // Blend a trace of the new frame back in, so it doesn't decay to mush.
         const k = this.p.persistence;
         for (let i = 0; i < moshed.length; i += 4) {
@@ -261,6 +315,11 @@
           moshed[i + 1] = moshed[i + 1] * k + cur.data[i + 1] * (1 - k);
           moshed[i + 2] = moshed[i + 2] * k + cur.data[i + 2] * (1 - k);
         }
+
+        // #59 masking: where motion is weak, drop the smear and show the clean
+        // current frame, so only the moving parts tear.
+        if (this.p.motionMask) this._maskLowMotion(moshed, cur.data, vec, cols, rows, w, h);
+
         this.accum = moshed;
         this.moshing = true;
       }

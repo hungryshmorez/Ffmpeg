@@ -59,4 +59,30 @@ window.WORKFLOWS_V5 = [
       iFrameInterval: 6, autoMoshOnCut: true, sceneCut: 0.28 },
     'Clean most of the time — then detonates on every scene change. Cuts are where moshing looks best, because that is exactly where the codec would have inserted a keyframe and we refuse to.',
     '✂️', ['scene', 'cut', 'transition', 'smart']),
+
+  // --- mosh-family shaping (#58–61) ---
+  _mosh('Horizontal Smear',
+    { blockSize: 16, motionRadius: 8, motionStrength: 1.2, persistence: 0.97, directionY: 0, iFrameInterval: 0 },
+    'Directional mosh — the vertical component of every motion vector is killed, so the whole image drags sideways. The classic horizontal datamosh streak.',
+    '↔️', ['directional', 'horizontal', 'smear', 'classic']),
+
+  _mosh('Vertical Drip',
+    { blockSize: 16, motionRadius: 8, motionStrength: 1.2, persistence: 0.97, directionX: 0, iFrameInterval: 0 },
+    'Directional mosh biased to the vertical axis — motion bleeds up and down like the picture is melting off the screen.',
+    '↕️', ['directional', 'vertical', 'drip']),
+
+  _mosh('Masked Mosh',
+    { blockSize: 16, motionRadius: 6, motionStrength: 1.3, persistence: 0.97, motionMask: true, maskMotion: 2, iFrameInterval: 0 },
+    'Only the moving parts tear — everything still stays sharp. Motion-magnitude masking keeps the background clean while the subject smears.',
+    '🎭', ['mask', 'motion', 'selective']),
+
+  _mosh('Amplified Chaos',
+    { blockSize: 16, motionRadius: 12, motionStrength: 1.4, persistence: 0.98, amplify: 0.5, iFrameInterval: 0 },
+    'A non-linear amplification curve pushes every motion vector toward the max — even gentle motion detonates into a full smear.',
+    '💢', ['amplify', 'curve', 'extreme']),
+
+  _mosh('Bloom Push',
+    { blockSize: 24, motionRadius: 6, motionStrength: 1.2, persistence: 0.97, bloomIterations: 4, iFrameInterval: 0 },
+    'Applies each frame’s displacement four times over, pushing the picture outward and blooming with every pass.',
+    '🌸', ['bloom', 'repeat', 'push', 'expand']),
 ];

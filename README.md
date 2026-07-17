@@ -17,14 +17,14 @@ datamosh, master audio, and perform live visuals, all client-side.
 
 | Area | Highlights |
 |---|---|
-| **Convert & compress** | 193 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
+| **Convert & compress** | 198 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
 | **Colour & video** | false-colour exposure, speed ramping with a draggable curve, before/after wipe, node graph (27 node types). |
 | **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors), auto-glitch/chaos engine, CPU pixel sort. |
 | **Audio studio** | real-time Web Audio rack (23 knobs, 12 presets, 7 modules), spectrogram, phase-vocoder time-stretch (keeps pitch), key/BPM detection, semantic macros. |
 | **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, 16-step sequencer, tap tempo, adaptive-quality load-shedding. |
 | **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code. |
 
-The build metadata is generated, not claimed: **31 JS modules · 193 workflows · 812/812
+The build metadata is generated, not claimed: **31 JS modules · 198 workflows · 825/825
 balanced CSS braces · 27 node-graph types · 11 trip-cam effects.** See
 [`scripts/generate-changelog.js`](./scripts/generate-changelog.js) and
 [`build-info.js`](./build-info.js) (the single source of truth).
@@ -112,10 +112,14 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/panic.mjs`** latches VJ triggers, runs the sequencer and pulls the master down, then hits
   **PANIC** (both the button and the `0` key) and asserts everything reset — no live tool ships
   without a panic. (Also caught that the VJ keyboard was never bound.)
+- **`.test/mosh-family.mjs`** feeds a shifted texture through the `MotionMosher` and asserts the new
+  shaping params act on the vector field / pixels **deterministically** (no MediaRecorder):
+  directional bias zeroes an axis, amplification bends the magnitude, bloom displaces further, and
+  masking shows the clean frame where motion is weak.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, and `test:panic` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, and `test:mosh-family` in real headless Chromium on
 every push and pull request.
 
 ---
@@ -190,7 +194,7 @@ All three are fixed and verified by the tests above.
 | `compositor-ui.js` | the Layer Compositor deck (layer strips, blend/opacity/solo/mute, crossfader, hot cues) over `FFPerf.Compositor` |
 | `nodegraph.js` | node-graph editor (27 node types) |
 | `clips.js` | Clip Studio (its own tab): clip library, take numbers, touch/drag reorder, sequence export |
-| `workflows*.js` | the 193 workflow definitions across 16 categories |
+| `workflows*.js` | the 198 workflow definitions across 16 categories |
 | `storage.js`, `opfs.js` | autosave + OPFS persistence |
 | `navigation.js`, `tools.js`, `analysis.js`, `agents.js` | tab nav, misc tools, analysis, agent helpers |
 
