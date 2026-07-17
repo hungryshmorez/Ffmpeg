@@ -97,7 +97,8 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/bin-features.mjs`** exercises the other "produce a clip → bin" surfaces that the missing
   `addBlobToBin` had silently broken: **compress-to-target** (decodes to real frames, lands under
   the size budget) and the **scene splitter** (three clips, each decodable). It also guards the
-  fix that batch producers no longer leave every clip but the last with a revoked blob URL.
+  fix that batch producers no longer leave every clip but the last with a revoked blob URL, and
+  that the touch-accessible bin **reorder** button moves an item (composite order is bin order).
 - **`.test/audio-studio.mjs`** loads an audio clip through `loadFromBin`, decodes it into the Web
   Audio engine, and **bounces it two ways** — direct WAV and MP3 with two-pass loudness
   normalisation — decoding each result back to **PCM samples** (the audio equivalent of frames,

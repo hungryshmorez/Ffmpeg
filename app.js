@@ -1911,12 +1911,23 @@ function renderMediaBin() {
   strip.querySelectorAll('.media-bin-card').forEach(card => {
     const id = card.dataset.mediaId;
     card.addEventListener('click', (e) => {
-      if (e.target.matches('input[type="checkbox"], .bin-card-remove, .bin-card-drag')) return;
+      // Ignore clicks on the checkbox, remove button, or the reorder row (and
+      // its child buttons) — those have their own handlers.
+      if (e.target.matches('input[type="checkbox"]') ||
+          e.target.closest('.bin-card-remove, .bin-card-drag')) return;
       setActiveMedia(id);
     });
   });
   strip.querySelectorAll('.bin-card-checkbox').forEach(cb => {
     cb.addEventListener('change', updateBinMultiToolbar);
+  });
+  // Touch-accessible reorder (native HTML5 drag below never fires on iOS/mobile,
+  // and bin order is the composite order — concat/stack read the bin sequence).
+  strip.querySelectorAll('.bin-reorder').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      moveBinItem(btn.dataset.id, btn.dataset.reorder === 'up' ? -1 : 1);
+    });
   });
   strip.querySelectorAll('.bin-card-remove').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -2017,7 +2028,11 @@ function binCardHtml(m, idx) {
       <div class="bin-card-thumb"${bgStyle}>${thumbInner}${badge}${status}</div>
       <div class="bin-card-name">${escapeHtml(m.name)}</div>
       <div class="bin-card-meta"><span class="badge">${dur}</span><span class="badge">${escapeHtml(res)}</span>${m.ext && BIN_EXT_CODEC_HINT[m.ext] ? `<span class="badge codec-hint" title="Likely codec (extension-based)">${escapeHtml(BIN_EXT_CODEC_HINT[m.ext])}</span>` : ''}</div>
-      <div class="bin-card-drag" title="Drag to reorder">⋮⋮</div>
+      <div class="bin-card-drag" title="Reorder (also draggable)">
+        <button type="button" class="bin-reorder" data-reorder="up" data-id="${m.id}" aria-label="Move earlier" title="Move earlier">◀</button>
+        <span class="bin-drag-dots" aria-hidden="true">⋮⋮</span>
+        <button type="button" class="bin-reorder" data-reorder="down" data-id="${m.id}" aria-label="Move later" title="Move later">▶</button>
+      </div>
     </div>
   `;
 }
@@ -2153,6 +2168,18 @@ function refreshVizBgSelect() {
 }
 
 // Run a bin multi-select composite.
+// Reorder a bin item by one position. Powers the ◀▶ buttons on each bin card —
+// a touch-accessible alternative to the native drag (dead on iOS), and bin order
+// is the order multi-file composites (concat/hstack/vstack/grid) consume.
+function moveBinItem(id, dir) {
+  const i = state.mediaBin.findIndex((m) => m.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= state.mediaBin.length) return;
+  [state.mediaBin[i], state.mediaBin[j]] = [state.mediaBin[j], state.mediaBin[i]];
+  renderMediaBin();
+}
+window.moveBinItem = moveBinItem;
+
 async function runBinComposite(mode) {
   if (binSelected.size < 2) {
     showInfo('Select files', 'Check 2+ bin cards to use multi-file composites.');

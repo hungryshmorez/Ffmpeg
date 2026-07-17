@@ -119,9 +119,24 @@ try {
   const sd = await decodeEntry(/scene 2/);
   ok('a scene clip decodes to real frames', sd.ok && sd.frames > 0, sd.ok ? `${sd.frames} frames · ${sd.bytes} B` : sd.err);
 
+  // ---- Touch-accessible bin reorder (composite order is bin order) ----
+  const reorder = await page.evaluate(async () => {
+    const before = window.state.mediaBin.map((m) => m.id);
+    if (before.length < 2) return { ok: false, err: `only ${before.length} bin items` };
+    const firstId = before[0];
+    const btn = document.querySelector(`.media-bin-card[data-media-id="${firstId}"] .bin-reorder[data-reorder="down"]`);
+    if (!btn) return { ok: false, err: 'no reorder button rendered' };
+    btn.click();
+    await new Promise((r) => setTimeout(r, 80));
+    const after = window.state.mediaBin.map((m) => m.id);
+    return { ok: true, moved: after[1] === firstId && after[0] !== firstId, n: before.length };
+  });
+  ok('bin reorder button moves an item (touch-accessible)',
+    reorder.ok && reorder.moved, reorder.err || `${reorder.n} items, first → position 2`);
+
   const passed = checks.filter(Boolean).length;
   durable(`==== ${passed}/${checks.length} checks passed ====`);
-  code = passed === checks.length && checks.length === 5 ? 0 : 1;
+  code = passed === checks.length && checks.length === 6 ? 0 : 1;
 } catch (e) {
   durable('FATAL: ' + (e.message || String(e)));
   code = 1;

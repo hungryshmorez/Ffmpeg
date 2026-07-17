@@ -1610,11 +1610,28 @@ kbd {
   position: absolute;
   bottom: 2px;
   left: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 12px;
   color: var(--text-dim);
   cursor: grab;
   user-select: none;
 }
+.bin-drag-dots { flex: 1; text-align: center; }
+.bin-reorder {
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border-2);
+  color: var(--text-dim);
+  border-radius: 4px;
+  min-width: 26px; height: 24px;      /* comfortable tap target */
+  font-size: 12px; line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.bin-reorder:hover { color: var(--accent); border-color: var(--accent); }
+.bin-reorder:active { transform: scale(0.92); }
 .media-bin-card.dragging { opacity: 0.5; }
 .media-bin-card.drag-over { border-color: var(--accent); border-style: dashed; }
 .media-bin-multi {
