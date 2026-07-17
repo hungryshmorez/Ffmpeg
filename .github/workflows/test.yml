@@ -65,3 +65,8 @@ jobs:
       # decode the produced clips out of the bin (real frames, under target size).
       - name: Media-bin producers
         run: npm run test:bin-features
+
+      # Audio Studio: loadFromBin → Web Audio bounce → decode the output to PCM
+      # samples (WAV direct + MP3 with two-pass loudnorm).
+      - name: Audio Studio bounce
+        run: npm run test:audio-studio

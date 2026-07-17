@@ -98,10 +98,14 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   `addBlobToBin` had silently broken: **compress-to-target** (decodes to real frames, lands under
   the size budget) and the **scene splitter** (three clips, each decodable). It also guards the
   fix that batch producers no longer leave every clip but the last with a revoked blob URL.
+- **`.test/audio-studio.mjs`** loads an audio clip through `loadFromBin`, decodes it into the Web
+  Audio engine, and **bounces it two ways** — direct WAV and MP3 with two-pass loudness
+  normalisation — decoding each result back to **PCM samples** (the audio equivalent of frames,
+  not bytes).
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
-`test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, and
-`test:bin-features` in real headless Chromium on every push and pull request.
+`test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
+and `test:audio-studio` in real headless Chromium on every push and pull request.
 
 ---
 
@@ -148,6 +152,7 @@ All three are fixed and verified by the tests above.
 │   ├── shortcuts.mjs       # keyboard shortcuts: cheat sheet + tab nav, asserted on UI state
 │   ├── workflows-v4v5.mjs  # TRUE datamosh + motion mosh reachable: real card click → decoded bin output
 │   ├── bin-features.mjs    # compress-to-target + scene split: decoded clips out of the Media Bin
+│   ├── audio-studio.mjs    # loadFromBin → Web Audio bounce (WAV + MP3/loudnorm) → decoded PCM samples
 │   └── server.mjs          # minimal COOP/COEP static server
 ├── .github/workflows/
 │   └── test.yml            # runs the tests on every push
