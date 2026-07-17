@@ -18,8 +18,8 @@ datamosh, master audio, and perform live visuals, all client-side.
 | Area | Highlights |
 |---|---|
 | **Convert & compress** | 199 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
-| **Colour & video** | false-colour exposure, speed ramping with a draggable curve, before/after wipe, node graph (27 node types). |
-| **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors), auto-glitch/chaos engine, CPU pixel sort. |
+| **Colour & video** | false-colour exposure, vectorscope + waveform monitor, speed ramping with a draggable curve, before/after wipe, node graph (27 node types). |
+| **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors), motion-vector overlay, optical-flow warp, feedback tunnel, auto-glitch/chaos engine, masked pixel sort. |
 | **Audio studio** | real-time Web Audio rack (23 knobs, 12 presets, 7 modules), spectrogram, phase-vocoder time-stretch (keeps pitch), key/BPM detection, semantic macros. |
 | **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, 16-step sequencer, tap tempo, adaptive-quality load-shedding. |
 | **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code. |
@@ -124,10 +124,25 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/databend.mjs`** runs the **Databend** card (corrupt the raw bytes, decode through the
   damage) and asserts the wrecked stream still **decodes to real frames** — plus a deterministic
   unit check that the corruptor pokes bytes and leaves the container header intact.
+- **`.test/pixelsort.mjs`** verifies the **masked / angled pixel sort** deterministically: a
+  hand-built row proves out-of-band pixels are left untouched and in-band runs come back sorted
+  (asc + desc), and a 90° pass proves the angle actually rotates the sort axis.
+- **`.test/feedback.mjs`** verifies the **feedback tunnel** deterministically on the buffer: a
+  central square spreads outward under zoom>1, the buffer fades under decay when nothing is added,
+  and a non-zero rotation lands the trail somewhere different.
+- **`.test/flow-displace.mjs`** verifies **optical-flow displacement** deterministically with
+  hand-built fields: a uniform field shifts a vertical edge by exactly `dx*scale`, the scale scales
+  it, a zero field is an identity, and a top→bottom-varying field warps the two halves differently.
+- **`.test/vector-overlay.mjs`** verifies the **motion-vector overlay** deterministically: nothing
+  is drawn before a field exists, the estimated field inks the canvas, and a single isolated vector's
+  arrow runs toward the tip (+x,+y) and not the other way.
+- **`.test/scopes.mjs`** verifies the **vectorscope + waveform** deterministically: a grey frame
+  plots at the vectorscope centre while saturated red and blue push apart, and a dark→bright gradient
+  makes the waveform's luma trace rise from bottom to top.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, and `test:databend` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, and `test:scopes` in real headless Chromium on
 every push and pull request.
 
 ---

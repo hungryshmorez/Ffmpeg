@@ -42,6 +42,74 @@ window.WORKFLOWS_V4 = [
     run: () => window.FFDatamosh.databend({ rate: 0.0008 }),
   },
 
+  // ---- MASKED / ANGLED PIXEL SORT ----
+  {
+    id: 'pixel-sort-masked',
+    name: 'Pixel Sort — Masked',
+    category: 'video-glitch-pipelines',
+    description: 'Sorts only the pixels whose brightness falls inside a mid-tone band, leaving shadows and highlights intact — the selective look, not the whole-frame smear. A real per-frame sort applied to every frame.',
+    tags: ['pixelsort', 'sort', 'glitch', 'mask', 'band'],
+    icon: '🌈', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderPixelSort(m, { lo: 0.25, hi: 0.85, mode: 'brightness', angle: 0, order: 'asc' }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Pixel sorting — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'pixel-sort-diagonal',
+    name: 'Pixel Sort — Diagonal',
+    category: 'video-glitch-pipelines',
+    description: 'The masked sort, run along a 45° axis so the streaks fall on the diagonal instead of the scanline. Rotate → sort the band → rotate back.',
+    tags: ['pixelsort', 'sort', 'glitch', 'diagonal', 'angle'],
+    icon: '📐', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderPixelSort(m, { lo: 0.2, hi: 0.9, mode: 'brightness', angle: 45, order: 'asc' }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Pixel sorting — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // ---- FEEDBACK TUNNEL ----
+  {
+    id: 'feedback-tunnel',
+    name: 'Feedback Tunnel',
+    category: 'video-glitch-pipelines',
+    description: 'The infinite video-feedback tunnel. Each frame re-draws the last one zoomed and rotated a touch, fading as it goes, so any detail spirals outward forever. Runs offline over the whole clip.',
+    tags: ['feedback', 'tunnel', 'zoom', 'rotate', 'trippy', 'psychedelic'],
+    icon: '🌀', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderFeedback(m, { zoom: 1.03, rotate: 0.015, decay: 0.9, mix: 0.75, blend: 'lighter' }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Feedback tunnel — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'feedback-vortex',
+    name: 'Feedback Vortex',
+    category: 'video-glitch-pipelines',
+    description: 'The tunnel wound tighter — stronger zoom, faster spin, longer trails. Everything gets pulled into the swirl.',
+    tags: ['feedback', 'vortex', 'spiral', 'zoom', 'rotate', 'trippy'],
+    icon: '🌪️', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderFeedback(m, { zoom: 1.06, rotate: 0.05, decay: 0.94, mix: 0.6, blend: 'lighter' }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Feedback vortex — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- AUTO COLOUR MATCH ----
   {
     id: 'color-match',

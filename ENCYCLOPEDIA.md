@@ -252,7 +252,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 48 | Halation & bloom (physical pass) | Proper light bleed. | ⬜ | Threshold → blur → screen. — *M* |
 | 49 | Lens distortion + CA profiles | Named-lens profiles. | ⬜ | Profile table + `lenscorrection`/CA shader. — *M* |
 | 50 | Deflicker for timelapse | Even out exposure flicker. | ⬜ | `deflicker` filter surfaced. — *S* |
-| 51 | Vectorscope + waveform monitor | Real colour scopes. | ⬜ | Canvas scopes from the preview frame. — *M* |
+| 51 | Vectorscope + waveform monitor | Real colour scopes. | ✅ | `scopes.js` — `vectorscope` plots per-pixel chroma (Cb,Cr) as a scatter (neutral greys centre, saturated hues push to the rim); `waveform` plots per-column luma up the Y axis. Both pure ImageData→ImageData. Live "Scopes" preview mode (`startScopesLoop`) paints them off the source video. `.test/scopes.mjs` verifies grey→centre, red/blue apart, and the luma trace rising on a gradient. |
 | 52 | False-colour exposure view | See over/under exposure. | ✅ | — |
 | 53 | Curves editor with a draggable spline | Not preset names. | 🟡 | Speed-curve editor exists; reuse the spline widget for colour curves. — *M* |
 | 54 | HSL secondary qualifiers | Grade just skin / just sky. | ⬜ | Qualifier UI → keyed mask. — *L* |
@@ -263,18 +263,18 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 
 | # | Feature | What it is / the vision | Status | What's left |
 |---|---|---|---|---|
-| 57 | Motion-vector overlay on by default | Dial in a mosh while seeing the field. | 🟡 | Overlay is written; default it on during mosh setup. — *S* |
+| 57 | Motion-vector overlay on by default | Dial in a mosh while seeing the field. | ✅ | `MotionMosher.drawVectors(ctx,opts)` draws the estimated field as arrows onto any 2-D context; `renderVectorOverlay` composites them over a dimmed frame with the overlay ON by default. Workflow "🧭 Motion Vectors — Overlay". `.test/vector-overlay.mjs` verifies nothing draws before a field, the estimated field inks, and arrows point the way the block moved. |
 | 58 | Directional mosh | Bias vectors along one axis (horizontal smear = the classic). | ✅ | `directionX/Y` axis bias in `_estimate`; presets "Horizontal Smear" / "Vertical Drip". `.test/mosh-family.mjs` asserts `directionY=0` zeroes every Y. |
 | 59 | Mosh masking | Only mosh where motion exceeds a threshold. | ✅ | `_maskLowMotion` shows the clean frame in low-motion blocks; preset "Masked Mosh". Unit-tested. |
 | 60 | Vector amplification curve | Non-linear response — ignore small, explode large. | ✅ | `amplify` power curve on vector magnitude; preset "Amplified Chaos". Test asserts the field magnitude shifts. |
 | 61 | Bloom mode (repeat vectors N×) | Smear further. | ✅ | `bloomIterations` re-applies the displacement N×; preset "Bloom Push". Test asserts 4× displaces further than 1×. |
 | 62 | **Datamosh between TWO clips** | Take A's vectors, apply to B — the *actual* classic technique. | ✅ | `MotionMosher.moshAcross` estimates on the motion clip and applies to the picture clip; `FFMosh.renderTwoClips` records it. UI: select 2 bin clips → "🌀 Datamosh A→B". Core verified deterministically + end-to-end (`.test/mosh-family.mjs`, `.test/datamosh2.mjs`). |
 | 63 | Persistent vector recording | Capture a motion field once, replay over anything. | ✅ | `recordVectors` captures a clip's fields; `serializeVectors`/`deserializeVectors` round-trip them (Int16, saved to localStorage); `replayVectors` applies them to any clip. UI: 🔴 Record Motion / ▶ Apply Motion. Verified deterministically + end-to-end (record 27 fields → replay onto another clip). |
-| 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ⬜ | Masked, angled sort. — *M* |
+| 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ✅ | `sortBands` sorts only contiguous runs whose luma/hue is inside a `[lo,hi]` band (out-of-band pixels untouched); `pixelSortMasked` runs it along any angle (rotate → sort → rotate back); `renderPixelSort` applies it per-frame → Media Bin. Workflows "🌈 Pixel Sort — Masked" / "📐 Pixel Sort — Diagonal". `.test/pixelsort.mjs` verifies mask selectivity, run ordering, and angle deterministically. |
 | 65 | True DCT manipulation | Corrupt DCT blocks at coefficient level. | 🔒 | Needs coefficient-level decode (custom codec work). — *XL* |
 | 66 | Databend mode | Corrupt raw bytes of any file and try to decode. | ✅ | `databendBytes` pokes the AVI frame-data region (header-safe, deterministic); `databend()` remuxes with error concealment. Workflow "🧨 Databend". `.test/databend.mjs` decodes the wreckage to real frames. |
-| 67 | Feedback with geometric transforms | Zoom+rotate per iteration — the infinite tunnel. | ⬜ | Per-iteration transform in the feedback shader. — *S–M* |
-| 68 | Optical-flow-driven displacement | Use the motion field as a displacement map. | ⬜ | Flow field → displacement shader. — *M* |
+| 67 | Feedback with geometric transforms | Zoom+rotate per iteration — the infinite tunnel. | ✅ | `FeedbackTunnel` keeps a persistent buffer, re-draws it zoomed+rotated over an opaque black bg and faded by `decay` each frame, then composites the new frame — detail spirals outward forever. `renderFeedback` runs it offline → Media Bin. Workflows "🌀 Feedback Tunnel" / "🌪️ Feedback Vortex". `.test/feedback.mjs` verifies zoom-spread, decay, and rotation deterministically on the buffer. |
+| 68 | Optical-flow-driven displacement | Use the motion field as a displacement map. | ✅ | `MotionMosher.displaceByFlow` samples the same picture through the block-grid flow field, bilinearly interpolated per pixel — a smooth liquid warp where the scene moves, not a datamosh tear. `renderFlowDisplace` estimates each frame's flow and warps that frame → Media Bin. Workflows "💧 Flow Warp — Liquid / 🔥 Heat Haze / 🌊 Riptide". `.test/flow-displace.mjs` verifies the shift-by-dx·scale, scale linearity, zero-field identity, and spatially-varying warp deterministically. |
 
 ### Live & Performance (69–80)
 
@@ -343,7 +343,7 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 ### Phase B — Finish what's already half-built (fast wins)
 5. 🟡 Wire the **global-intensity slider** + **hot cues** back into `vj-mode.js` (dropped in v10.4's reduced copy). — *S each.*
 6. 🟡 Gate expensive shaders via `FFPerf.Perf.isAllowed()` and apply `FFPerf.scale` to the **WebGL editor preview** too. — *S–M.*
-7. 🟡 Default the **motion-vector overlay** on during mosh setup (#57). — *S.*
+7. ✅ **Motion-vector overlay** — `drawVectors` + `renderVectorOverlay`, on by default (#57).
 8. ✅ **Keyboard-shortcut coverage + cheat sheet** (#96) — `?` toggle, `[`/`]` tab cycle, `Alt+1‑8`
    jumps, grouped auto-generated cheat sheet; verified by `.test/shortcuts.mjs`.
 
@@ -357,7 +357,7 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 ### Phase D — The mosh/glitch family (build on the SAD estimator)
 11. ⬜ Directional mosh, masking, amplification curve, bloom (#58–61) — small, share the vector field.
 12. ⬜ **Datamosh between two clips** (#62) + persistent vector recording (#63) — the headline.
-13. ⬜ Feedback transforms (#67), flow displacement (#68), masked pixel sort (#64), databend (#66).
+13. ✅ masked pixel sort (#64), databend (#66), feedback transforms (#67), flow displacement (#68).
 
 ### Phase E — Audio depth
 14. ⬜ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),
