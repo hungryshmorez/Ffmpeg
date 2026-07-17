@@ -386,6 +386,31 @@
       return out;
     }
 
+    // -------------------------------------------------------------------------
+    // CAPTURE — estimate one frame's motion field WITHOUT applying it, for
+    // persistent recording (#63). Returns {vec,cols,rows} or null on the first
+    // (priming) frame.
+    // -------------------------------------------------------------------------
+    captureField(source) {
+      const w = this.cv.width, h = this.cv.height;
+      this._work.width = w; this._work.height = h;
+      this._wctx.drawImage(source, 0, 0, w, h);
+      const curY = this._luma(this._wctx.getImageData(0, 0, w, h));
+      if (!this.prevY) { this.prevY = curY; return null; }
+      const { vec, cols, rows } = this._estimate(curY, this.prevY, w, h);
+      this.prevY = curY; this.vec = vec;
+      return { vec: vec.slice(), cols, rows };
+    }
+
+    // Apply an externally-supplied vector field (a recorded frame) to a picture.
+    applyField(pictureData, vec, cols, rows, w, h) {
+      let out = this._apply(pictureData, vec, cols, rows, w, h);
+      const iters = Math.max(1, this.p.bloomIterations | 0);
+      for (let it = 1; it < iters; it++) out = this._apply(out, vec, cols, rows, w, h);
+      if (this.p.motionMask) this._maskLowMotion(out, pictureData, vec, cols, rows, w, h);
+      return out;
+    }
+
     reset() {
       this.prevY = null; this.accum = null; this.vec = null;
       this.frameNo = 0; this.moshing = false;
@@ -545,5 +570,131 @@
     return blob;
   }
 
-  window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips };
+  // ===========================================================================
+  // PERSISTENT VECTOR RECORDING (#63) — capture a clip's motion field ONCE, then
+  // replay it over any other footage. The recording is serialisable, so a motion
+  // signature can be saved and reused.
+  // ===========================================================================
+  function loadVideo(src) {
+    const v = document.createElement('video');
+    v.src = src; v.muted = true; v.playsInline = true;
+    return new Promise((r) => { v.onloadedmetadata = () => r(v); setTimeout(() => r(v), 5000); });
+  }
+
+  async function recordVectors(motionMedia, params, onProgress) {
+    const v = await loadVideo(motionMedia.blobUrl);
+    const w = Math.min(640, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const m = new MotionMosher(cv); m.setParams(params);
+    const rec = { w, h, blockSize: m.p.blockSize, cols: 0, rows: 0, frames: [], name: motionMedia.name };
+
+    await v.play().catch(() => {});
+    await new Promise((res) => {
+      let done = false;
+      const finish = () => { if (done) return; done = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => {
+        if (v.ended || v.paused) return finish();
+        if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; }
+      }, 100);
+      const step = () => {
+        if (done) return;
+        if (v.ended || v.paused) return finish();
+        const f = m.captureField(v);
+        if (f) { rec.cols = f.cols; rec.rows = f.rows; rec.frames.push(f.vec); }
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), rec.frames.length);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    window.logToConsole?.('ok', `[mosh] recorded ${rec.frames.length} motion fields from ${motionMedia.name}`);
+    return rec;
+  }
+
+  async function replayVectors(recording, pictureMedia, params, onProgress) {
+    if (!recording?.frames?.length) throw new Error('No recorded motion to replay.');
+    const pv = await loadVideo(pictureMedia.blobUrl);
+    const w = recording.w, h = recording.h;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const m = new MotionMosher(cv); m.setParams(Object.assign({ blockSize: recording.blockSize }, params));
+
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))(
+      'video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const mr = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { mr.onstop = res; });
+
+    ctx.drawImage(pv, 0, 0, w, h);
+    let accum = ctx.getImageData(0, 0, w, h).data;
+    const k = (params.persistence != null) ? params.persistence : 0.92;
+    let fi = 0;
+
+    mr.start(200);
+    await pv.play().catch(() => {});
+    await new Promise((res) => {
+      let done2 = false;
+      const finish = () => { if (done2) return; done2 = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => {
+        if (pv.ended) return finish();
+        if (pv.currentTime === last) { if (++stalls >= 8) finish(); } else { last = pv.currentTime; stalls = 0; }
+      }, 100);
+      const step = () => {
+        if (done2) return;
+        if (pv.ended) return finish();
+        ctx.drawImage(pv, 0, 0, w, h);
+        const pic = ctx.getImageData(0, 0, w, h).data;
+        const vec = recording.frames[fi % recording.frames.length]; fi++;   // loop the motion
+        let moshed = m.applyField(accum, vec, recording.cols, recording.rows, w, h);
+        for (let i = 0; i < moshed.length; i += 4) {
+          moshed[i] = moshed[i] * k + pic[i] * (1 - k);
+          moshed[i + 1] = moshed[i + 1] * k + pic[i + 1] * (1 - k);
+          moshed[i + 2] = moshed[i + 2] * k + pic[i + 2] * (1 - k);
+        }
+        accum = moshed;
+        ctx.putImageData(new ImageData(new Uint8ClampedArray(accum), w, h), 0, 0);
+        onProgress?.(pv.currentTime / (pv.duration || pv.currentTime || 1), 0);
+        pv.requestVideoFrameCallback ? pv.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      pv.requestVideoFrameCallback ? pv.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    mr.stop(); await done;
+    const type = (mr.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${pictureMedia.name} [MOTION REPLAY].${ext}`, type);
+    window.logToConsole?.('ok', `[mosh] replayed ${recording.frames.length} fields over ${pictureMedia.name}`);
+    return blob;
+  }
+
+  // Serialise a recording to a compact string (Int16 vectors, base64) so a motion
+  // signature can be saved / loaded.
+  function serializeVectors(rec) {
+    const per = rec.cols * rec.rows * 2;
+    const flat = new Int16Array(rec.frames.length * per);
+    rec.frames.forEach((f, i) => { for (let j = 0; j < per; j++) flat[i * per + j] = Math.round(f[j]); });
+    let bin = '';
+    const bytes = new Uint8Array(flat.buffer);
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return JSON.stringify({ w: rec.w, h: rec.h, blockSize: rec.blockSize, cols: rec.cols, rows: rec.rows, count: rec.frames.length, name: rec.name, data: btoa(bin) });
+  }
+
+  function deserializeVectors(str) {
+    const o = JSON.parse(str);
+    const bin = atob(o.data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const flat = new Int16Array(bytes.buffer);
+    const per = o.cols * o.rows * 2;
+    const frames = [];
+    for (let i = 0; i < o.count; i++) frames.push(Float32Array.from(flat.subarray(i * per, (i + 1) * per)));
+    return { w: o.w, h: o.h, blockSize: o.blockSize, cols: o.cols, rows: o.rows, frames, name: o.name };
+  }
+
+  window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips,
+    recordVectors, replayVectors, serializeVectors, deserializeVectors };
 })();

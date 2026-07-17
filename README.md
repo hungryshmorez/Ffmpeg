@@ -119,7 +119,8 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   picture with the motion clip's field.
 - **`.test/datamosh2.mjs`** drives the headline **two-clip datamosh** UI end-to-end — two VP9 clips
   into the bin, select both, click "Datamosh A→B" — and plays the result back to prove it's a real
-  decodable video (clip A's motion on clip B's picture).
+  decodable video (clip A's motion on clip B's picture). Then **records** one clip's motion field
+  (#63) and **replays** it onto the other, proving the persistent-recording round-trip end-to-end.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,

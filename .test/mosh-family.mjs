@@ -171,8 +171,31 @@ try {
       acrossIsPicture = dstill < 20;               // picture content, not motion noise
     }
 
+    // #63 persistent recording: capture a field, serialise a 1-frame recording,
+    // deserialise it, and confirm it round-trips (Int16) and still displaces a
+    // picture — i.e. a saved motion signature replays.
+    let recRoundTrips = false, recApplies = false;
+    {
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      const m = new window.FFMosh.MotionMosher(cv);
+      m.setParams({ blockSize: 16, motionRadius: 16, threshold: 0 });
+      m.captureField(A);                 // prime
+      const f = m.captureField(B);       // {vec, cols, rows}
+      const rec = { w: W, h: H, blockSize: 16, cols: f.cols, rows: f.rows, frames: [f.vec], name: 't' };
+      const back = window.FFMosh.deserializeVectors(window.FFMosh.serializeVectors(rec));
+      let maxErr = 0;
+      for (let i = 0; i < f.vec.length; i++) maxErr = Math.max(maxErr, Math.abs(back.frames[0][i] - Math.round(f.vec[i])));
+      recRoundTrips = back.frames.length === 1 && back.cols === f.cols && maxErr < 0.6;
+      // build a gradient picture and apply the deserialised field to it
+      const pic = new Uint8ClampedArray(W * H * 4);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 4; const v = Math.round(x * 255 / W); pic[i] = pic[i + 1] = pic[i + 2] = v; pic[i + 3] = 255; }
+      const m2 = new window.FFMosh.MotionMosher(cv); m2.setParams({ blockSize: 16 });
+      const out = m2.applyField(pic.slice(), back.frames[0], back.cols, back.rows, W, H);
+      recApplies = diff(Array.from(out), Array.from(pic)) > 50;
+    }
+
     return {
-      maskShowsClean, maskKeepsMoving, acrossApplied, acrossIsPicture,
+      maskShowsClean, maskKeepsMoving, acrossApplied, acrossIsPicture, recRoundTrips, recApplies,
       dbgAcross: { dmoved, smoothness: dstill },
       baseHasMotion: col0Mag(base.vec) > 1,
       baseHasY: anyY(base.vec),
@@ -190,10 +213,12 @@ try {
   ok('#59 masking: still block → clean, moving block → smear', r.maskShowsClean && r.maskKeepsMoving);
   ok('#62 two-clip: motion clip drags the picture clip', r.acrossApplied, `${r.dbgAcross.dmoved} px moved`);
   ok('#62 two-clip: output carries the picture (not motion pixels)', r.acrossIsPicture, `smoothness=${r.dbgAcross.smoothness}`);
+  ok('#63 recording serialises + round-trips', r.recRoundTrips);
+  ok('#63 a recorded field replays onto a picture', r.recApplies);
 
   const passed = checks.filter(Boolean).length;
   durable(`==== ${passed}/${checks.length} checks passed ====`);
-  code = passed === checks.length && checks.length === 7 ? 0 : 1;
+  code = passed === checks.length && checks.length === 9 ? 0 : 1;
 } catch (e) {
   durable('FATAL: ' + (e.message || String(e)));
   code = 1;

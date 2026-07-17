@@ -2045,7 +2045,7 @@ function updateBinMultiToolbar() {
     if (cb.checked) binSelected.add(cb.dataset.checkId);
     else binSelected.delete(cb.dataset.checkId);
   });
-  if (binSelected.size >= 2) {
+  if (binSelected.size >= 1) {
     bar.hidden = false;
     if (count) count.textContent = String(binSelected.size);
   } else {
@@ -2200,6 +2200,38 @@ async function runTwoClipDatamosh() {
     logToConsole('error', `[mosh] datamosh failed: ${e && e.message || e}`);
     showInfo('Datamosh A→B', `Failed: ${e && e.message || e}`);
   }
+}
+
+// #63 — persistent vector recording. Record a clip's motion field once, then
+// replay that motion over any other clip(s). The recording lives on window so
+// it survives between selections.
+async function runRecordMotion() {
+  const sel = state.mediaBin.filter((m) => binSelected.has(m.id));
+  const clip = sel[0];
+  if (!clip || !(clip.hasVideo || clip.type === 'video')) { showInfo('Record Motion', 'Select one video clip to record its motion.'); return; }
+  if (!window.FFMosh?.recordVectors) { showInfo('Record Motion', 'Motion engine not loaded.'); return; }
+  try {
+    setProgressText?.('Recording motion field…');
+    const rec = await window.FFMosh.recordVectors(clip, { blockSize: 16, motionRadius: 8, threshold: 12 }, (p, n) => { setProgress?.(p); });
+    window._motionRecording = rec;
+    try { localStorage.setItem('ffs.motionRec', window.FFMosh.serializeVectors(rec)); } catch (_) {}
+    logToConsole('ok', `[mosh] motion recorded from ${clip.name} — ${rec.frames.length} fields. Select another clip and hit "Apply Motion".`);
+    showInfo('Motion recorded', `Captured ${rec.frames.length} motion fields from “${clip.name}”. Now select a different clip and click ▶ Apply Motion.`);
+  } catch (e) { logToConsole('error', `[mosh] record failed: ${e && e.message || e}`); }
+}
+
+async function runApplyMotion() {
+  const sel = state.mediaBin.filter((m) => binSelected.has(m.id));
+  const clip = sel[0];
+  if (!clip || !(clip.hasVideo || clip.type === 'video')) { showInfo('Apply Motion', 'Select one video clip to apply the recorded motion to.'); return; }
+  let rec = window._motionRecording;
+  if (!rec) { try { rec = window.FFMosh.deserializeVectors(localStorage.getItem('ffs.motionRec')); } catch (_) {} }
+  if (!rec?.frames?.length) { showInfo('Apply Motion', 'Record a motion field first (select a clip → 🔴 Record Motion).'); return; }
+  try {
+    setProgressText?.('Replaying recorded motion…');
+    await window.FFMosh.replayVectors(rec, clip, { persistence: 0.92 }, (p) => setProgress?.(p));
+    logToConsole('ok', '[mosh] motion replay complete → Media Bin');
+  } catch (e) { logToConsole('error', `[mosh] replay failed: ${e && e.message || e}`); }
 }
 
 async function runBinComposite(mode) {
@@ -2396,6 +2428,8 @@ function bindMediaBin() {
     'bin-op-merge':  () => runBinComposite('merge'),
     'bin-op-batch':  () => runBinBatchApply(),
     'bin-op-datamosh': () => runTwoClipDatamosh(),
+    'bin-op-record':   () => runRecordMotion(),
+    'bin-op-replay':   () => runApplyMotion(),
   };
   for (const [id, fn] of Object.entries(ops)) {
     const b = document.getElementById(id);

@@ -127,9 +127,39 @@ try {
   });
   ok('two-clip datamosh output is a decodable video', out.ok, out.ok ? `${out.w}x${out.h}` : out.err);
 
+  // #63 end-to-end: record the motion clip, then apply it to the picture clip.
+  const selectOne = (nameRe) => page.evaluate((reSrc) => {
+    const re = new RegExp(reSrc, 'i');
+    document.querySelectorAll('.bin-card-checkbox').forEach((cb) => {
+      const m = window.state.mediaBin.find((x) => x.id === cb.dataset.checkId);
+      const want = m && re.test(m.name);
+      if (cb.checked !== want) { cb.checked = want; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
+  }, nameRe.source);
+
+  await selectOne(/motion\.webm/);
+  await page.evaluate(() => document.getElementById('bin-op-record').click());
+  await page.waitForFunction(() => !!(window._motionRecording && window._motionRecording.frames.length), null, { timeout: 60000 }).catch(() => {});
+  const recorded = await page.evaluate(() => window._motionRecording ? window._motionRecording.frames.length : 0);
+  ok('#63 motion recorded from a clip', recorded > 0, `${recorded} fields`);
+
+  const binBefore2 = await page.evaluate(() => window.state.mediaBin.length);
+  await selectOne(/picture\.webm/);
+  await page.evaluate(() => document.getElementById('bin-op-replay').click());
+  await page.waitForFunction((n) => window.state.mediaBin.some((m) => /MOTION REPLAY/i.test(m.name)) && window.state.mediaBin.length > n,
+    binBefore2, { timeout: 120000 }).catch(() => {});
+  const replay = await page.evaluate(async () => {
+    const entry = [...window.state.mediaBin].reverse().find((m) => /MOTION REPLAY/i.test(m.name));
+    if (!entry) return { ok: false, err: 'no replay entry' };
+    const v = document.createElement('video'); v.src = entry.blobUrl || entry.url; v.muted = true;
+    const good = await new Promise((res) => { v.onloadeddata = () => res(v.readyState >= 2 && v.videoWidth > 0); v.onerror = () => res(false); setTimeout(() => res(v.readyState >= 2 && v.videoWidth > 0), 8000); });
+    return { ok: good, w: v.videoWidth };
+  });
+  ok('#63 recorded motion replays onto another clip (decodable)', replay.ok, replay.ok ? `${replay.w}px` : replay.err);
+
   const passed = checks.filter(Boolean).length;
   durable(`==== ${passed}/${checks.length} checks passed ====`);
-  code = passed === checks.length && checks.length === 2 ? 0 : 1;
+  code = passed === checks.length && checks.length === 4 ? 0 : 1;
 } catch (e) {
   durable('FATAL: ' + (e.message || String(e)));
   code = 1;
