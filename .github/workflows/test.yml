@@ -95,3 +95,8 @@ jobs:
       # video lands in the bin (clip A's motion applied to clip B's picture).
       - name: Two-clip datamosh
         run: npm run test:datamosh2
+
+      # Databend (#66): corrupt the raw bytes, decode through the damage — the
+      # output must still decode to real frames.
+      - name: Databend
+        run: npm run test:databend

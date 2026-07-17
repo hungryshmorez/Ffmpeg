@@ -17,14 +17,14 @@ datamosh, master audio, and perform live visuals, all client-side.
 
 | Area | Highlights |
 |---|---|
-| **Convert & compress** | 198 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
+| **Convert & compress** | 199 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
 | **Colour & video** | false-colour exposure, speed ramping with a draggable curve, before/after wipe, node graph (27 node types). |
 | **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors), auto-glitch/chaos engine, CPU pixel sort. |
 | **Audio studio** | real-time Web Audio rack (23 knobs, 12 presets, 7 modules), spectrogram, phase-vocoder time-stretch (keeps pitch), key/BPM detection, semantic macros. |
 | **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, 16-step sequencer, tap tempo, adaptive-quality load-shedding. |
 | **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code. |
 
-The build metadata is generated, not claimed: **31 JS modules · 198 workflows · 825/825
+The build metadata is generated, not claimed: **31 JS modules · 199 workflows · 825/825
 balanced CSS braces · 27 node-graph types · 11 trip-cam effects.** See
 [`scripts/generate-changelog.js`](./scripts/generate-changelog.js) and
 [`build-info.js`](./build-info.js) (the single source of truth).
@@ -121,10 +121,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   into the bin, select both, click "Datamosh A→B" — and plays the result back to prove it's a real
   decodable video (clip A's motion on clip B's picture). Then **records** one clip's motion field
   (#63) and **replays** it onto the other, proving the persistent-recording round-trip end-to-end.
+- **`.test/databend.mjs`** runs the **Databend** card (corrupt the raw bytes, decode through the
+  damage) and asserts the wrecked stream still **decodes to real frames** — plus a deterministic
+  unit check that the corruptor pokes bytes and leaves the container header intact.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, and `test:datamosh2` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, and `test:databend` in real headless Chromium on
 every push and pull request.
 
 ---
@@ -199,7 +202,7 @@ All three are fixed and verified by the tests above.
 | `compositor-ui.js` | the Layer Compositor deck (layer strips, blend/opacity/solo/mute, crossfader, hot cues) over `FFPerf.Compositor` |
 | `nodegraph.js` | node-graph editor (27 node types) |
 | `clips.js` | Clip Studio (its own tab): clip library, take numbers, touch/drag reorder, sequence export |
-| `workflows*.js` | the 198 workflow definitions across 16 categories |
+| `workflows*.js` | the 199 workflow definitions across 16 categories |
 | `storage.js`, `opfs.js` | autosave + OPFS persistence |
 | `navigation.js`, `tools.js`, `analysis.js`, `agents.js` | tab nav, misc tools, analysis, agent helpers |
 

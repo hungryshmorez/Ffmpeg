@@ -331,8 +331,69 @@
     return { file: 'match.cube', cube, refStats, srcStats, gain };
   }
 
+  // ===========================================================================
+  // DATABEND (#66) — corrupt the raw bytes of the encoded stream and decode it
+  // anyway. Real databending: open a media file as data, poke the bytes, and let
+  // a tolerant decoder make art out of the wreckage. We corrupt only the frame
+  // DATA region of an AVI (never the RIFF/index headers, or nothing decodes) and
+  // remux with error concealment on.
+  // ===========================================================================
+
+  /** Deterministically corrupt bytes inside the AVI 'movi' region. */
+  function databendBytes(bytes, { rate = 0.0008, seed = 1337 } = {}) {
+    const out = bytes.slice();
+    let start = Math.min(4096, out.length >> 2), end = out.length;
+    try { const p = parseAVI(bytes); start = p.movi + 4; end = p.moviEnd; } catch (_) { /* fall back to a coarse body window */ }
+    let s = (seed >>> 0) || 1;
+    const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+    let n = 0;
+    for (let i = start; i < end; i++) {
+      if (rnd() < rate) { out[i] = (out[i] + 1 + ((rnd() * 254) | 0)) & 0xff; n++; }
+    }
+    return { bytes: out, corrupted: n, start, end };
+  }
+
+  async function databend(opts = {}) {
+    const { rate = 0.0008, seed = 1337, quality = 5 } = opts;
+    const m = window.state?.inputFile;
+    if (!m) { window.logToConsole?.('warn', 'No file selected.'); return null; }
+    const ff = window.ff;
+    const log = (s, k = '') => window.logToConsole?.(k, `[databend] ${s}`);
+    try {
+      log('1/3 encoding to a parseable AVI…');
+      await ff.exec(['-i', m.virtualName, '-c:v', 'mpeg4', '-q:v', String(quality),
+        '-g', '9999', '-sc_threshold', '0', '-an', '-y', 'bend_src.avi']);
+
+      log('2/3 corrupting the bytes…');
+      const raw = await ff.readFile('bend_src.avi');
+      const bent = databendBytes(raw, { rate, seed });
+      log(`poked ${bent.corrupted} bytes in the frame data`, bent.corrupted ? 'ok' : 'warn');
+      await ff.writeFile('bend_out.avi', bent.bytes);
+      await ff.deleteFile('bend_src.avi').catch(() => {});
+
+      log('3/3 decoding through the damage…');
+      // Error concealment + tolerant timestamps so the decoder rides out the
+      // corruption instead of aborting.
+      await ff.exec(['-err_detect', 'ignore_err', '-fflags', '+genpts+igndts+discardcorrupt',
+        '-i', 'bend_out.avi', '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1',
+        '-pix_fmt', 'yuv420p', '-y', 'bend_final.mp4']);
+
+      const data = await ff.readFile('bend_final.mp4');
+      if (!data?.length) throw new Error('Databend produced no output.');
+      const blob = new Blob([data.buffer], { type: 'video/mp4' });
+      await window.addBlobToBin?.(blob, `${m.name} [DATABEND]`, 'video/mp4');
+      await ff.deleteFile('bend_out.avi').catch(() => {});
+      await ff.deleteFile('bend_final.mp4').catch(() => {});
+      log(`✔ done — ${(blob.size / 1024 / 1024).toFixed(2)} MB → Media Bin`, 'ok');
+      return { blob, corrupted: bent.corrupted };
+    } catch (e) {
+      window.logToConsole?.('error', `[databend] ${e.message}`);
+      throw e;
+    }
+  }
+
   window.FFDatamosh = {
-    parseAVI, rebuildAVI, trueDatamosh,
+    parseAVI, rebuildAVI, trueDatamosh, databend, databendBytes,
     generateMatchLUT, imageStats, toImageData,
   };
 })();

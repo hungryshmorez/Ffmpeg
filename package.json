@@ -18,6 +18,7 @@
     "test:panic": "node .test/panic.mjs",
     "test:mosh-family": "node .test/mosh-family.mjs",
     "test:datamosh2": "node .test/datamosh2.mjs",
+    "test:databend": "node .test/databend.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

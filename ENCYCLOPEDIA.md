@@ -272,7 +272,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 63 | Persistent vector recording | Capture a motion field once, replay over anything. | ✅ | `recordVectors` captures a clip's fields; `serializeVectors`/`deserializeVectors` round-trip them (Int16, saved to localStorage); `replayVectors` applies them to any clip. UI: 🔴 Record Motion / ▶ Apply Motion. Verified deterministically + end-to-end (record 27 fields → replay onto another clip). |
 | 64 | Pixel sort with a mask | Sort within a luma/hue range, angled. | ⬜ | Masked, angled sort. — *M* |
 | 65 | True DCT manipulation | Corrupt DCT blocks at coefficient level. | 🔒 | Needs coefficient-level decode (custom codec work). — *XL* |
-| 66 | Databend mode | Corrupt raw bytes of any file and try to decode. | ⬜ | Byte-corruptor + tolerant decode. — *M* |
+| 66 | Databend mode | Corrupt raw bytes of any file and try to decode. | ✅ | `databendBytes` pokes the AVI frame-data region (header-safe, deterministic); `databend()` remuxes with error concealment. Workflow "🧨 Databend". `.test/databend.mjs` decodes the wreckage to real frames. |
 | 67 | Feedback with geometric transforms | Zoom+rotate per iteration — the infinite tunnel. | ⬜ | Per-iteration transform in the feedback shader. — *S–M* |
 | 68 | Optical-flow-driven displacement | Use the motion field as a displacement map. | ⬜ | Flow field → displacement shader. — *M* |
 

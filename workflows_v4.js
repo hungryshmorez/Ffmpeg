@@ -32,6 +32,15 @@ window.WORKFLOWS_V4 = [
     icon: '☠️', slow: true,
     run: () => window.FFDatamosh.trueDatamosh({ mode: 'both', bloomFactor: 3, bloomEvery: 8, quality: 10 }),
   },
+  {
+    id: 'databend',
+    name: 'Databend',
+    category: 'video-glitch-pipelines',
+    description: 'Real databending — corrupt the raw bytes of the encoded stream and decode through the damage with error concealment on. Genuine byte-level glitch, not a filter.',
+    tags: ['databend', 'corrupt', 'bytes', 'glitch', 'true'],
+    icon: '🧨', slow: true,
+    run: () => window.FFDatamosh.databend({ rate: 0.0008 }),
+  },
 
   // ---- AUTO COLOUR MATCH ----
   {
