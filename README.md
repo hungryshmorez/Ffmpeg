@@ -133,10 +133,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/flow-displace.mjs`** verifies **optical-flow displacement** deterministically with
   hand-built fields: a uniform field shifts a vertical edge by exactly `dx*scale`, the scale scales
   it, a zero field is an identity, and a top→bottom-varying field warps the two halves differently.
+- **`.test/vector-overlay.mjs`** verifies the **motion-vector overlay** deterministically: nothing
+  is drawn before a field exists, the estimated field inks the canvas, and a single isolated vector's
+  arrow runs toward the tip (+x,+y) and not the other way.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, and `test:flow-displace` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, and `test:vector-overlay` in real headless Chromium on
 every push and pull request.
 
 ---

@@ -116,3 +116,8 @@ jobs:
       # zero leaves it be, a varying field warps the halves differently.
       - name: Flow displacement
         run: npm run test:flow-displace
+
+      # Motion-vector overlay (#57): draw the estimated field as arrows and read
+      # the ink back — nothing before a field, ink after, arrows point +x,+y.
+      - name: Motion-vector overlay
+        run: npm run test:vector-overlay

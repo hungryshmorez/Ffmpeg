@@ -263,7 +263,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 
 | # | Feature | What it is / the vision | Status | What's left |
 |---|---|---|---|---|
-| 57 | Motion-vector overlay on by default | Dial in a mosh while seeing the field. | 🟡 | Overlay is written; default it on during mosh setup. — *S* |
+| 57 | Motion-vector overlay on by default | Dial in a mosh while seeing the field. | ✅ | `MotionMosher.drawVectors(ctx,opts)` draws the estimated field as arrows onto any 2-D context; `renderVectorOverlay` composites them over a dimmed frame with the overlay ON by default. Workflow "🧭 Motion Vectors — Overlay". `.test/vector-overlay.mjs` verifies nothing draws before a field, the estimated field inks, and arrows point the way the block moved. |
 | 58 | Directional mosh | Bias vectors along one axis (horizontal smear = the classic). | ✅ | `directionX/Y` axis bias in `_estimate`; presets "Horizontal Smear" / "Vertical Drip". `.test/mosh-family.mjs` asserts `directionY=0` zeroes every Y. |
 | 59 | Mosh masking | Only mosh where motion exceeds a threshold. | ✅ | `_maskLowMotion` shows the clean frame in low-motion blocks; preset "Masked Mosh". Unit-tested. |
 | 60 | Vector amplification curve | Non-linear response — ignore small, explode large. | ✅ | `amplify` power curve on vector magnitude; preset "Amplified Chaos". Test asserts the field magnitude shifts. |
@@ -343,7 +343,7 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 ### Phase B — Finish what's already half-built (fast wins)
 5. 🟡 Wire the **global-intensity slider** + **hot cues** back into `vj-mode.js` (dropped in v10.4's reduced copy). — *S each.*
 6. 🟡 Gate expensive shaders via `FFPerf.Perf.isAllowed()` and apply `FFPerf.scale` to the **WebGL editor preview** too. — *S–M.*
-7. 🟡 Default the **motion-vector overlay** on during mosh setup (#57). — *S.*
+7. ✅ **Motion-vector overlay** — `drawVectors` + `renderVectorOverlay`, on by default (#57).
 8. ✅ **Keyboard-shortcut coverage + cheat sheet** (#96) — `?` toggle, `[`/`]` tab cycle, `Alt+1‑8`
    jumps, grouped auto-generated cheat sheet; verified by `.test/shortcuts.mjs`.
 

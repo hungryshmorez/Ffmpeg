@@ -119,4 +119,22 @@ window.WORKFLOWS_V5 = [
         '🌊', ['extreme', 'drag', 'current']),
     ];
   })(),
+
+  // --- motion-vector overlay (#57), arrows ON by default ---
+  {
+    id: 'vector-overlay',
+    name: 'Motion Vectors — Overlay',
+    category: 'video-glitch-pipelines',
+    description: 'Draws the estimated motion field as green arrows over a dimmed version of the frame — the codec’s-eye view of your footage. The overlay is on by default; genuinely useful for dialling a mosh in, and a striking look on its own.',
+    tags: ['motion', 'vectors', 'overlay', 'debug', 'flow', 'arrows'],
+    icon: '🧭', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFMosh.renderVectorOverlay(m, { blockSize: 16, motionRadius: 12, threshold: 1, dim: 0.55, scale: 2.5 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Motion vectors — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
 ].flat();
