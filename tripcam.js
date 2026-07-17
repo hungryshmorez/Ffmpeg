@@ -1048,20 +1048,25 @@ void main() {
   function startRec(canvas, fps = 30) {
     if (REC.rec) return stopRec();
     const stream = canvas.captureStream(fps);
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9' : 'video/webm';
+    // iOS/Safari has no webm encoder — fall through to mp4 (see pickRecorderMime).
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))(
+      'video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
     REC.chunks = [];
-    REC.rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+    REC.rec = new MediaRecorder(stream, mime
+      ? { mimeType: mime, videoBitsPerSecond: 8_000_000 }
+      : { videoBitsPerSecond: 8_000_000 });
     REC.t0 = Date.now();
     REC.rec.ondataavailable = (e) => { if (e.data.size) REC.chunks.push(e.data); };
     REC.rec.onstop = async () => {
-      const blob = new Blob(REC.chunks, { type: 'video/webm' });
-      const name = `tripcam-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}.webm`;
+      const type = (REC.rec.mimeType || 'video/webm').split(';')[0];
+      const ext = type.includes('mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(REC.chunks, { type });
+      const name = `tripcam-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}.${ext}`;
       // Recordings are TAKES. They belong in the Clip Library, where you can
       // review them, reorder them, and sequence them — not lost in the media bin
       // next to your source footage.
       window.FFClips?.add(blob, name, { source: 'tripcam' });
-      await window.addBlobToBin?.(blob, name, 'video/webm');
+      await window.addBlobToBin?.(blob, name, type);
       window.logToConsole?.('ok',
         `${name} → Media Bin. Run any of the 180 workflows on it, or hit "Send to Editor".`);
       REC.rec = null; REC.chunks = [];

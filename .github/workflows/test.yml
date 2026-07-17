@@ -75,3 +75,8 @@ jobs:
       # the concatenated result (frame count = sum of the clips).
       - name: Clip sequence export
         run: npm run test:clips
+
+      # Mobile / iPad: touch-emulated contexts at phone + tablet sizes assert no
+      # horizontal page overflow and that taps switch/reach tabs.
+      - name: Mobile + iPad layout
+        run: npm run test:mobile

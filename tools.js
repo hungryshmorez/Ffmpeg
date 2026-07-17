@@ -168,22 +168,26 @@
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
 
+      // iOS/Safari records mp4, not webm — fall through (see pickRecorderMime).
+      const pick = window.pickRecorderMime || (() => '');
       const mime = kind === 'mic'
-        ? (MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm')
-        : (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm');
+        ? pick('audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac')
+        : pick('video/webm;codecs=vp9,opus', 'video/webm', 'video/mp4;codecs=h264,aac', 'video/mp4');
 
       REC.stream = stream;
       REC.kind = kind;
       REC.chunks = [];
-      REC.rec = new MediaRecorder(stream, { mimeType: mime });
+      REC.rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
       REC.t0 = Date.now();
 
       REC.rec.ondataavailable = (e) => { if (e.data.size) REC.chunks.push(e.data); };
       REC.rec.onstop = async () => {
-        const blob = new Blob(REC.chunks, { type: mime });
-        const ext  = kind === 'mic' ? 'webm' : 'webm';
+        const type = (REC.rec.mimeType || mime || (kind === 'mic' ? 'audio/webm' : 'video/webm')).split(';')[0];
+        const blob = new Blob(REC.chunks, { type });
+        const ext  = type.includes('mp4') ? (kind === 'mic' ? 'm4a' : 'mp4')
+                   : type.includes('aac') ? 'aac' : 'webm';
         const name = `${kind}-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}.${ext}`;
-        await window.addBlobToBin?.(blob, name, mime);
+        await window.addBlobToBin?.(blob, name, type);
         window.logToConsole?.('ok', `Recording saved to the Media Bin: ${name}`);
         cleanupRec();
       };

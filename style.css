@@ -901,6 +901,19 @@ kbd {
 ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
+/* ---------- Responsive: tablet header (iPad portrait, small laptops) ----
+   The fixed 3-column topbar can't fit brand + preset-select + action buttons
+   in a third of the width, so on iPad-portrait-class widths (769–1024px, which
+   the <768 rule below misses) the header's right cluster overflowed the page
+   and the whole thing scrolled sideways ~99px. Stack the header and let the
+   right cluster wrap; the decorative subtitle drops. Body layout is untouched. */
+@media (max-width: 1024px) {
+  .topbar { grid-template-columns: 1fr; height: auto; row-gap: 8px; }
+  .topbar-center { display: none; }
+  .topbar-left, .topbar-right { justify-content: flex-start; }
+  .topbar-right { flex-wrap: wrap; }
+}
+
 /* ---------- Responsive: < 768px --------------------------------------- */
 @media (max-width: 768px) {
   body { overflow-y: auto; }
@@ -1101,6 +1114,7 @@ kbd {
   display: flex;
   gap: 6px;
   margin-bottom: 14px;
+  flex-wrap: wrap;   /* five compare-mode buttons wrap instead of overflowing on phones */
 }
 .mode-btn {
   background: var(--panel-2);

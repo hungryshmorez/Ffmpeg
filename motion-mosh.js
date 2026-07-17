@@ -331,10 +331,13 @@
     m.setParams(params);
 
     const stream = cv.captureStream(30);
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9' : 'video/webm';
+    // iOS/Safari has no webm encoder — fall through to mp4 (see pickRecorderMime).
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))(
+      'video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
     const chunks = [];
-    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 10_000_000 });
+    const rec = new MediaRecorder(stream, mime
+      ? { mimeType: mime, videoBitsPerSecond: 10_000_000 }
+      : { videoBitsPerSecond: 10_000_000 });
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
 
     const done = new Promise((res) => { rec.onstop = res; });
@@ -379,8 +382,10 @@
     rec.stop();
     await done;
 
-    const blob = new Blob(chunks, { type: 'video/webm' });
-    await window.addBlobToBin?.(blob, `${media.name} [MOTION MOSH].webm`, 'video/webm');
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [MOTION MOSH].${ext}`, type);
     window.logToConsole?.('ok',
       `[mosh] rendered ${(blob.size / 1024 / 1024).toFixed(1)} MB → Media Bin`);
     return blob;

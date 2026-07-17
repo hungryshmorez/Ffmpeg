@@ -105,6 +105,20 @@ function drawSpeedCurve() {
   }
 }
 
+// Pick a MediaRecorder MIME the browser actually supports, in preference order.
+// Safari/iOS has no webm encoder, so a bare 'video/webm' fallback throws
+// NotSupportedError and every recording/demo-clip path dies — fall through to
+// mp4 there. Returns '' when nothing matches, which tells MediaRecorder to use
+// its own platform default (always valid). Callers must omit mimeType when ''.
+function pickRecorderMime(...candidates) {
+  const R = typeof MediaRecorder !== 'undefined' ? MediaRecorder : null;
+  for (const m of candidates) {
+    if (m && R && typeof R.isTypeSupported === 'function' && R.isTypeSupported(m)) return m;
+  }
+  return '';
+}
+window.pickRecorderMime = pickRecorderMime;
+
 async function generateDemoClip() {
   const W = 640, H = 360, FPS = 24, DUR = 10;
   const cv = document.createElement('canvas');
@@ -112,14 +126,15 @@ async function generateDemoClip() {
   const ctx = cv.getContext('2d');
 
   const stream = cv.captureStream(FPS);
-  const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-    ? 'video/webm;codecs=vp9' : 'video/webm';
-  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_000_000 });
+  const mime = pickRecorderMime('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+  const rec = new MediaRecorder(stream, mime
+    ? { mimeType: mime, videoBitsPerSecond: 2_000_000 }
+    : { videoBitsPerSecond: 2_000_000 });
   const chunks = [];
   rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
 
   return new Promise((resolve, reject) => {
-    rec.onstop = () => resolve(new Blob(chunks, { type: mime.split(';')[0] }));
+    rec.onstop = () => resolve(new Blob(chunks, { type: (rec.mimeType || mime || 'video/webm').split(';')[0] }));
     rec.onerror = (e) => reject(new Error(e.error?.message || 'recorder error'));
     rec.start();
 

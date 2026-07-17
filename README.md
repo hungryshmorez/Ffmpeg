@@ -105,10 +105,14 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/clips.mjs`** adds two clips to the Clip Studio library and runs **`exportSequence`**,
   then decodes the concatenated output — the frame count equals the sum of the clips, proving the
   concat ran (not just that a file appeared).
+- **`.test/mobile.mjs`** loads the app in **touch-emulated** contexts at phone, iPad-portrait and
+  iPad-landscape sizes and asserts the page never scrolls sideways (across every tab) and that real
+  taps switch tabs and reach off-screen ones.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, and `test:clips` in real headless Chromium on every push and pull request.
+`test:audio-studio`, `test:clips`, and `test:mobile` in real headless Chromium on every push and
+pull request.
 
 ---
 
@@ -157,6 +161,7 @@ All three are fixed and verified by the tests above.
 │   ├── bin-features.mjs    # compress-to-target + scene split: decoded clips out of the Media Bin
 │   ├── audio-studio.mjs    # loadFromBin → Web Audio bounce (WAV + MP3/loudnorm) → decoded PCM samples
 │   ├── clips.mjs           # Clip Studio exportSequence: concat of two clips → decoded frame count
+│   ├── mobile.mjs          # touch-emulated phone/iPad: no horizontal overflow + taps switch tabs
 │   └── server.mjs          # minimal COOP/COEP static server
 ├── .github/workflows/
 │   └── test.yml            # runs the tests on every push
@@ -211,3 +216,10 @@ next move.
 - The ffmpeg.wasm core is pinned: `@ffmpeg/ffmpeg 0.12.10`, `@ffmpeg/util 0.12.1`,
   `@ffmpeg/core 0.12.10`. The single-thread core is preferred at boot (it round-trips
   deterministically); the multi-thread core is a fallback.
+- **iPad & mobile.** The layout is responsive and touch-driven — drag handles (trim, wipe) and
+  the VJ pads use pointer/touch events, the tab and mode bars scroll horizontally, and the header
+  stacks on tablet-portrait widths so nothing pushes the page sideways (`.test/mobile.mjs` guards
+  this across phone/iPad sizes). Recording paths select an mp4 MIME on Safari/iOS, which has no
+  webm encoder. Two things still depend on the browser, not this code: `SharedArrayBuffer`
+  (needs the COOP/COEP headers, which the bundled `coi-serviceworker.js` re-adds on static hosts)
+  and tight iOS memory limits on very large clips.

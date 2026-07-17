@@ -14,6 +14,7 @@
     "test:bin-features": "node .test/bin-features.mjs",
     "test:audio-studio": "node .test/audio-studio.mjs",
     "test:clips": "node .test/clips.mjs",
+    "test:mobile": "node .test/mobile.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },
