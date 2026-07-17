@@ -2258,6 +2258,7 @@
         <button class="mode-btn"        data-mode="output"  type="button">Output</button>
         <button class="mode-btn"        data-mode="compare" type="button">Compare</button>
         <button class="mode-btn"        data-mode="falsecolor" type="button">False Color</button>
+        <button class="mode-btn"        data-mode="scopes" type="button">Scopes</button>
         <button class="mode-btn"        data-mode="wipe" type="button">Wipe</button>
       </div>
 
@@ -2279,6 +2280,19 @@
             <span style="background:#00ff00">Midtones</span>
             <span style="background:#ffff00">Highlights</span>
             <span style="background:#ff0000">Overexposed</span>
+          </div>
+        </div>
+        <!-- Scopes mode (#51): vectorscope + waveform monitor -->
+        <div class="preview-mode preview-scopes" id="pmode-scopes">
+          <div class="scopes-grid">
+            <div class="scope-cell">
+              <canvas id="pv-vectorscope" class="scope-canvas"></canvas>
+              <div class="scope-label">Vectorscope</div>
+            </div>
+            <div class="scope-cell">
+              <canvas id="pv-waveform" class="scope-canvas"></canvas>
+              <div class="scope-label">Waveform (luma)</div>
+            </div>
           </div>
         </div>
         <div class="preview-mode preview-wipe" id="pmode-wipe">
@@ -2460,6 +2474,7 @@
     <script src="audio-engine.js"></script>
     <script src="audio-studio.js"></script>
     <script src="motion-mosh.js"></script>
+    <script src="scopes.js"></script>
     <script src="audio-intel.js"></script>
     <script src="clips.js"></script>
     <script src="vj-mode.js"></script>

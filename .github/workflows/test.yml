@@ -121,3 +121,8 @@ jobs:
       # the ink back — nothing before a field, ink after, arrows point +x,+y.
       - name: Motion-vector overlay
         run: npm run test:vector-overlay
+
+      # Scopes (#51): vectorscope + waveform, pure ImageData math — grey centres,
+      # red/blue push apart, and the luma trace rises on a dark→bright gradient.
+      - name: Colour scopes
+        run: npm run test:scopes

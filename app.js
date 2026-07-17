@@ -6836,6 +6836,8 @@ function setPreviewMode(mode) {
   syncPreviewMode();
   if (mode === 'falsecolor') startFalseColorLoop();
   else stopFalseColorLoop();
+  if (mode === 'scopes') startScopesLoop();
+  else stopScopesLoop();
 }
 
 // =============================================================================
@@ -6890,6 +6892,40 @@ function startFalseColorLoop() {
   loop();
 }
 function stopFalseColorLoop() { cancelAnimationFrame(_fcRaf); _fcRaf = 0; }
+
+// =============================================================================
+// #51 VECTORSCOPE + WAVEFORM MONITOR
+// -----------------------------------------------------------------------------
+// Real colour scopes, live off the source preview. The scope maths lives in
+// scopes.js (pure ImageData → ImageData, unit-tested); this just samples the
+// video into a small offscreen canvas each frame and paints the two scopes.
+// =============================================================================
+let _scRaf = 0;
+function startScopesLoop() {
+  cancelAnimationFrame(_scRaf);
+  const vs = document.getElementById('pv-vectorscope');
+  const wf = document.getElementById('pv-waveform');
+  const src = document.getElementById('pv-source');
+  if (!vs || !wf || !src || !window.FFScopes) return;
+  const SZ = 256;
+  vs.width = SZ; vs.height = SZ; wf.width = SZ; wf.height = SZ;
+  const vctx = vs.getContext('2d'), wctx = wf.getContext('2d');
+  const SW = 240, SH = 135;
+  const off = document.createElement('canvas'); off.width = SW; off.height = SH;
+  const offCtx = off.getContext('2d', { willReadFrequently: true });
+  const loop = () => {
+    if (stateV2.previewMode !== 'scopes') { _scRaf = 0; return; }
+    if (src.readyState >= 2) {
+      offCtx.drawImage(src, 0, 0, SW, SH);
+      const img = offCtx.getImageData(0, 0, SW, SH);
+      vctx.putImageData(window.FFScopes.vectorscope(img, SZ), 0, 0);
+      wctx.putImageData(window.FFScopes.waveform(img, SZ, SZ), 0, 0);
+    }
+    _scRaf = requestAnimationFrame(loop);
+  };
+  loop();
+}
+function stopScopesLoop() { cancelAnimationFrame(_scRaf); _scRaf = 0; }
 
 // =============================================================================
 // #92 BEFORE/AFTER WIPE

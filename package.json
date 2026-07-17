@@ -23,6 +23,7 @@
     "test:feedback": "node .test/feedback.mjs",
     "test:flow-displace": "node .test/flow-displace.mjs",
     "test:vector-overlay": "node .test/vector-overlay.mjs",
+    "test:scopes": "node .test/scopes.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

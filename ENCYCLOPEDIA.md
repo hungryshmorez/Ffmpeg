@@ -252,7 +252,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 48 | Halation & bloom (physical pass) | Proper light bleed. | ⬜ | Threshold → blur → screen. — *M* |
 | 49 | Lens distortion + CA profiles | Named-lens profiles. | ⬜ | Profile table + `lenscorrection`/CA shader. — *M* |
 | 50 | Deflicker for timelapse | Even out exposure flicker. | ⬜ | `deflicker` filter surfaced. — *S* |
-| 51 | Vectorscope + waveform monitor | Real colour scopes. | ⬜ | Canvas scopes from the preview frame. — *M* |
+| 51 | Vectorscope + waveform monitor | Real colour scopes. | ✅ | `scopes.js` — `vectorscope` plots per-pixel chroma (Cb,Cr) as a scatter (neutral greys centre, saturated hues push to the rim); `waveform` plots per-column luma up the Y axis. Both pure ImageData→ImageData. Live "Scopes" preview mode (`startScopesLoop`) paints them off the source video. `.test/scopes.mjs` verifies grey→centre, red/blue apart, and the luma trace rising on a gradient. |
 | 52 | False-colour exposure view | See over/under exposure. | ✅ | — |
 | 53 | Curves editor with a draggable spline | Not preset names. | 🟡 | Speed-curve editor exists; reuse the spline widget for colour curves. — *M* |
 | 54 | HSL secondary qualifiers | Grade just skin / just sky. | ⬜ | Qualifier UI → keyed mask. — *L* |
