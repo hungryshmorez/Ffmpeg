@@ -41,6 +41,7 @@
     "test:stabilize": "node .test/stabilize.mjs",
     "test:reframe": "node .test/reframe.mjs",
     "test:crossfade-curves": "node .test/crossfade-curves.mjs",
+    "test:n-layers": "node .test/n-layers.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

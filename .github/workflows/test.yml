@@ -215,3 +215,8 @@ jobs:
       # to 1 (no mid dip), sharp is an S-curve; crossfade drives layer opacity.
       - name: Crossfader curves
         run: npm run test:crossfade-curves
+
+      # N-layer compositor (#72): grow the deck to 6 layers and composite on the
+      # 6th (beyond the old max) — screen-blend → yellow; count clamps to [2,8].
+      - name: N-layer compositor
+        run: npm run test:n-layers

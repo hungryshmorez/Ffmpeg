@@ -283,7 +283,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 69 | MIDI clock sync (slave) | Play with anyone. | ⬜ | Sync sequencer to incoming MIDI clock. — *M* |
 | 70 | Ableton Link | Networked tempo. | 🔒 | No browser Link without a bridge. — *L* |
 | 71 | MIDI output | Send clock/notes so lights follow. | ⬜ | MIDI-out from the sequencer. — *S–M* |
-| 72 | More than 4 layers + mixer strip | Real mixer. | ⬜ | Extend the compositor (1.4) to N layers. — *L* |
+| 72 | More than 4 layers + mixer strip | Real mixer. | ✅ | The `Compositor` engine already takes any layer count; `FFComp.setLayerCount(n)` (＋/− in the deck head) rebuilds the mixer for 2–8 layers, regenerating the strips, crossfader options and wiring. `.test/n-layers.mjs` grows the deck to 6 in the real app, loads a clip into layer 5 (beyond the old max), and screen-blends it over a red base → yellow centre pixel (frames, not bytes); the count clamps to [2,8]. |
 | 73 | Per-layer effect chains | Each layer its own shader stack. | ⬜ | Effect chain per layer. — *L* |
 | 74 | Crossfader with curve selection | Linear / constant-power / sharp. | ✅ | `FFPerf.CROSSFADE_CURVES` — linear (gainA+gainB=1), constant-power (gainA²+gainB²=1, no mid-level dip), and sharp (an S-curve that lingers at the ends and snaps through the middle). `Compositor.crossfade(a,b,x,curve)` drives the two layers' opacity by the chosen law; a curve dropdown sits by the crossfader in the deck. `.test/crossfade-curves.mjs` verifies each law's defining property and that the compositor's layer opacities follow (const-power → 0.707/0.707 at the midpoint). |
 | 75 | Pattern banks (8, switch on the bar) | Recall sequencer patterns. | ⬜ | Save/recall + bar-quantised switch. — *M* |

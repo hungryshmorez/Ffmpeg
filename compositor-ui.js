@@ -21,6 +21,9 @@
   let comp = null;                 // the FFPerf.Compositor instance
   let fileInput = null;            // one hidden <input> reused for every "Load…"
   let pendingLayer = -1;           // which layer a file-picker result lands on
+  let deckEl = null;               // the VJ deck we mount into
+  let curN = 4;                    // current layer count (#72, adjustable 2–8)
+  const MIN_LAYERS = 2, MAX_LAYERS = 8;
 
   const log = (m, k = '') => window.logToConsole?.(k, `[comp] ${m}`);
   const modes = () => window.FFPerf?.BLEND_MODES || ['normal'];
@@ -33,8 +36,23 @@
     if (!deck || deck.dataset.compBuilt) return;
     if (!window.FFPerf?.Compositor) { log('compositor engine not loaded', 'warn'); return; }
     deck.dataset.compBuilt = '1';
+    deckEl = deck;
+    mount(curN);
+  }
 
-    const N = 4;
+  /** Rebuild the deck for a new layer count (#72). Sources reset — it's a setup
+   *  action. Engine already supports any N; this drives it from the UI. */
+  function setLayerCount(n) {
+    n = Math.max(MIN_LAYERS, Math.min(MAX_LAYERS, n));
+    if (n === curN) return;
+    if (comp?.raf) comp.stop();
+    document.getElementById('vj-compositor')?.remove();
+    curN = n;
+    mount(curN);
+  }
+
+  function mount(N) {
+    const deck = deckEl;
     const panel = document.createElement('section');
     panel.className = 'comp';
     panel.id = 'vj-compositor';
@@ -42,6 +60,11 @@
       <div class="comp-head">
         <strong>🎛 Layer Compositor</strong>
         <small>Stack sources · blend · solo/mute · crossfade — a deck, not a preview</small>
+        <span class="comp-count" title="Layer count (#72)">
+          <button type="button" id="comp-layer-minus" class="mini-btn">−</button>
+          <span id="comp-layer-n">${N}</span> layers
+          <button type="button" id="comp-layer-plus" class="mini-btn">＋</button>
+        </span>
         <button type="button" id="comp-power" class="mini-btn">▶ Run</button>
       </div>
       <div class="comp-stage"><canvas id="comp-canvas" width="640" height="360"></canvas></div>
@@ -121,6 +144,10 @@
   // WIRING
   // ---------------------------------------------------------------------------
   function bind(panel) {
+    // Layer count (#72): rebuild the deck with N±1 layers (2–8).
+    panel.querySelector('#comp-layer-plus')?.addEventListener('click', () => setLayerCount(curN + 1));
+    panel.querySelector('#comp-layer-minus')?.addEventListener('click', () => setLayerCount(curN - 1));
+
     // Run / stop the composite loop.
     const power = panel.querySelector('#comp-power');
     power.addEventListener('click', () => {
@@ -254,7 +281,7 @@
 
   // Public surface (and a test hook: loadInto lets the headless test feed clips
   // straight into a layer without a real file dialog).
-  window.FFComp = { build, loadInto, get compositor() { return comp; } };
+  window.FFComp = { build, loadInto, setLayerCount, get layerCount() { return curN; }, get compositor() { return comp; } };
 
   // Build when the VJ tab is opened — after vj-mode has rendered the deck.
   // vj-mode registers its click handler at DOMContentLoaded; loading this script
