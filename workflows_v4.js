@@ -76,6 +76,24 @@ window.WORKFLOWS_V4 = [
     },
   },
 
+  // ---- LENS DISTORTION + CA ----
+  ...['vintage-wide', 'cctv', 'anamorphic', 'tele-pincushion'].map((prof) => ({
+    id: `lens-${prof}`,
+    name: `Lens — ${prof.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,
+    category: 'retro-analog',
+    description: `A named-lens profile: radial barrel/pincushion distortion plus real chromatic aberration that grows toward the edges — the physical fingerprint of a ${prof.replace(/-/g, ' ')} lens. Not a filter preset; an actual per-pixel radial remap.`,
+    tags: ['lens', 'distortion', 'chromatic', 'aberration', 'barrel', prof],
+    icon: '🔎', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderLens(m, { profile: prof }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Lens (${prof}) — ${Math.round(p * 100)}%`);
+      });
+    },
+  })),
+
   // ---- SPEED-UP WITH MOTION BLUR ----
   {
     id: 'speed-blur-4x',

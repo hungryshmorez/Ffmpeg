@@ -796,6 +796,94 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5g. LENS DISTORTION + CHROMATIC ABERRATION (#49) — named-lens profiles. A
+  //     radial remap bends straight lines (barrel k1<0 bows them out, pincushion
+  //     k1>0 pulls them in), and sampling R/G/B at slightly different radii gives
+  //     real chromatic aberration — the coloured fringing that grows toward the
+  //     edges of a fast wide lens. Both are physical, radial, edge-weighted.
+  // ===========================================================================
+
+  const LENS_PROFILES = {
+    'none':        { k1: 0, k2: 0, ca: 0 },
+    'vintage-wide':{ k1: -0.28, k2: -0.05, ca: 0.004 },   // barrel + fringe
+    'anamorphic':  { k1: -0.12, k2: 0, ca: 0.006 },
+    'cctv':        { k1: -0.5, k2: -0.12, ca: 0.002 },    // heavy fishbowl
+    'tele-pincushion': { k1: 0.22, k2: 0.04, ca: 0.0025 },
+  };
+
+  function _sampleBilinear(data, w, h, fx, fy, ch) {
+    if (fx < 0) fx = 0; else if (fx > w - 1) fx = w - 1;
+    if (fy < 0) fy = 0; else if (fy > h - 1) fy = h - 1;
+    const x0 = fx | 0, y0 = fy | 0, x1 = x0 + 1 < w ? x0 + 1 : x0, y1 = y0 + 1 < h ? y0 + 1 : y0;
+    const tx = fx - x0, ty = fy - y0;
+    const i00 = (y0 * w + x0) * 4 + ch, i10 = (y0 * w + x1) * 4 + ch, i01 = (y1 * w + x0) * 4 + ch, i11 = (y1 * w + x1) * 4 + ch;
+    return (data[i00] * (1 - tx) + data[i10] * tx) * (1 - ty) + (data[i01] * (1 - tx) + data[i11] * tx) * ty;
+  }
+
+  /** Lens distortion + CA over one frame (in place). k1/k2 radial, ca fringe. */
+  function lensDistort(imgData, opts = {}) {
+    const prof = typeof opts.profile === 'string' ? (LENS_PROFILES[opts.profile] || LENS_PROFILES.none) : {};
+    const k1 = opts.k1 ?? prof.k1 ?? -0.25, k2 = opts.k2 ?? prof.k2 ?? 0, ca = opts.ca ?? prof.ca ?? 0.003;
+    const { data, width: w, height: h } = imgData;
+    const src = new Uint8ClampedArray(data);                 // read from a copy
+    const cx = (w - 1) / 2, cy = (h - 1) / 2, maxR = Math.hypot(cx, cy);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = (x - cx) / maxR, dy = (y - cy) / maxR;    // normalised offset
+        const r2 = dx * dx + dy * dy;
+        const f = 1 + k1 * r2 + k2 * r2 * r2;                // radial distortion
+        const i = (y * w + x) * 4;
+        // per-channel radius for chromatic aberration (edge-weighted by r2)
+        const fR = f * (1 + ca * r2 * 40), fB = f * (1 - ca * r2 * 40);
+        data[i]     = _sampleBilinear(src, w, h, cx + dx * maxR * fR, cy + dy * maxR * fR, 0);
+        data[i + 1] = _sampleBilinear(src, w, h, cx + dx * maxR * f,  cy + dy * maxR * f,  1);
+        data[i + 2] = _sampleBilinear(src, w, h, cx + dx * maxR * fB, cy + dy * maxR * fB, 2);
+        data[i + 3] = 255;
+      }
+    }
+    return imgData;
+  }
+
+  /** Offline render: lens profile over every frame → Media Bin. */
+  async function renderLens(media, opts = {}, onProgress) {
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(960, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        lensDistort(img, opts);
+        ctx.putImageData(img, 0, 0);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [LENS].${ext}`, type);
+    window.logToConsole?.('ok', `[lens] distortion → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 5f. MOTION BLUR ON SPEED-UP (#43) — a 4× timelapse that DROPS frames strobes;
   //     a 4× timelapse that BLENDS the frames it would have dropped smears the
   //     motion smoothly, the way a long exposure does. frameBlend averages a
@@ -919,6 +1007,7 @@ vec2 _rotTC(vec2 tc, float a) {
     EFFECT_DEFAULTS, applyEffectDefaults,
     pixelSort, pixelSortMasked, sortBands, renderPixelSort,
     FeedbackTunnel, renderFeedback, halation, renderHalation,
-    FilmGrain, filmGrain, renderFilmGrain, frameBlend, renderSpeedBlur, Sparkles,
+    FilmGrain, filmGrain, renderFilmGrain, frameBlend, renderSpeedBlur,
+    lensDistort, renderLens, LENS_PROFILES, Sparkles,
   };
 })();

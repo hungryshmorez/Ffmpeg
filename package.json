@@ -36,6 +36,7 @@
     "test:stems": "node .test/stems.mjs",
     "test:conv-reverb": "node .test/conv-reverb.mjs",
     "test:stems-export": "node .test/stems-export.mjs",
+    "test:lens": "node .test/lens.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

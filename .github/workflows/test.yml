@@ -190,3 +190,8 @@ jobs:
       # the delay stem echoes at the delay time.
       - name: Export stems
         run: npm run test:stems-export
+
+      # Lens distortion + CA (#49): barrel bows a straight line, chromatic
+      # aberration fringes the edges (not the centre), no-op is a near-identity.
+      - name: Lens distortion + CA
+        run: npm run test:lens
