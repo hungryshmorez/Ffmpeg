@@ -76,6 +76,24 @@ window.WORKFLOWS_V4 = [
     },
   },
 
+  // ---- SPEED-UP WITH MOTION BLUR ----
+  {
+    id: 'speed-blur-4x',
+    name: 'Timelapse 4× (motion blur)',
+    category: 'motion-speed',
+    description: 'Speeds the clip up 4× the right way — instead of dropping frames (which strobes), it BLENDS the frames it skips, so motion smears smoothly like a long exposure. The timelapse look without the stutter.',
+    tags: ['timelapse', 'speed', 'motion-blur', 'blend', 'long-exposure'],
+    icon: '💨', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderSpeedBlur(m, { factor: 4 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Timelapse 4× — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- REAL FILM GRAIN ----
   {
     id: 'film-grain',

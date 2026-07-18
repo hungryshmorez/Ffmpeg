@@ -169,3 +169,8 @@ jobs:
       # is CLUMPY (lag-1 autocorrelation ≫ white noise) — proving it's a plate.
       - name: Film grain
         run: npm run test:film-grain
+
+      # Speed-up motion blur (#43): frameBlend smears a moving dot along its path
+      # (mid-path lit, peak lowered, span widened); a still is left untouched.
+      - name: Speed-up motion blur
+        run: npm run test:speed-blur

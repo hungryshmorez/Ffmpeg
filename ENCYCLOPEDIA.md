@@ -244,7 +244,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 |---|---|---|---|---|
 | 41 | Optical-flow frame interpolation | Real slow-mo, not frame duplication. | ⬜ | `minterpolate` path or flow-based interp. — *L* |
 | 42 | Speed ramping with a draggable curve | Not one multiplier. | ✅ | — |
-| 43 | Motion blur on speed-up | 4× timelapse shouldn't strobe. | ⬜ | Frame-blend on decimation. — *M* |
+| 43 | Motion blur on speed-up | 4× timelapse shouldn't strobe. | ✅ | `FFShaderPlus.frameBlend` averages the frames a fast decimation would drop into one (a long-exposure blend); `renderSpeedBlur` plays the source at factor× and blends each group of skipped frames → Media Bin. Workflow "💨 Timelapse 4× (motion blur)". `.test/speed-blur.mjs` verifies on a stepping dot that the blend lights a mid-path point that was black in frame 0, lowers the peak, and widens the lit span into a trail; a still is untouched. |
 | 44 | Stabilisation that works | You have motion vectors — average global motion, counter it. | ⬜ | Global-motion estimate from the mosher's vectors → counter-transform. — *L* |
 | 45 | Auto-reframe (track subject) | Crop toward motion for vertical. | ⬜ | Dominant-motion tracker → crop path. — *L* |
 | 46 | Rolling-shutter / jello (sim + correct) | Both directions. | ⬜ | Row-time skew model. — *L* |

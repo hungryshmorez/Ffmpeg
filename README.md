@@ -160,10 +160,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/film-grain.mjs`** verifies **plate-based film grain**: it adds texture, preserves the
   mean, scales with intensity, and is clumpy — the grain layer's lag-1 autocorrelation (0.94) sits
   far above a white-noise reference (~0), which is what makes it a plate and not digital hiss.
+- **`.test/speed-blur.mjs`** verifies **motion blur on speed-up**: `frameBlend` smears a stepping
+  dot along its path (a mid-path point lights though it was black in frame 0, the peak drops, the
+  lit span widens into a trail) while a still is left untouched.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, and `test:film-grain` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, and `test:speed-blur` in real headless Chromium on
 every push and pull request.
 
 ---

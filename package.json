@@ -32,6 +32,7 @@
     "test:ms-eq": "node .test/ms-eq.mjs",
     "test:multiband": "node .test/multiband.mjs",
     "test:film-grain": "node .test/film-grain.mjs",
+    "test:speed-blur": "node .test/speed-blur.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

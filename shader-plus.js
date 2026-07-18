@@ -796,6 +796,70 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5f. MOTION BLUR ON SPEED-UP (#43) — a 4× timelapse that DROPS frames strobes;
+  //     a 4× timelapse that BLENDS the frames it would have dropped smears the
+  //     motion smoothly, the way a long exposure does. frameBlend averages a
+  //     group of frames into one; renderSpeedBlur plays the source fast and, for
+  //     each output frame, blends the frames that fell in that step.
+  // ===========================================================================
+
+  /** Average an array of same-size ImageData into one (the long-exposure blend). */
+  function frameBlend(frames) {
+    const w = frames[0].width, h = frames[0].height, len = w * h * 4;
+    const acc = new Float32Array(len);
+    for (const f of frames) for (let i = 0; i < len; i++) acc[i] += f.data[i];
+    const out = new Uint8ClampedArray(len);
+    const n = frames.length;
+    for (let i = 0; i < len; i++) out[i] = i % 4 === 3 ? 255 : acc[i] / n;
+    return new ImageData(out, w, h);
+  }
+
+  /** Offline: speed a clip up by `factor`, blending the skipped frames as motion
+   *  blur (a rolling buffer of the last `factor` decoded frames per output). */
+  async function renderSpeedBlur(media, opts = {}, onProgress) {
+    const factor = Math.max(2, Math.round(opts.factor || 4));
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(960, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const grab = document.createElement('canvas'); grab.width = w; grab.height = h;
+    const gctx = grab.getContext('2d', { willReadFrequently: true });
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    v.playbackRate = Math.min(4, factor);
+    rec.start(200); await v.play().catch(() => {});
+    let buf = [], n = 0;
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        gctx.drawImage(v, 0, 0, w, h);
+        buf.push(gctx.getImageData(0, 0, w, h));
+        if (buf.length >= factor) { ctx.putImageData(frameBlend(buf), 0, 0); buf = []; }
+        n++;
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [${factor}x BLUR].${ext}`, type);
+    window.logToConsole?.('ok', `[speedblur] ${factor}× with motion blur → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 6. SPARKLE / PARTICLE OVERLAY — with gravity. Drawn on top of the shader.
   // ===========================================================================
 
@@ -855,6 +919,6 @@ vec2 _rotTC(vec2 tc, float a) {
     EFFECT_DEFAULTS, applyEffectDefaults,
     pixelSort, pixelSortMasked, sortBands, renderPixelSort,
     FeedbackTunnel, renderFeedback, halation, renderHalation,
-    FilmGrain, filmGrain, renderFilmGrain, Sparkles,
+    FilmGrain, filmGrain, renderFilmGrain, frameBlend, renderSpeedBlur, Sparkles,
   };
 })();
