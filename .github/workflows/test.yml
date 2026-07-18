@@ -275,3 +275,8 @@ jobs:
       # fills with one slice's tone, a shuffle reverses the tones, length sums.
       - name: Granular beat stutter
         run: npm run test:granular
+
+      # Pitch snap (#35): detectPitch recovers a 440 Hz fundamental (no octave
+      # error), and snapToScale nudges an off-key note into the chosen scale.
+      - name: Pitch snap to key
+        run: npm run test:pitch-snap

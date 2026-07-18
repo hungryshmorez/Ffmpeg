@@ -413,5 +413,73 @@
     return out.subarray(0, w);
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate, detectLoop, granularRearrange };
+  // ---------------------------------------------------------------------------
+  // PITCH DETECTION + SNAP TO KEY (#35) — find the fundamental by autocorrelation
+  // (the strongest periodicity in the pitch band), turn it into a MIDI note, and
+  // snap it to the nearest note IN a chosen scale. Returns the correction in
+  // semitones, which the engine's `pitch` control then applies.
+  // ---------------------------------------------------------------------------
+  const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const SCALES = {
+    chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    major: [0, 2, 4, 5, 7, 9, 11],
+    minor: [0, 2, 3, 5, 7, 8, 10],
+    pentatonic: [0, 3, 5, 7, 10],
+  };
+  const freqToMidi = (f) => 69 + 12 * Math.log2(f / 440);
+  const midiToFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+  function detectPitch(samples, sr, opts = {}) {
+    const minHz = opts.minHz ?? 70, maxHz = opts.maxHz ?? 1200;
+    const minLag = Math.max(2, Math.floor(sr / maxHz));
+    const maxLag = Math.min(samples.length - 2, Math.ceil(sr / minHz));
+    const win = Math.min(samples.length - maxLag, opts.window ?? 4096);
+    if (maxLag <= minLag || win < 4) return { freq: 0, confidence: 0 };
+    const scores = new Float32Array(maxLag + 1);
+    let best = -Infinity;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let dot = 0, n0 = 0, n1 = 0;
+      for (let i = 0; i < win; i++) { const a = samples[i], b = samples[i + lag]; dot += a * b; n0 += a * a; n1 += b * b; }
+      const score = dot / (Math.sqrt(n0 * n1) + 1e-12);
+      scores[lag] = score;
+      if (score > best) best = score;
+    }
+    // Autocorrelation peaks at the period AND its multiples (octave-down errors),
+    // so take the SHORTEST lag whose score reaches near the max — that's the
+    // fundamental period, not a subharmonic.
+    const thresh = best * (opts.octaveBias ?? 0.9);
+    let bestLag = minLag, found = false;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      if (scores[lag] >= thresh) {                     // first strong lag = fundamental band
+        let peak = lag;                                // climb to the local peak of that period
+        while (peak + 1 <= maxLag && scores[peak + 1] >= scores[peak]) peak++;
+        bestLag = peak; found = true; break;
+      }
+    }
+    if (!found) { let m = -Infinity; for (let l = minLag; l <= maxLag; l++) if (scores[l] > m) { m = scores[l]; bestLag = l; } }
+    return { freq: sr / bestLag, confidence: Math.max(0, Math.min(1, best)) };
+  }
+
+  function nearestNote(freq) {
+    const midi = Math.round(freqToMidi(freq));
+    const nf = midiToFreq(midi);
+    return { midi, name: NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1), freq: nf, cents: 1200 * Math.log2(freq / nf) };
+  }
+
+  /** Snap `freq` to the nearest note in `scale` rooted at `rootMidi` (mod 12).
+   *  Returns the target note + the correction in semitones (what to detune by). */
+  function snapToScale(freq, rootMidi = 0, scale = 'major') {
+    const degs = SCALES[scale] || SCALES.chromatic;
+    const target = freqToMidi(freq);
+    let best = null, bd = Infinity;
+    for (let m = Math.floor(target) - 2; m <= Math.ceil(target) + 2; m++) {
+      if (!degs.includes((((m - rootMidi) % 12) + 12) % 12)) continue;
+      const d = Math.abs(m - target);
+      if (d < bd) { bd = d; best = m; }
+    }
+    if (best == null) best = Math.round(target);
+    return { midi: best, name: NOTE_NAMES[((best % 12) + 12) % 12] + (Math.floor(best / 12) - 1), freq: midiToFreq(best), semitones: best - target };
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate, detectLoop, granularRearrange, detectPitch, nearestNote, snapToScale, SCALES };
 })();

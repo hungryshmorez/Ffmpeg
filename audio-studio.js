@@ -215,6 +215,19 @@
           <button type="button" class="primary-btn wide" id="as-bounce">⬇ Bounce to file</button>
           <button type="button" class="mini-btn wide" id="as-stems">⎇ Export stems (dry / reverb / delay)</button>
           <button type="button" class="mini-btn wide" id="as-loop">🔁 Find loop point</button>
+          <label class="as-stem-label" for="as-key">Snap to key</label>
+          <span style="display:flex;gap:6px">
+            <select id="as-key" class="ctrl">
+              <option value="0">C</option><option value="1">C#</option><option value="2">D</option><option value="3">D#</option>
+              <option value="4">E</option><option value="5">F</option><option value="6">F#</option><option value="7">G</option>
+              <option value="8">G#</option><option value="9">A</option><option value="10">A#</option><option value="11">B</option>
+            </select>
+            <select id="as-scale" class="ctrl">
+              <option value="major">major</option><option value="minor">minor</option>
+              <option value="pentatonic">pentatonic</option><option value="chromatic">chromatic</option>
+            </select>
+            <button type="button" class="mini-btn" id="as-snap">🎯 Snap</button>
+          </span>
           <div id="as-bounce-status" class="as-status"></div>
 
           <div id="lufs-meter-audio" class="lufs-meter"></div>
@@ -613,6 +626,25 @@
     return r;
   }
 
+  // #35 Detect the clip's pitch, snap it to the chosen key, set the pitch knob.
+  function snapToKey() {
+    if (!eng?.buffer) return;
+    const status = document.getElementById('as-bounce-status');
+    const root = +document.getElementById('as-key').value;
+    const scale = document.getElementById('as-scale').value;
+    const ch = eng.buffer.getChannelData(0);
+    const seg = ch.subarray(0, Math.min(ch.length, eng.buffer.sampleRate * 2)); // first ~2 s
+    const p = window.FFAudioDSP.detectPitch(seg, eng.buffer.sampleRate);
+    if (!p.freq || p.confidence < 0.3) { status.textContent = 'Snap: no clear pitch found.'; return; }
+    const snap = window.FFAudioDSP.snapToScale(p.freq, root, scale);
+    const semis = Math.max(-12, Math.min(12, Math.round(snap.semitones)));
+    eng.applyParams({ pitch: semis });
+    const knob = document.getElementById('as-pitch'); if (knob) knob.value = semis;
+    refreshOutputs();
+    status.innerHTML = `<span class="ok">🎯 ${window.FFAudioDSP.nearestNote(p.freq).name} → ${snap.name} (${semis > 0 ? '+' : ''}${semis} st)</span>`;
+    window.logToConsole?.('ok', `[pitch] detected ${p.freq.toFixed(1)}Hz → snap ${snap.name}, ${semis} st`);
+  }
+
   // #40 Export the dry / reverb / delay buses as three separate WAV files.
   async function exportStems() {
     if (!eng?.buffer) return;
@@ -708,6 +740,7 @@
     document.getElementById('as-bounce').addEventListener('click', bounce);
     document.getElementById('as-stems')?.addEventListener('click', exportStems);
     document.getElementById('as-loop')?.addEventListener('click', findLoop);
+    document.getElementById('as-snap')?.addEventListener('click', snapToKey);
 
     // An ffmpeg mastering chain is an OFFLINE filter chain. It CANNOT run in the
     // live Web Audio rack — different engine entirely. So we don't pretend:
