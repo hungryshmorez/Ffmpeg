@@ -76,6 +76,24 @@ window.WORKFLOWS_V4 = [
     },
   },
 
+  // ---- REAL FILM GRAIN ----
+  {
+    id: 'film-grain',
+    name: 'Film Grain',
+    category: 'retro-analog',
+    description: 'Real plate-based film grain — silver-halide clumps with actual spatial structure, luma-weighted so it lives in the mids and fades in the blacks and highlights. The plate shifts each frame like a physical negative. Not per-pixel digital noise.',
+    tags: ['grain', 'film', 'analog', 'plate', 'texture', '35mm'],
+    icon: '🎞️', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderFilmGrain(m, { intensity: 0.14, size: 2, seed: 1337 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Film grain — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- HALATION & BLOOM ----
   {
     id: 'halation-bloom',

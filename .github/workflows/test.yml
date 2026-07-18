@@ -164,3 +164,8 @@ jobs:
       # alone.
       - name: Multiband compression
         run: npm run test:multiband
+
+      # Film grain (#47): plate-based grain adds texture, preserves the mean, and
+      # is CLUMPY (lag-1 autocorrelation ≫ white noise) — proving it's a plate.
+      - name: Film grain
+        run: npm run test:film-grain

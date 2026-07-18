@@ -683,6 +683,119 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5e. REAL FILM GRAIN (#47) — plate-based, not per-pixel procedural noise.
+  //     Film grain is silver-halide CLUMPS: it has spatial structure and stays
+  //     consistent frame to frame (it's a physical plate). So we build a grain
+  //     PLATE once (white noise blurred into clumps), and each frame overlay it
+  //     shifted a little — luma-weighted so it shows in the mids and fades in the
+  //     deep blacks and blown highlights, the way real grain does. Procedural
+  //     white noise looks digital; this looks like film because it is a plate.
+  // ===========================================================================
+
+  // separable box blur of a scalar Float32 field → gives the noise its clumping
+  function _blurScalar(src, w, h, r, passes) {
+    if (r < 1) return src;
+    let a = Float32Array.from(src); const tmp = new Float32Array(a.length); const win = r * 2 + 1;
+    for (let p = 0; p < passes; p++) {
+      for (let y = 0; y < h; y++) {
+        let sum = 0; for (let x = -r; x <= r; x++) sum += a[y * w + (x < 0 ? 0 : x >= w ? w - 1 : x)];
+        for (let x = 0; x < w; x++) { tmp[y * w + x] = sum / win; const xo = x - r < 0 ? 0 : x - r, xi = x + r + 1 >= w ? w - 1 : x + r + 1; sum += a[y * w + xi] - a[y * w + xo]; }
+      }
+      for (let x = 0; x < w; x++) {
+        let sum = 0; for (let y = -r; y <= r; y++) sum += tmp[(y < 0 ? 0 : y >= h ? h - 1 : y) * w + x];
+        for (let y = 0; y < h; y++) { a[y * w + x] = sum / win; const yo = y - r < 0 ? 0 : y - r, yi = y + r + 1 >= h ? h - 1 : y + r + 1; sum += tmp[yi * w + x] - tmp[yo * w + x]; }
+      }
+    }
+    return a;
+  }
+
+  class FilmGrain {
+    constructor(w, h, opts = {}) {
+      this.w = w; this.h = h;
+      this.p = Object.assign({ intensity: 0.14, size: 1.5, seed: 1337 }, opts);
+      // white noise, then blur by `size` so the grains CLUMP (that's what makes
+      // it plate-like instead of hissy per-pixel noise).
+      let s = this.p.seed >>> 0;
+      const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+      const n = new Float32Array(w * h);
+      for (let i = 0; i < n.length; i++) n[i] = rnd();
+      const clumped = _blurScalar(n, w, h, Math.max(1, Math.round(this.p.size)), 2);
+      // normalise to zero-mean, unit-ish spread so intensity is predictable
+      let mean = 0; for (let i = 0; i < clumped.length; i++) mean += clumped[i]; mean /= clumped.length;
+      let sd = 0; for (let i = 0; i < clumped.length; i++) sd += (clumped[i] - mean) ** 2; sd = Math.sqrt(sd / clumped.length) || 1;
+      this.plate = new Float32Array(clumped.length);
+      for (let i = 0; i < clumped.length; i++) this.plate[i] = (clumped[i] - mean) / sd;
+    }
+    /** Overlay the plate (shifted by ox,oy) onto imgData, luma-weighted. */
+    apply(imgData, ox = 0, oy = 0) {
+      const { data, width: w, height: h } = imgData;
+      const amt = this.p.intensity * 255;
+      for (let y = 0; y < h; y++) {
+        const py = ((y + oy) % h + h) % h;
+        for (let x = 0; x < w; x++) {
+          const px = ((x + ox) % w + w) % w;
+          const g = this.plate[py * w + px];
+          const i = (y * w + x) * 4;
+          const luma = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) / 255;
+          const wgt = 1 - Math.abs(luma - 0.5) * 1.3;         // grain shows in the mids
+          const d = g * amt * (wgt > 0 ? wgt : 0);
+          data[i] += d; data[i + 1] += d; data[i + 2] += d;
+        }
+      }
+      return imgData;
+    }
+  }
+
+  /** Grain one frame in place (builds a plate each call — for the offline render
+   *  use a FilmGrain instance so the plate is shared and only shifted). */
+  function filmGrain(imgData, opts = {}) {
+    const g = new FilmGrain(imgData.width, imgData.height, opts);
+    g.apply(imgData, opts.offX || 0, opts.offY || 0);
+    return imgData;
+  }
+
+  /** Offline render: overlay a shared, shifting grain plate on every frame. */
+  async function renderFilmGrain(media, opts = {}, onProgress) {
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(960, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const grain = new FilmGrain(w, h, opts);
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    let frame = 0;
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        grain.apply(img, (frame * 37) % w, (frame * 53) % h);   // shift the plate each frame
+        ctx.putImageData(img, 0, 0); frame++;
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [FILM GRAIN].${ext}`, type);
+    window.logToConsole?.('ok', `[grain] film grain → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 6. SPARKLE / PARTICLE OVERLAY — with gravity. Drawn on top of the shader.
   // ===========================================================================
 
@@ -741,6 +854,7 @@ vec2 _rotTC(vec2 tc, float a) {
     ChaosEngine, CHAOS_DEFAULTS, GLITCH,
     EFFECT_DEFAULTS, applyEffectDefaults,
     pixelSort, pixelSortMasked, sortBands, renderPixelSort,
-    FeedbackTunnel, renderFeedback, halation, renderHalation, Sparkles,
+    FeedbackTunnel, renderFeedback, halation, renderHalation,
+    FilmGrain, filmGrain, renderFilmGrain, Sparkles,
   };
 })();
