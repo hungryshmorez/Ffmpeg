@@ -215,6 +215,8 @@
           <button type="button" class="primary-btn wide" id="as-bounce">⬇ Bounce to file</button>
           <button type="button" class="mini-btn wide" id="as-stems">⎇ Export stems (dry / reverb / delay)</button>
           <button type="button" class="mini-btn wide" id="as-loop">🔁 Find loop point</button>
+          <button type="button" class="mini-btn wide" id="as-abref">⚖ A/B a reference (loudness-matched)</button>
+          <div id="as-stage-warn" class="as-status" hidden></div>
           <label class="as-stem-label" for="as-key">Snap to key</label>
           <span style="display:flex;gap:6px">
             <select id="as-key" class="ctrl">
@@ -344,6 +346,15 @@
         const mixKey = ['reverbMix', 'delayMix', 'chorusMix'].find((mk) => mod.querySelector(`#as-${mk}`));
         if (mixKey) mod.classList.toggle('off', Number(P[mixKey]) === 0);
         if (mod.dataset.m === 'drive') mod.classList.toggle('off', Number(P.distortionAmount) === 0);
+      }
+    }
+    // #32 gain-staging warning — flag the stage that clips into 0 dBFS.
+    if (window.FFAudioDSP) {
+      const gs = window.FFAudioDSP.gainStaging(P);
+      const warn = document.getElementById('as-stage-warn');
+      if (warn) {
+        warn.hidden = !gs.clips;
+        if (gs.clips) warn.textContent = `⚠ Gain staging: ${gs.firstClip} stage clips (${gs.peakDb > 0 ? '+' : ''}${gs.peakDb} dBFS) — pull it back or drop Volume.`;
       }
     }
   }
@@ -626,6 +637,36 @@
     return r;
   }
 
+  // #33 Load a reference track, loudness-match it to the current mix, and A/B.
+  //  Plays the reference at matched gain so you compare tone, not volume.
+  let abRef = null, abGain = 1, abPlaying = false;
+  async function abReference() {
+    if (!eng?.buffer) return;
+    const status = document.getElementById('as-bounce-status');
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*';
+    inp.onchange = async () => {
+      if (!inp.files[0]) return;
+      try {
+        abRef = await eng.ctx.decodeAudioData(await inp.files[0].arrayBuffer());
+        const m = window.FFAudioDSP.loudnessMatch(eng.buffer.getChannelData(0), abRef.getChannelData(0));
+        abGain = m.gain;
+        status.innerHTML = `<span class="ok">⚖ Reference loaded — matched ${m.gainDb > 0 ? '+' : ''}${m.gainDb.toFixed(1)} dB. Click again to toggle A/B.</span>`;
+        window.logToConsole?.('ok', `[a/b] reference matched: gain ${m.gainDb.toFixed(1)} dB`);
+      } catch (e) { status.textContent = `A/B load failed: ${e.message}`; }
+    };
+    if (!abRef) { inp.click(); return; }
+    // toggle playback of the loudness-matched reference
+    if (abPlaying) { abStop(); return; }
+    eng.stop(); document.getElementById('as-play').textContent = '▶';
+    const src = eng.ctx.createBufferSource(); const g = eng.ctx.createGain();
+    src.buffer = abRef; g.gain.value = abGain; src.connect(g).connect(eng.ctx.destination);
+    src.onended = () => { abPlaying = false; };
+    src.start(); abPlaying = true; abSrc = src;
+    status.innerHTML = `<span class="ok">⚖ Playing REFERENCE (matched). Click A/B again to stop.</span>`;
+  }
+  let abSrc = null;
+  function abStop() { try { abSrc?.stop(); } catch (_) {} abPlaying = false; }
+
   // #35 Detect the clip's pitch, snap it to the chosen key, set the pitch knob.
   function snapToKey() {
     if (!eng?.buffer) return;
@@ -741,6 +782,7 @@
     document.getElementById('as-stems')?.addEventListener('click', exportStems);
     document.getElementById('as-loop')?.addEventListener('click', findLoop);
     document.getElementById('as-snap')?.addEventListener('click', snapToKey);
+    document.getElementById('as-abref')?.addEventListener('click', abReference);
 
     // An ffmpeg mastering chain is an OFFLINE filter chain. It CANNOT run in the
     // live Web Audio rack — different engine entirely. So we don't pretend:

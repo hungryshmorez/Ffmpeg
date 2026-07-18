@@ -481,5 +481,42 @@
     return { midi: best, name: NOTE_NAMES[((best % 12) + 12) % 12] + (Math.floor(best / 12) - 1), freq: midiToFreq(best), semitones: best - target };
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate, detectLoop, granularRearrange, detectPitch, nearestNote, snapToScale, SCALES };
+  // ---------------------------------------------------------------------------
+  // AUTOMATIC GAIN STAGING (#32) — walk the rack's boosts in series and flag the
+  // stage where the running level crosses 0 dBFS, so you know it's the bass boost
+  // clipping into the reverb rather than the master. A worst-case estimate (only
+  // boosts raise the running peak; cuts don't guarantee headroom back), which is
+  // exactly what a staging warning should assume.
+  // ---------------------------------------------------------------------------
+  function gainStaging(params = {}, inputPeakDb = -6) {
+    const stages = [];
+    let level = inputPeakDb;
+    const step = (stage, gainDb) => { level += Math.max(0, gainDb); stages.push({ stage, levelDb: +level.toFixed(1), clip: level > 0 }); };
+    step('bass', params.bassBoostDb || 0);
+    step('eq-low', params.eqLowDb || 0);
+    step('eq-mid', params.eqMidDb || 0);
+    step('eq-high', params.eqHighDb || 0);
+    step('distortion', (params.distortionAmount || 0) > 0 ? 3 + (params.distortionAmount || 0) / 20 : 0);
+    step('output', 20 * Math.log10(Math.max(1e-3, params.volume == null ? 1 : params.volume)));
+    const firstClip = stages.find((s) => s.clip);
+    return { stages, clips: !!firstClip, firstClip: firstClip ? firstClip.stage : null, peakDb: +level.toFixed(1) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // LOUDNESS-MATCHED A/B (#33) — comparing your mix to a reference is only honest
+  // if they're at the same loudness (louder always sounds "better"). Measure both
+  // RMS levels and return the gain that brings the mix onto the reference, so an
+  // A/B toggle compares TONE, not volume.
+  // ---------------------------------------------------------------------------
+  function rmsLevel(samples) {
+    let s = 0; const n = samples.length; for (let i = 0; i < n; i++) s += samples[i] * samples[i];
+    return n ? Math.sqrt(s / n) : 0;
+  }
+  function loudnessMatch(samples, reference) {
+    const a = rmsLevel(samples), b = rmsLevel(reference);
+    const gain = a > 1e-9 ? b / a : 1;
+    return { gain, mixRms: a, refRms: b, gainDb: 20 * Math.log10(Math.max(1e-9, gain)) };
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate, detectLoop, granularRearrange, detectPitch, nearestNote, snapToScale, SCALES, gainStaging, rmsLevel, loudnessMatch };
 })();

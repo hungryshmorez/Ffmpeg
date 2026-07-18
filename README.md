@@ -214,10 +214,12 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   `[0,0,0]` stutter fills with slice-0's 200 Hz tone, a `[2,1,0]` shuffle plays 800/400/200, length sums.
 - **`.test/pitch-snap.mjs`** verifies **pitch snap**: `detectPitch` recovers a 440 Hz fundamental
   without an octave error, and `snapToScale` nudges an off-key pitch into the chosen scale (→ D4).
+- **`.test/gain-staging.mjs`** verifies **gain staging + A/B**: the staging check flags the first
+  stage that clips (a +12 dB bass boost), and `loudnessMatch` brings a mix onto a reference's RMS.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, and `test:pitch-snap` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, `test:pitch-snap`, and `test:gain-staging` in real headless Chromium on
 every push and pull request.
 
 ---

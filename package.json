@@ -54,6 +54,7 @@
     "test:beat-chop": "node .test/beat-chop.mjs",
     "test:granular": "node .test/granular.mjs",
     "test:pitch-snap": "node .test/pitch-snap.mjs",
+    "test:gain-staging": "node .test/gain-staging.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

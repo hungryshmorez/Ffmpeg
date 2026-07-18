@@ -280,3 +280,8 @@ jobs:
       # error), and snapToScale nudges an off-key note into the chosen scale.
       - name: Pitch snap to key
         run: npm run test:pitch-snap
+
+      # Gain staging + A/B (#32/#33): the staging check flags the stage that
+      # clips; loudnessMatch brings a mix onto a reference's RMS.
+      - name: Gain staging + A/B
+        run: npm run test:gain-staging
