@@ -137,4 +137,22 @@ window.WORKFLOWS_V5 = [
       });
     },
   },
+
+  // --- stabilisation (#44), from the same motion field ---
+  {
+    id: 'stabilise',
+    name: 'Stabilise',
+    category: 'motion-speed',
+    description: 'Steadies shaky footage using the same motion estimation as the mosh — the median of each frame’s field IS the camera’s motion, so it integrates the camera path, smooths it, and counter-shifts each frame. The intended pan survives; the shake goes.',
+    tags: ['stabilise', 'stabilize', 'steady', 'smooth', 'motion', 'shake'],
+    icon: '🎯', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFMosh.renderStabilize(m, { blockSize: 16, motionRadius: 14, threshold: 0, smoothRadius: 24, strength: 1 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Stabilising — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
 ].flat();

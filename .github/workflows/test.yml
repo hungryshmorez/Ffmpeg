@@ -200,3 +200,8 @@ jobs:
       # corrects it, wobble bends it; the no-op is a byte-identity.
       - name: Rolling shutter (jello)
         run: npm run test:rolling-shutter
+
+      # Stabilisation (#44): globalMotion is outlier-robust (median), and
+      # stabilizePath drops a jittery pan's acceleration while keeping the pan.
+      - name: Stabilisation
+        run: npm run test:stabilize

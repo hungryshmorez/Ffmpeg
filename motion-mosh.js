@@ -488,6 +488,90 @@
   }
 
   // ===========================================================================
+  // STABILISATION (#44) — we already estimate a motion field per frame, so the
+  // dominant translation of that field IS the camera's frame-to-frame motion.
+  // Take the MEDIAN of the field (robust to a few moving objects), integrate it
+  // into the camera PATH, smooth the path, and shift each frame by the gap
+  // between the smooth path and the real one — the shake cancels, the intended
+  // pan survives.
+  // ===========================================================================
+
+  /** Dominant translation of a block field: the median vector (outlier-robust). */
+  function globalMotion(vec, cols, rows) {
+    const n = cols * rows; if (!n) return [0, 0];
+    const xs = new Array(n), ys = new Array(n);
+    for (let i = 0; i < n; i++) { xs[i] = vec[i * 2]; ys[i] = vec[i * 2 + 1]; }
+    xs.sort((a, b) => a - b); ys.sort((a, b) => a - b);
+    const med = (a) => a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2;
+    return [med(xs), med(ys)];
+  }
+
+  /** Per-frame global motions → correction offsets. Integrate to the camera
+   *  path, smooth it (centred moving average, radius r), correct = smooth−path. */
+  function stabilizePath(motions, radius = 15) {
+    const n = motions.length;
+    const cx = new Float64Array(n), cy = new Float64Array(n);
+    let ax = 0, ay = 0;
+    for (let i = 0; i < n; i++) { ax += motions[i][0]; ay += motions[i][1]; cx[i] = ax; cy[i] = ay; }
+    const corr = new Array(n);
+    for (let i = 0; i < n; i++) {
+      let sx = 0, sy = 0, c = 0;
+      for (let j = Math.max(0, i - radius); j <= Math.min(n - 1, i + radius); j++) { sx += cx[j]; sy += cy[j]; c++; }
+      corr[i] = [sx / c - cx[i], sy / c - cy[i]];
+    }
+    return corr;
+  }
+
+  /** Offline stabiliser render. Uses a CAUSAL low-pass of the camera path (a
+   *  real-time-style smoother — no second pass / frame buffering), shifting each
+   *  frame toward the smoothed path. The tested cores (globalMotion +
+   *  stabilizePath) are the centred, higher-quality offline version. */
+  async function renderStabilize(media, params, onProgress) {
+    const p = Object.assign({ blockSize: 16, motionRadius: 14, threshold: 0, smoothRadius: 24, strength: 1 }, params || {});
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const m = new MotionMosher(cv); m.setParams(p);
+    const alpha = 1 / Math.max(1, p.smoothRadius);
+    let cumX = 0, cumY = 0, smX = 0, smY = 0;
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        const field = m.captureField(v);
+        const g = field ? globalMotion(field.vec, field.cols, field.rows) : [0, 0];
+        cumX += g[0]; cumY += g[1];
+        smX += (cumX - smX) * alpha; smY += (cumY - smY) * alpha;
+        const sx = (smX - cumX) * p.strength, sy = (smY - cumY) * p.strength;
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(v, sx, sy, w, h);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [STABILISED].${ext}`, type);
+    window.logToConsole?.('ok', `[stab] stabilised → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // OFFLINE RENDER — run the mosher over a whole file and record the result.
   // ===========================================================================
 
@@ -870,5 +954,6 @@
   }
 
   window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips, renderFlowDisplace,
-    renderVectorOverlay, recordVectors, replayVectors, serializeVectors, deserializeVectors };
+    renderVectorOverlay, globalMotion, stabilizePath, renderStabilize,
+    recordVectors, replayVectors, serializeVectors, deserializeVectors };
 })();
