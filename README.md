@@ -154,10 +154,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   after each detected kick and recovers before the next; amount=0 is untouched.
 - **`.test/ms-eq.mjs`** verifies **mid/side EQ**: mono-the-bass collapses the low side while keeping
   the high side, widen-the-highs lifts the high side, and neutral is untouched.
+- **`.test/multiband.mjs`** verifies **multiband compression**: complementary crossovers reconstruct
+  to unity (Δ=0), the low band compresses down with a real gain-reduction read, and the high band is
+  left alone.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, and `test:ms-eq` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, and `test:multiband` in real headless Chromium on
 every push and pull request.
 
 ---

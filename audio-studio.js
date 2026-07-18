@@ -84,6 +84,13 @@
       ],
     },
     {
+      id: 'multiband', name: 'Multiband', icon: '📊',
+      desc: 'Three-band glue on bounce — low / mid / high compressed independently. Watch the GR meters after a bounce.',
+      params: [
+        ['multibandAmount', 'Amount', 0, 1, 0.01, (v) => v === 0 ? 'off' : `${Math.round(v * 100)}%`],
+      ],
+    },
+    {
       id: 'mseq', name: 'M/S EQ', icon: '↔️',
       desc: 'Mono the bass and widen the highs on bounce. Tightens the low end, opens the top.',
       params: [
@@ -240,6 +247,16 @@
             </div>`).join('')}
         </div>
       </div>`).join('');
+
+    // Gain-reduction meters (#28) live inside the Multiband module.
+    const mbMod = document.querySelector('.as-module[data-m="multiband"]');
+    if (mbMod) {
+      const gr = document.createElement('div');
+      gr.className = 'as-gr';
+      gr.innerHTML = ['Low', 'Mid', 'High'].map((b, i) =>
+        `<div class="as-gr-row"><label>${b}</label><div class="as-gr-track"><div class="as-gr-fill" id="as-gr-${i}"></div></div><output id="as-gr-v${i}">—</output></div>`).join('');
+      mbMod.appendChild(gr);
+    }
 
     // Correlation meter (#31) lives inside the Stereo module.
     const stereoMod = document.querySelector('.as-module[data-m="stereo"]');
@@ -431,6 +448,13 @@
     try {
       status.textContent = 'Rendering (offline, faster than real time)…';
       const rendered = await eng.bounce((p) => { status.textContent = `Rendering… ${Math.round(p * 100)}%`; }, { playbackRate: preservePitch ? 1 : undefined });
+
+      // #28 gain-reduction meters: paint the last bounce's per-band GR.
+      if (eng.lastGR) eng.lastGR.forEach((db, i) => {
+        const fill = document.getElementById(`as-gr-${i}`); const out = document.getElementById(`as-gr-v${i}`);
+        if (fill) fill.style.width = Math.min(100, db / 18 * 100) + '%';
+        if (out) out.textContent = db > 0.05 ? `-${db.toFixed(1)}` : '0';
+      });
 
       const wav = window.FFAudio.AudioEngine.toWav(rendered);
       status.textContent = `Rendered ${(wav.size / 1024 / 1024).toFixed(1)} MB.`;

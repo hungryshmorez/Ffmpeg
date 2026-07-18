@@ -158,3 +158,9 @@ jobs:
       # lifts the high side, neutral is untouched.
       - name: Mid/side EQ
         run: npm run test:ms-eq
+
+      # Multiband compression (#28): complementary crossovers sum to unity; the
+      # low band compresses down with a real GR read while the high band is left
+      # alone.
+      - name: Multiband compression
+        run: npm run test:multiband

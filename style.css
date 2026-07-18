@@ -2379,6 +2379,13 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 .as-corr-fill{position:absolute;top:0;height:100%;width:0;left:50%;background:#4caf70;transition:width .08s,left .08s,background .2s}
 .as-corr-zero{position:absolute;top:0;left:50%;width:1px;height:100%;background:#3a3a3a}
 .as-corr output{min-width:30px;text-align:right;font-variant-numeric:tabular-nums;opacity:.85}
+/* #28 gain-reduction meters */
+.as-gr{margin-top:10px;display:flex;flex-direction:column;gap:5px;font-size:10px}
+.as-gr-row{display:flex;align-items:center;gap:8px}
+.as-gr-row label{opacity:.7;min-width:30px}
+.as-gr-track{position:relative;flex:1;height:7px;background:#0d0d0d;border-radius:4px;overflow:hidden}
+.as-gr-fill{position:absolute;top:0;right:0;width:0;height:100%;background:linear-gradient(90deg,#e0a53f,#e0533f);transition:width .1s}
+.as-gr output{min-width:34px;text-align:right;font-variant-numeric:tabular-nums;opacity:.85}
 .as-module.off{opacity:.45}
 .as-module.off:hover{opacity:.8}
 .as-mod-head{display:flex;gap:9px;align-items:flex-start;margin-bottom:10px;

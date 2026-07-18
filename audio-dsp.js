@@ -179,6 +179,10 @@
     const w = 2 * Math.PI * f0 / sr, c = Math.cos(w), s = Math.sin(w), al = s / (2 * Q);
     return _biquad(data, (1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al);
   }
+  function lowpass(data, sr, f0, Q = 0.707) {
+    const w = 2 * Math.PI * f0 / sr, c = Math.cos(w), s = Math.sin(w), al = s / (2 * Q);
+    return _biquad(data, (1 - c) / 2, 1 - c, (1 - c) / 2, 1 + al, -2 * c, 1 - al);
+  }
   function highShelf(data, sr, f0, gainDb, S = 1) {
     const A = Math.pow(10, gainDb / 40), w = 2 * Math.PI * f0 / sr, c = Math.cos(w), s = Math.sin(w);
     const al = s / 2 * Math.sqrt((A + 1 / A) * (1 / S - 1) + 2), sq = 2 * Math.sqrt(A) * al;
@@ -207,5 +211,61 @@
     return channels;
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, highShelf, midSideEQ };
+  // ---------------------------------------------------------------------------
+  // MULTIBAND COMPRESSION (#28) — split into low / mid / high with biquad
+  // crossovers, compress each band on its own (stereo-linked), sum back, and
+  // report each band's peak gain reduction so the UI can draw GR meters. This is
+  // the standard mastering move: glue the low end without pumping the highs.
+  // ---------------------------------------------------------------------------
+  function _compressLinked(bandCh, sr, b) {
+    const thLin = Math.pow(10, (b.threshold ?? -24) / 20);
+    const ratio = Math.max(1, b.ratio ?? 3);
+    const aC = Math.exp(-1 / Math.max(1, (b.attackMs ?? 10) * sr / 1000));
+    const rC = Math.exp(-1 / Math.max(1, (b.releaseMs ?? 120) * sr / 1000));
+    const makeup = Math.pow(10, (b.makeupDb ?? 0) / 20);
+    const n = bandCh[0].length;
+    let env = 0, maxGrDb = 0;
+    for (let i = 0; i < n; i++) {
+      let x = 0;
+      for (let c = 0; c < bandCh.length; c++) { const a = Math.abs(bandCh[c][i]); if (a > x) x = a; }
+      env = x > env ? aC * env + (1 - aC) * x : rC * env + (1 - rC) * x;
+      let g = 1;
+      if (env > thLin) {
+        const overDb = 20 * Math.log10(env / thLin);
+        const grDb = overDb * (1 - 1 / ratio);
+        if (grDb > maxGrDb) maxGrDb = grDb;
+        g = Math.pow(10, -grDb / 20);
+      }
+      g *= makeup;
+      for (let c = 0; c < bandCh.length; c++) bandCh[c][i] *= g;
+    }
+    return maxGrDb;
+  }
+
+  function multibandCompress(channels, sr, opts = {}) {
+    const xLow = opts.crossLow ?? 200, xHigh = opts.crossHigh ?? 2500;
+    const bands = opts.bands || [{ threshold: -24, ratio: 3 }, { threshold: -24, ratio: 3 }, { threshold: -24, ratio: 3 }];
+    const nch = channels.length, n = channels[0] ? channels[0].length : 0;
+    if (!n) return { gr: [0, 0, 0] };
+    // COMPLEMENTARY (subtractive) crossovers: high = signal − low, so with unity
+    // gain the three bands sum back to the original exactly (no crossover ripple).
+    const lowCh = [], midCh = [], highCh = [];
+    for (const ch of channels) {
+      const low = Float32Array.from(ch); lowpass(low, sr, xLow);
+      const above = new Float32Array(n); for (let i = 0; i < n; i++) above[i] = ch[i] - low[i];
+      const mid = Float32Array.from(above); lowpass(mid, sr, xHigh);
+      const high = new Float32Array(n); for (let i = 0; i < n; i++) high[i] = above[i] - mid[i];
+      lowCh.push(low); midCh.push(mid); highCh.push(high);
+    }
+    const gr = [
+      _compressLinked(lowCh, sr, bands[0]),
+      _compressLinked(midCh, sr, bands[1]),
+      _compressLinked(highCh, sr, bands[2]),
+    ];
+    for (let ci = 0; ci < nch; ci++)
+      for (let i = 0; i < n; i++) channels[ci][i] = lowCh[ci][i] + midCh[ci][i] + highCh[ci][i];
+    return { gr };
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress };
 })();

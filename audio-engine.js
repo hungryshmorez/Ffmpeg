@@ -63,6 +63,9 @@
     // stereo (#31)
     width: 1.0,          // 0 – 2   (mid/side width; 1 = neutral, 0 = mono)
 
+    // multiband compression (#28) — applied at bounce (3 bands + GR meters)
+    multibandAmount: 0,  // 0 – 1   (0 = off; drives all three bands' thresholds)
+
     // mid/side EQ (#30) — applied at bounce (needs the full stereo buffer)
     msMonoBelow: 0,      // 0 – 300 Hz  (0 = off; high-pass the side → mono bass)
     msWidenDb: 0,        // 0 – 12 dB   (high-shelf boost on the side → wider highs)
@@ -493,6 +496,17 @@
       if (window.FFAudioDSP) {
         const chans = [];
         for (let c = 0; c < rendered.numberOfChannels; c++) chans.push(rendered.getChannelData(c));
+        // Multiband compression (#28) — glue first, in the frequency domain.
+        if (P.multibandAmount > 0) {
+          const amt = P.multibandAmount;
+          const th = -12 - amt * 24;                 // 0→-12 dB … 1→-36 dB
+          const ratio = 1.5 + amt * 4;               // gentler → harder
+          const band = { threshold: th, ratio, attackMs: 12, releaseMs: 140, makeupDb: amt * 4 };
+          const res = window.FFAudioDSP.multibandCompress(chans, rendered.sampleRate, {
+            crossLow: 200, crossHigh: 2500, bands: [band, band, band],
+          });
+          this.lastGR = res.gr;                       // for the GR meters
+        }
         // Mid/side EQ (#30) — shape the stereo field before dynamics.
         if (P.msMonoBelow > 0 || P.msWidenDb !== 0) {
           window.FFAudioDSP.midSideEQ(chans, rendered.sampleRate, {
