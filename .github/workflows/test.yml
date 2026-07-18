@@ -250,3 +250,8 @@ jobs:
       # → loudnorm/trim/reframe, vertical no-audio → music/social, 4K → downscale.
       - name: Workflow suggestions
         run: npm run test:suggest
+
+      # Beat-sync assembler (#83): snap cuts to the nearest beat, segment every N
+      # beats, lay clips onto the grid (short whole, long trimmed to the segment).
+      - name: Beat-sync assembler
+        run: npm run test:beatsync
