@@ -63,6 +63,9 @@
     // stereo (#31)
     width: 1.0,          // 0 – 2   (mid/side width; 1 = neutral, 0 = mono)
 
+    // sidechain duck (#27) — applied at bounce (kick detected from the sub band)
+    sidechainAmount: 0,  // 0 – 1   (0 = off; depth of the pump under each kick)
+
     // transient shaper (#39) — applied at bounce (envelope over the full buffer)
     transientAttack: 0,  // -1 – +1  (punch: boost/cut the onset)
     transientSustain: 0, // -1 – +1  (body: boost/cut the tail)
@@ -486,6 +489,11 @@
       if (window.FFAudioDSP) {
         const chans = [];
         for (let c = 0; c < rendered.numberOfChannels; c++) chans.push(rendered.getChannelData(c));
+        // Sidechain duck (#27) — pump first, so the transient shaper and limiter
+        // act on the already-ducked mix.
+        if (P.sidechainAmount > 0) {
+          window.FFAudioDSP.sidechainDuck(chans, rendered.sampleRate, { amount: P.sidechainAmount });
+        }
         // Transient shaper (#39).
         if (P.transientAttack || P.transientSustain) {
           window.FFAudioDSP.transientShaper(chans, rendered.sampleRate, {

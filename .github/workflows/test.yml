@@ -148,3 +148,8 @@ jobs:
       # attack=-1 lowers it, sustain=+1 lifts the tail RMS; neutral is untouched.
       - name: Transient shaper
         run: npm run test:transient
+
+      # Sidechain duck (#27): kick detected from the sub band pumps the pad — the
+      # level dips after each kick and recovers before the next; amount=0 is off.
+      - name: Sidechain duck
+        run: npm run test:sidechain

@@ -122,5 +122,44 @@
     return channels;
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper };
+  // ---------------------------------------------------------------------------
+  // SIDECHAIN DUCK TO THE KICK (#27) — the pump. There's no separate kick track
+  // in a single bounce, so the kick is DETECTED from the low end: a 2-pole
+  // low-pass isolates the sub band, and each time its envelope crosses the
+  // threshold (a kick lands) the whole mix ducks to (1-amount) and recovers over
+  // `releaseMs`. That rhythmic dip under every kick is the sidechain sound.
+  // ---------------------------------------------------------------------------
+  function sidechainDuck(channels, sr, opts = {}) {
+    const amount = opts.amount ?? 0.5;      // 0 … 1 depth of the duck
+    const releaseMs = opts.releaseMs ?? 220;
+    const detectHz = opts.detectHz ?? 120;
+    const threshold = opts.threshold ?? 0.12;
+    if (amount <= 0) return channels;
+    const n = channels[0] ? channels[0].length : 0;
+    if (!n) return channels;
+    // 2-pole (cascaded one-pole) low-pass on the channel sum → sub-band signal.
+    const lpCoef = Math.exp(-2 * Math.PI * detectHz / sr);
+    let lp1 = 0, lp2 = 0, env = 0;
+    const relCoef = Math.exp(-1 / Math.max(1, releaseMs * sr / 1000));
+    const envAtt = Math.exp(-1 / Math.max(1, 2 * sr / 1000));   // 2 ms env attack
+    const envRel = Math.exp(-1 / Math.max(1, 25 * sr / 1000));  // 25 ms env release
+    let gain = 1, armed = true;
+    for (let i = 0; i < n; i++) {
+      let sum = 0;
+      for (let c = 0; c < channels.length; c++) sum += channels[c][i];
+      sum /= channels.length;
+      lp1 = lpCoef * lp1 + (1 - lpCoef) * sum;
+      lp2 = lpCoef * lp2 + (1 - lpCoef) * lp1;             // steeper roll-off
+      const rect = Math.abs(lp2);
+      env = rect > env ? envAtt * env + (1 - envAtt) * rect : envRel * env + (1 - envRel) * rect;
+      // rising edge across the threshold = a kick → duck (re-arm on the way down)
+      if (env > threshold && armed) { gain = 1 - amount; armed = false; }
+      else if (env < threshold * 0.6) { armed = true; }
+      gain = gain + (1 - gain) * (1 - relCoef);            // release back toward 1
+      for (let c = 0; c < channels.length; c++) channels[c][i] *= gain;
+    }
+    return channels;
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck };
 })();

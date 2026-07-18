@@ -84,6 +84,13 @@
       ],
     },
     {
+      id: 'sidechain', name: 'Sidechain', icon: '🫀',
+      desc: 'The pump. Detects the kick in the low end and ducks the whole mix under it on bounce. 0% is off.',
+      params: [
+        ['sidechainAmount', 'Duck', 0, 1, 0.01, (v) => v === 0 ? 'off' : `${Math.round(v * 100)}%`],
+      ],
+    },
+    {
       id: 'transient', name: 'Transient', icon: '🥁',
       desc: 'Reshape the punch on bounce. Attack adds or tames the onset; Sustain lifts or dries the tail.',
       params: [
