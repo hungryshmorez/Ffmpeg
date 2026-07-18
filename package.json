@@ -51,6 +51,7 @@
     "test:beatsync": "node .test/beatsync.mjs",
     "test:highlights": "node .test/highlights.mjs",
     "test:launch-quantize": "node .test/launch-quantize.mjs",
+    "test:beat-chop": "node .test/beat-chop.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

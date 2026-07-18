@@ -55,5 +55,31 @@
     return { at, delay: Math.max(0, at - elapsedMs), grid };
   }
 
-  window.FFBeatSync = { snapToBeats, beatSegments, assembleOnBeats, beatMs, nextGridTime, GRID };
+  // --- beat-grid chopping / rearranging (#36) --------------------------------
+
+  /** Slice a clip on the beat grid → contiguous [start,end) slices. */
+  function chopOnBeats(beatTimes, opts = {}) {
+    const end = opts.duration ?? (beatTimes.length ? beatTimes[beatTimes.length - 1] : 0);
+    const slices = [];
+    for (let i = 0; i < beatTimes.length; i++) {
+      const s = beatTimes[i], e = i + 1 < beatTimes.length ? beatTimes[i + 1] : end;
+      if (e > s) slices.push({ index: slices.length, start: s, end: e, dur: e - s });
+    }
+    return slices;
+  }
+
+  /** Rearrange / repeat slices by an `order` of source indices, laying them out
+   *  on a fresh output timeline. This is the chop-shuffle / stutter engine. */
+  function rearrangeSlices(slices, order) {
+    const out = []; let at = 0;
+    for (const idx of order) {
+      const s = slices[idx];
+      if (!s) continue;
+      out.push({ from: idx, srcStart: s.start, srcEnd: s.end, dur: s.dur, at });
+      at += s.dur;
+    }
+    return { steps: out, duration: at };
+  }
+
+  window.FFBeatSync = { snapToBeats, beatSegments, assembleOnBeats, beatMs, nextGridTime, GRID, chopOnBeats, rearrangeSlices };
 })();
