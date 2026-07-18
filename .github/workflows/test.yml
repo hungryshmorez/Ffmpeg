@@ -255,3 +255,8 @@ jobs:
       # beats, lay clips onto the grid (short whole, long trimmed to the segment).
       - name: Beat-sync assembler
         run: npm run test:beatsync
+
+      # Highlight reel (#82): score windows by energy+motion+scene-cut and pick
+      # the top spaced-apart moments in time order.
+      - name: Highlight reel
+        run: npm run test:highlights

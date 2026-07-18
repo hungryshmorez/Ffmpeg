@@ -204,10 +204,12 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   Reframe, a vertical no-audio short gets Music/social/Loop (no audio-only steps), 4K gets Downscale.
 - **`.test/beatsync.mjs`** verifies the **beat-sync assembler**: cuts snap to the nearest beat,
   segments fall every N beats, and clips lay onto the grid (short used whole, long trimmed to fit).
+- **`.test/highlights.mjs`** verifies the **highlight reel**: scoring energy+motion+scene-cut picks
+  the two peaks (t=5, t=14), keeps them ≥3 s apart, and returns them chronologically.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, and `test:beatsync` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, and `test:highlights` in real headless Chromium on
 every push and pull request.
 
 ---

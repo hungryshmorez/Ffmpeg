@@ -49,6 +49,7 @@
     "test:loop-detect": "node .test/loop-detect.mjs",
     "test:suggest": "node .test/suggest.mjs",
     "test:beatsync": "node .test/beatsync.mjs",
+    "test:highlights": "node .test/highlights.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },
