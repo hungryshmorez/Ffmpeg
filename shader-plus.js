@@ -862,6 +862,84 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5j. POWER WINDOWS / MASKS (#55) — grade PART of the frame. A shape mask
+  //     (ellipse or rectangle, with a feathered edge) limits a brightness /
+  //     contrast / saturation adjustment to a region, blended by the mask so the
+  //     grade falls off smoothly. The colourist's vignette / spotlight tool.
+  // ===========================================================================
+
+  function powerWindow(imgData, opts = {}) {
+    const { shape = 'ellipse', cx = 0.5, cy = 0.5, rx = 0.3, ry = 0.3, feather = 0.15, invert = false } = opts;
+    const brightness = opts.brightness ?? 0, contrast = opts.contrast ?? 1, saturation = opts.saturation ?? 1;
+    const { data, width: w, height: h } = imgData;
+    const bAdd = brightness * 255;
+    for (let y = 0; y < h; y++) {
+      const ny = y / h;
+      for (let x = 0; x < w; x++) {
+        const nx = x / w;
+        let d;
+        if (shape === 'rect') d = Math.max(Math.abs(nx - cx) / rx, Math.abs(ny - cy) / ry);
+        else d = Math.hypot((nx - cx) / rx, (ny - cy) / ry);
+        let mask = d <= 1 ? 1 : (feather <= 0 || d >= 1 + feather ? 0 : 1 - (d - 1) / feather);
+        if (invert) mask = 1 - mask;
+        if (mask <= 0.0001) continue;
+        const i = (y * w + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          let v = data[i + c];
+          v = (v - 128) * contrast + 128 + bAdd;              // contrast + brightness
+          data[i + c] = data[i + c] * (1 - mask) + v * mask;  // blend by the window
+        }
+        if (saturation !== 1) {
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const lum = r * 0.299 + g * 0.587 + b * 0.114;
+          const s = 1 + (saturation - 1) * mask;
+          data[i] = lum + (r - lum) * s; data[i + 1] = lum + (g - lum) * s; data[i + 2] = lum + (b - lum) * s;
+        }
+      }
+    }
+    return imgData;
+  }
+
+  /** Offline render: a power window over every frame → Media Bin. */
+  async function renderPowerWindow(media, opts = {}, onProgress) {
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        powerWindow(img, opts);
+        ctx.putImageData(img, 0, 0);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [WINDOW].${ext}`, type);
+    window.logToConsole?.('ok', `[window] power window → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 5g. LENS DISTORTION + CHROMATIC ABERRATION (#49) — named-lens profiles. A
   //     radial remap bends straight lines (barrel k1<0 bows them out, pincushion
   //     k1>0 pulls them in), and sampling R/G/B at slightly different radii gives
@@ -1143,6 +1221,6 @@ vec2 _rotTC(vec2 tc, float a) {
     FilmGrain, filmGrain, renderFilmGrain, frameBlend, renderSpeedBlur,
     lensDistort, renderLens, LENS_PROFILES,
     rollingShutter, renderRollingShutter,
-    Deflicker, renderDeflicker, Sparkles,
+    Deflicker, renderDeflicker, powerWindow, renderPowerWindow, Sparkles,
   };
 })();

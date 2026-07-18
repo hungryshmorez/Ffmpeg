@@ -193,10 +193,12 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   and t=0/1 return the source frames exactly.
 - **`.test/deflicker.mjs`** verifies **deflicker**: a 128±40 flicker's frame-brightness variance
   collapses (796→3) while a slow 80→180 ramp is preserved (Δ75) and a steady sequence is unchanged.
+- **`.test/power-window.mjs`** verifies **power windows**: a feathered elliptical mask brightens the
+  inside (120→222), leaves the outside untouched, grades the feathered edge partially, and inverts.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, and `test:deflicker` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, and `test:power-window` in real headless Chromium on
 every push and pull request.
 
 ---

@@ -256,7 +256,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 52 | False-colour exposure view | See over/under exposure. | ✅ | — |
 | 53 | Curves editor with a draggable spline | Not preset names. | 🟡 | Speed-curve editor exists; reuse the spline widget for colour curves. — *M* |
 | 54 | HSL secondary qualifiers | Grade just skin / just sky. | ⬜ | Qualifier UI → keyed mask. — *L* |
-| 55 | Power windows / masks | Grade part of the frame. | ⬜ | Shape masks → per-region grade. — *L* |
+| 55 | Power windows / masks | Grade part of the frame. | ✅ | `FFShaderPlus.powerWindow` builds an ellipse/rectangle mask with a feathered edge and applies a brightness/contrast/saturation grade blended by the mask (invertible). `renderPowerWindow` runs it per frame → Media Bin. Workflows "🔦 Spotlight" / "🌑 Darken Surround". `.test/power-window.mjs` verifies inside brightens (120→222), outside is untouched (120), the feathered edge is partial (168), and invert flips the region. |
 | 56 | Frame-blend vs optical-flow toggle | Choose retime method. | ⬜ | Toggle on the speed panel. — *S* |
 
 ### Glitch & Mosh (57–68)

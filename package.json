@@ -44,6 +44,7 @@
     "test:n-layers": "node .test/n-layers.mjs",
     "test:interpolate": "node .test/interpolate.mjs",
     "test:deflicker": "node .test/deflicker.mjs",
+    "test:power-window": "node .test/power-window.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

@@ -230,3 +230,8 @@ jobs:
       # while a slow day→night ramp survives; a steady sequence is unchanged.
       - name: Deflicker
         run: npm run test:deflicker
+
+      # Power windows (#55): a shape mask grades only its region — inside
+      # brightens, outside is untouched, the feathered edge is partial, invert flips.
+      - name: Power windows
+        run: npm run test:power-window

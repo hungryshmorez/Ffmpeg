@@ -94,6 +94,38 @@ window.WORKFLOWS_V4 = [
     },
   })),
 
+  // ---- POWER WINDOW ----
+  {
+    id: 'power-window-spotlight',
+    name: 'Power Window — Spotlight',
+    category: 'color-grading',
+    description: 'Grade just part of the frame — a feathered elliptical window in the centre with a brightness/contrast lift, so the subject pops and the surround sits back. The colourist’s spotlight, per-region and edge-blended.',
+    tags: ['power-window', 'mask', 'vignette', 'spotlight', 'secondary', 'grade'],
+    icon: '🔦', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderPowerWindow(m, { shape: 'ellipse', cx: 0.5, cy: 0.45, rx: 0.35, ry: 0.4, feather: 0.25, brightness: 0.08, contrast: 1.12, saturation: 1.1 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Power window — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'power-window-darken-edges',
+    name: 'Power Window — Darken Surround',
+    category: 'color-grading',
+    description: 'The inverse window — leaves the centre alone and pulls the edges down, a soft graded vignette that isn’t just a black overlay.',
+    tags: ['power-window', 'vignette', 'mask', 'invert', 'darken', 'grade'],
+    icon: '🌑', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderPowerWindow(m, { shape: 'ellipse', cx: 0.5, cy: 0.5, rx: 0.45, ry: 0.5, feather: 0.35, brightness: -0.18, contrast: 0.95, invert: true }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Vignette — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- DEFLICKER ----
   {
     id: 'deflicker',
