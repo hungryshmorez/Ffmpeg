@@ -285,7 +285,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 71 | MIDI output | Send clock/notes so lights follow. | ⬜ | MIDI-out from the sequencer. — *S–M* |
 | 72 | More than 4 layers + mixer strip | Real mixer. | ⬜ | Extend the compositor (1.4) to N layers. — *L* |
 | 73 | Per-layer effect chains | Each layer its own shader stack. | ⬜ | Effect chain per layer. — *L* |
-| 74 | Crossfader with curve selection | Linear / constant-power / sharp. | 🟡 | Compositor has crossfade; add curve options. — *S* |
+| 74 | Crossfader with curve selection | Linear / constant-power / sharp. | ✅ | `FFPerf.CROSSFADE_CURVES` — linear (gainA+gainB=1), constant-power (gainA²+gainB²=1, no mid-level dip), and sharp (an S-curve that lingers at the ends and snaps through the middle). `Compositor.crossfade(a,b,x,curve)` drives the two layers' opacity by the chosen law; a curve dropdown sits by the crossfader in the deck. `.test/crossfade-curves.mjs` verifies each law's defining property and that the compositor's layer opacities follow (const-power → 0.707/0.707 at the midpoint). |
 | 75 | Pattern banks (8, switch on the bar) | Recall sequencer patterns. | ⬜ | Save/recall + bar-quantised switch. — *M* |
 | 76 | Automation recording | Record knob moves, play back. | ⬜ | Param automation lanes. — *L* |
 | 77 | Panic key (instant reset) | Non-negotiable on stage. | ✅ | PANIC button + `0` key drop every latched/held trigger, the sequencer, chaos, strobe and mosh and reset the patch. Also revived the whole VJ keyboard — `bindKeys()` was defined but never called, so hold=stab / shift=latch was dead. `.test/panic.mjs` 3/3. |

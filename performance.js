@@ -300,16 +300,28 @@
     }
     stop() { cancelAnimationFrame(this.raf); this.raf = 0; }
 
-    /** Crossfade between two layers with one value. The classic VJ move. */
-    crossfade(a, b, x) {
-      this.layers[a].opacity = 1 - x;
-      this.layers[b].opacity = x;
+    /** Crossfade between two layers with one value + a curve (#74). Linear keeps
+     *  gainA+gainB=1; constant-power keeps gainA²+gainB²=1 (no mid dip); sharp is
+     *  an S-curve that lingers at the ends and snaps through the middle. */
+    crossfade(a, b, x, curve = 'linear') {
+      const fn = CROSSFADE_CURVES[curve] || CROSSFADE_CURVES.linear;
+      const [ga, gb] = fn(Math.max(0, Math.min(1, x)));
+      this.layers[a].opacity = ga;
+      this.layers[b].opacity = gb;
+      return [ga, gb];
     }
   }
 
+  // Crossfader curves (#74). Each maps x∈[0,1] → [gainA, gainB].
+  const CROSSFADE_CURVES = {
+    linear: (x) => [1 - x, x],
+    power:  (x) => [Math.cos(x * Math.PI / 2), Math.sin(x * Math.PI / 2)],
+    sharp:  (x) => { const s = x * x * (3 - 2 * x); return [1 - s, s]; },
+  };
+
   window.FFPerf = {
     Perf, TIERS, EXPENSIVE, Master,
-    Layer, Compositor, BLEND_MODES,
+    Layer, Compositor, BLEND_MODES, CROSSFADE_CURVES,
     scale: 1, particleScale: 1, allowMosh: true, fxLevel: 'all',
   };
 

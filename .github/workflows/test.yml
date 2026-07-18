@@ -210,3 +210,8 @@ jobs:
       # subject to each corner and returns null on a still field.
       - name: Auto-reframe
         run: npm run test:reframe
+
+      # Crossfader curves (#74): linear sums to 1, constant-power sums-of-squares
+      # to 1 (no mid dip), sharp is an S-curve; crossfade drives layer opacity.
+      - name: Crossfader curves
+        run: npm run test:crossfade-curves

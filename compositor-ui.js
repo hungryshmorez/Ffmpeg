@@ -54,6 +54,11 @@
           <select id="comp-xf-a" class="ctrl">${layerOpts(N, 0)}</select>
           <input type="range" id="comp-xf" min="0" max="1" step="0.01" value="0.5">
           <select id="comp-xf-b" class="ctrl">${layerOpts(N, 1)}</select>
+          <select id="comp-xf-curve" class="ctrl" title="Crossfader curve (#74)">
+            <option value="linear">Linear</option>
+            <option value="power">Const-Power</option>
+            <option value="sharp">Sharp</option>
+          </select>
         </label>
         <label class="comp-mo" title="Master opacity over the whole stack">
           <span>MASTER</span>
@@ -171,10 +176,12 @@
       const a = +panel.querySelector('#comp-xf-a').value;
       const b = +panel.querySelector('#comp-xf-b').value;
       if (a === b) return;
-      comp.crossfade(a, b, +xf.value);
+      const curve = panel.querySelector('#comp-xf-curve').value;
+      comp.crossfade(a, b, +xf.value, curve);
       reflectOpacity(a); reflectOpacity(b);
     };
     xf.addEventListener('input', applyXfade);
+    panel.querySelector('#comp-xf-curve').addEventListener('change', applyXfade);
     panel.querySelector('#comp-xf-a').addEventListener('change', applyXfade);
     panel.querySelector('#comp-xf-b').addEventListener('change', applyXfade);
 
