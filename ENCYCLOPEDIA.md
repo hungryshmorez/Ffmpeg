@@ -302,7 +302,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 83 | Auto-sync an edit to the beat grid | You have both halves already. | ⬜ | Cut-on-beat assembler. — *M* |
 | 84 | Shot-type classification | Wide/medium/close by subject size. | 🔒 | Needs a model (face/subject detector). — *L* |
 | 85 | Auto colour-match across clips | You have the LUT generator; run it clip-to-clip. | 🟡 | Wire the LUT generator into a batch clip-to-clip pass. — *M* |
-| 86 | Auto loop-point detection | Find the two most similar frames for seamless GIFs. | ⬜ | Frame-similarity search. — *M* |
+| 86 | Auto loop-point detection | Find the two most similar frames for seamless GIFs. | ✅ | `FFAudioDSP.detectLoop` takes the normalised autocorrelation of the (decimated) signal over candidate loop lengths and returns the strongest peak — length, end sample, and a confidence. A "🔁 Find loop point" button in the Audio Studio reports it for the loaded clip. `.test/loop-detect.mjs` verifies a 0.5 s motif tiled 4× is detected at 0.5 s (conf 1.00), a 0.3 s motif at 0.3 s (not hard-coded), and unrepeating noise scores low (0.18). |
 | 87 | Content-aware fill | Remove objects (WebGPU compute). | 🔒 | WebGPU inpainting — research-grade. — *XL* |
 | 88 | Suggest a workflow from content | "Talking head → Silence Trim + Loudnorm." | ⬜ | Heuristics over the probe metadata. — *M* |
 

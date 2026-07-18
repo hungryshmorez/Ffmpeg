@@ -240,3 +240,8 @@ jobs:
       # turns the red half green while blue is untouched; unmatched hue selects nothing.
       - name: HSL secondaries
         run: npm run test:hsl-qualify
+
+      # Loop-point detection (#86): autocorrelation finds a tiled motif's period
+      # (0.5 s / 0.3 s, conf ~1.0) and scores unrepeating noise low.
+      - name: Loop-point detection
+        run: npm run test:loop-detect

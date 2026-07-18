@@ -353,5 +353,32 @@
     return [centre, Float32Array.from(centre)];
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate };
+  // ---------------------------------------------------------------------------
+  // AUTO LOOP-POINT DETECTION (#86) — find the length at which a clip loops
+  // seamlessly. A seamless loop is where the audio a whole period LATER lines up
+  // with the start, so we take the normalised autocorrelation over candidate
+  // loop lengths and pick the strongest peak. The signal is decimated first so
+  // the search is fast regardless of sample rate.
+  // ---------------------------------------------------------------------------
+  function detectLoop(samples, sr, opts = {}) {
+    const targetRate = 2000;
+    const stride = Math.max(1, Math.floor(sr / targetRate));
+    const rsr = sr / stride;
+    const ds = [];
+    for (let i = 0; i < samples.length; i += stride) ds.push(samples[i]);
+    const minLag = Math.max(1, Math.floor((opts.minSec ?? 0.25) * rsr));
+    const maxLag = Math.min(ds.length - 2, Math.floor((opts.maxSec ?? 4) * rsr));
+    const win = Math.max(1, Math.min(ds.length - maxLag - 1, Math.floor((opts.window ?? 0.15) * rsr)));
+    if (maxLag <= minLag || win < 2) return { start: 0, end: samples.length - 1, lengthSec: samples.length / sr, confidence: 0 };
+    let bestLag = minLag, best = -Infinity;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let dot = 0, n0 = 0, n1 = 0;
+      for (let i = 0; i < win; i++) { const a = ds[i], b = ds[lag + i]; dot += a * b; n0 += a * a; n1 += b * b; }
+      const score = dot / (Math.sqrt(n0 * n1) + 1e-12);
+      if (score > best) { best = score; bestLag = lag; }
+    }
+    return { start: 0, end: bestLag * stride, lengthSec: bestLag / rsr, confidence: Math.max(0, Math.min(1, best)) };
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate, detectLoop };
 })();

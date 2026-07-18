@@ -214,6 +214,7 @@
 
           <button type="button" class="primary-btn wide" id="as-bounce">⬇ Bounce to file</button>
           <button type="button" class="mini-btn wide" id="as-stems">⎇ Export stems (dry / reverb / delay)</button>
+          <button type="button" class="mini-btn wide" id="as-loop">🔁 Find loop point</button>
           <div id="as-bounce-status" class="as-status"></div>
 
           <div id="lufs-meter-audio" class="lufs-meter"></div>
@@ -600,6 +601,18 @@
     }
   }
 
+  // #86 Detect the best seamless loop length and report it.
+  function findLoop() {
+    if (!eng?.buffer) return;
+    const status = document.getElementById('as-bounce-status');
+    const ch = eng.buffer.getChannelData(0);
+    const r = window.FFAudioDSP.detectLoop(ch, eng.buffer.sampleRate, { minSec: 0.25, maxSec: Math.min(8, eng.buffer.duration * 0.9) });
+    const pct = Math.round(r.confidence * 100);
+    status.innerHTML = `<span class="ok">🔁 Loop ≈ ${r.lengthSec.toFixed(2)}s (0 → ${(r.end / eng.buffer.sampleRate).toFixed(2)}s) · match ${pct}%</span>`;
+    window.logToConsole?.('ok', `[loop] best loop length ${r.lengthSec.toFixed(3)}s, confidence ${r.confidence.toFixed(3)}`);
+    return r;
+  }
+
   // #40 Export the dry / reverb / delay buses as three separate WAV files.
   async function exportStems() {
     if (!eng?.buffer) return;
@@ -694,6 +707,7 @@
 
     document.getElementById('as-bounce').addEventListener('click', bounce);
     document.getElementById('as-stems')?.addEventListener('click', exportStems);
+    document.getElementById('as-loop')?.addEventListener('click', findLoop);
 
     // An ffmpeg mastering chain is an OFFLINE filter chain. It CANNOT run in the
     // live Web Audio rack — different engine entirely. So we don't pretend:
