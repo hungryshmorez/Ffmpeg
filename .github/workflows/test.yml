@@ -143,3 +143,8 @@ jobs:
       # untouched; an end-to-end bounce caps at the set dB ceiling.
       - name: Master limiter
         run: npm run test:limiter
+
+      # Transient shaper (#39): on a drum hit, attack=+1 raises the crest factor,
+      # attack=-1 lowers it, sustain=+1 lifts the tail RMS; neutral is untouched.
+      - name: Transient shaper
+        run: npm run test:transient

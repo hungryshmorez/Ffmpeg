@@ -90,5 +90,37 @@
     return channels;
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter };
+  // ---------------------------------------------------------------------------
+  // TRANSIENT SHAPER (#39) — attack / sustain, envelope-based. Two magnitude
+  // followers run off a shared control signal: a FAST one that snaps onto
+  // onsets and a SLOW one that lags. Their difference is >0 during the attack
+  // (fast leads) and <0 during the sustain/tail (fast falls away first). The
+  // `attack` knob scales the gain in the first region, `sustain` in the second —
+  // so you can put the punch back into an over-compressed drum, or tame it.
+  // ---------------------------------------------------------------------------
+  function transientShaper(channels, sr, opts = {}) {
+    const attack = opts.attack ?? 0;    // -1 … +1
+    const sustain = opts.sustain ?? 0;  // -1 … +1
+    if (attack === 0 && sustain === 0) return channels;
+    const n = channels[0] ? channels[0].length : 0;
+    if (!n) return channels;
+    const coef = (ms) => Math.exp(-1 / Math.max(1, ms * sr / 1000));
+    const aLag = coef(6), rel = coef(50);           // lagged attack, medium release
+    let ei = 0, el = 0;                              // instant + lagged envelopes
+    for (let i = 0; i < n; i++) {
+      let x = 0;
+      for (let c = 0; c < channels.length; c++) { const a = Math.abs(channels[c][i]); if (a > x) x = a; }
+      ei = x > ei ? x : rel * ei + (1 - rel) * x;                       // instant attack → hugs the onset peak
+      el = x > el ? aLag * el + (1 - aLag) * x : rel * el + (1 - rel) * x;   // lagged attack
+      const eps = el + 1e-4;
+      const att = ei > el ? (ei - el) / eps : 0;     // >0 only on the leading edge (aligned to the peak)
+      const sus = el > x ? (el - x) / eps : 0;        // >0 in the decaying tail
+      let g = 1 + attack * Math.min(2, att) + sustain * Math.min(2, sus);
+      if (g < 0) g = 0; else if (g > 4) g = 4;
+      for (let c = 0; c < channels.length; c++) channels[c][i] *= g;
+    }
+    return channels;
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper };
 })();

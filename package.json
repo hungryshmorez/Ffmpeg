@@ -27,6 +27,7 @@
     "test:halation": "node .test/halation.mjs",
     "test:stereo-width": "node .test/stereo-width.mjs",
     "test:limiter": "node .test/limiter.mjs",
+    "test:transient": "node .test/transient.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

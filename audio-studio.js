@@ -84,6 +84,14 @@
       ],
     },
     {
+      id: 'transient', name: 'Transient', icon: '🥁',
+      desc: 'Reshape the punch on bounce. Attack adds or tames the onset; Sustain lifts or dries the tail.',
+      params: [
+        ['transientAttack',  'Attack',  -1, 1, 0.01, (v) => v === 0 ? 'off' : `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`],
+        ['transientSustain', 'Sustain', -1, 1, 0.01, (v) => v === 0 ? 'off' : `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`],
+      ],
+    },
+    {
       id: 'master', name: 'Master Limiter', icon: '🧱',
       desc: 'Lookahead brickwall on the bounce. Ceiling at 0 dB is off; pull it down to catch peaks without clipping.',
       params: [

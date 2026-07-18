@@ -235,7 +235,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 36 | Beat-grid quantised chopping | Slice on beats, rearrange, repeat. | 🟡 | Beat grid exists; add the chop/rearrange UI. — *M* |
 | 37 | Granular / stutter on the beat grid | Beat-driven stutter. | ⬜ | Granular engine keyed to beats. — *M* |
 | 38 | Convolution reverb from a user IR | Not just the generated one. | ⬜ | IR file upload → convolver node. — *S–M* |
-| 39 | Transient shaper (attack/sustain) | Shape the punch. | ⬜ | Envelope-follower transient node. — *M* |
+| 39 | Transient shaper (attack/sustain) | Shape the punch. | ✅ | `FFAudioDSP.transientShaper` — an instant-attack envelope hugs the onset peak, a lagged one trails it; their difference marks the leading edge (Attack scales it, aligned to the peak) and the tail where the lagged env sits above the signal (Sustain scales it). Applied at bounce, before the limiter. "Transient" rack module (Attack / Sustain). `.test/transient.mjs` verifies on a synthetic drum hit that attack=+1 raises the crest factor, attack=-1 lowers it, and sustain=+1 lifts the tail RMS. |
 | 40 | Export stems (dry/reverb/delay) | Separate files. | ⬜ | Render each bus separately. — *M* |
 
 ### Video (41–56)
