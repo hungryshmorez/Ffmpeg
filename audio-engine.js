@@ -571,6 +571,38 @@
       return rendered;   // AudioBuffer
     }
 
+    // =========================================================================
+    // #40 EXPORT STEMS — render the dry, reverb and delay buses as SEPARATE
+    // buffers. The wet returns are isolated by rendering the mix with just that
+    // effect and subtracting the dry render (the buses sum linearly, and the
+    // master processors are bypassed for stems), so no graph surgery is needed.
+    // =========================================================================
+    async bounceStems(onProgress) {
+      const base = this.params;
+      // stems are PRE-master: bypass every post-render/master stage and the
+      // phaser feedback (so the dry stem's tail is clean and the wet stems
+      // subtract exactly).
+      const stemBase = {
+        ...base, multibandAmount: 0, msMonoBelow: 0, msWidenDb: 0, sidechainAmount: 0,
+        transientAttack: 0, transientSustain: 0, limiterCeiling: 0, phaserFeedback: 0, phaserDepth: 0,
+      };
+      const render = async (patch) => { const saved = this.params; this.params = { ...stemBase, ...patch }; const b = await this.bounce(); this.params = saved; return b; };
+      onProgress?.(0.05);
+      const dry = await render({ reverbMix: 0, delayMix: 0, chorusMix: 0 });
+      onProgress?.(0.35);
+      const revFull = await render({ delayMix: 0, chorusMix: 0 });
+      onProgress?.(0.65);
+      const delFull = await render({ reverbMix: 0, chorusMix: 0 });
+      onProgress?.(0.95);
+      const sub = (a, b) => {
+        const n = Math.min(a.length, b.length), nch = a.numberOfChannels;
+        const out = new OfflineAudioContext(nch, n, a.sampleRate).createBuffer(nch, n, a.sampleRate);
+        for (let c = 0; c < nch; c++) { const oa = a.getChannelData(c), ob = b.getChannelData(c), od = out.getChannelData(c); for (let i = 0; i < n; i++) od[i] = oa[i] - ob[i]; }
+        return out;
+      };
+      return { dry, reverb: sub(revFull, dry), delay: sub(delFull, dry) };
+    }
+
     /** AudioBuffer → 16-bit WAV Blob. No ffmpeg needed for WAV. */
     static toWav(buf) {
       const ch = buf.numberOfChannels, len = buf.length, sr = buf.sampleRate;

@@ -35,6 +35,7 @@
     "test:speed-blur": "node .test/speed-blur.mjs",
     "test:stems": "node .test/stems.mjs",
     "test:conv-reverb": "node .test/conv-reverb.mjs",
+    "test:stems-export": "node .test/stems-export.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

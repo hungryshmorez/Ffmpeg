@@ -213,6 +213,7 @@
           </select>
 
           <button type="button" class="primary-btn wide" id="as-bounce">⬇ Bounce to file</button>
+          <button type="button" class="mini-btn wide" id="as-stems">⎇ Export stems (dry / reverb / delay)</button>
           <div id="as-bounce-status" class="as-status"></div>
 
           <div id="lufs-meter-audio" class="lufs-meter"></div>
@@ -599,6 +600,29 @@
     }
   }
 
+  // #40 Export the dry / reverb / delay buses as three separate WAV files.
+  async function exportStems() {
+    if (!eng?.buffer) return;
+    const status = document.getElementById('as-bounce-status');
+    eng.stop(); document.getElementById('as-play').textContent = '▶';
+    try {
+      status.textContent = 'Rendering stems…';
+      const stems = await eng.bounceStems((p) => { status.textContent = `Rendering stems… ${Math.round(p * 100)}%`; });
+      const baseName = (media?.name || 'audio').replace(/\.[^.]+$/, '');
+      let added = 0;
+      for (const [label, buf] of [['dry', stems.dry], ['reverb', stems.reverb], ['delay', stems.delay]]) {
+        const wav = window.FFAudio.AudioEngine.toWav(buf);
+        await window.addBlobToBin?.(wav, `${baseName} [${label}].wav`, wav.type);
+        added++;
+      }
+      status.innerHTML = `<span class="ok">✔ ${added} stems → Media Bin (dry / reverb / delay)</span>`;
+      window.logToConsole?.('ok', `[audio] exported ${added} stems`);
+    } catch (e) {
+      status.textContent = `Stem export failed: ${e.message}`;
+      window.logToConsole?.('error', `[audio] stem export failed: ${e.message}`);
+    }
+  }
+
   async function finish(blob, ext, status) {
     const name = `${(media?.name || 'audio').replace(/\.[^.]+$/, '')} [processed].${ext}`;
     await window.addBlobToBin?.(blob, name, blob.type);
@@ -669,6 +693,7 @@
     });
 
     document.getElementById('as-bounce').addEventListener('click', bounce);
+    document.getElementById('as-stems')?.addEventListener('click', exportStems);
 
     // An ffmpeg mastering chain is an OFFLINE filter chain. It CANNOT run in the
     // live Web Audio rack — different engine entirely. So we don't pretend:

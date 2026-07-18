@@ -169,10 +169,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/conv-reverb.mjs`** verifies **convolution reverb from a user IR**: a click bounced through
   a hand-built 2-tap impulse response echoes at the tap position, and only when the IR is loaded (the
   dry render is silent there).
+- **`.test/stems-export.mjs`** verifies **stem export**: a click through reverb+delay splits into a
+  dry stem carrying the click, a reverb stem that isolates the reverb (dry click removed 0.119→0.003),
+  and a delay stem that echoes at the delay time.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, and `test:conv-reverb` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, and `test:stems-export` in real headless Chromium on
 every push and pull request.
 
 ---

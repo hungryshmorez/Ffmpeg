@@ -184,3 +184,9 @@ jobs:
       # echoes at the tap — and only with the IR loaded (dry is silent there).
       - name: Convolution reverb (user IR)
         run: npm run test:conv-reverb
+
+      # Export stems (#40): dry/reverb/delay buses rendered separately — the dry
+      # stem has the click, the reverb stem isolates the tail (dry click removed),
+      # the delay stem echoes at the delay time.
+      - name: Export stems
+        run: npm run test:stems-export
