@@ -270,3 +270,8 @@ jobs:
       # onto a fresh timeline; out-of-range indices are skipped.
       - name: Beat-grid chopping
         run: npm run test:beat-chop
+
+      # Granular / beat stutter (#37): render a rearrangement to PCM — a stutter
+      # fills with one slice's tone, a shuffle reverses the tones, length sums.
+      - name: Granular beat stutter
+        run: npm run test:granular

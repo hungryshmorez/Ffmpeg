@@ -380,5 +380,38 @@
     return { start: 0, end: bestLag * stride, lengthSec: bestLag / rsr, confidence: Math.max(0, Math.min(1, best)) };
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate, detectLoop };
+  // ---------------------------------------------------------------------------
+  // GRANULAR / BEAT STUTTER (#37) — realise a beat-grid rearrangement as audio.
+  // Given the source PCM and a list of steps (from FFBeatSync.rearrangeSlices —
+  // each {srcStart,srcEnd} in seconds), concatenate those grains into a new
+  // buffer, with a short equal-power crossfade at every seam so the stutter
+  // doesn't click.
+  // ---------------------------------------------------------------------------
+  function granularRearrange(samples, sr, steps, opts = {}) {
+    const xf = Math.max(0, Math.round((opts.crossfadeMs ?? 3) * sr / 1000));
+    const grains = [];
+    for (const s of steps) {
+      const a = Math.max(0, Math.round(s.srcStart * sr));
+      const b = Math.min(samples.length, Math.round(s.srcEnd * sr));
+      if (b > a) grains.push({ a, len: b - a });
+    }
+    if (!grains.length) return new Float32Array(0);
+    let cap = 0; for (const g of grains) cap += g.len;
+    const out = new Float32Array(cap);
+    let w = 0, prevLen = 0;
+    for (let gi = 0; gi < grains.length; gi++) {
+      const g = grains[gi];
+      const ov = gi > 0 ? Math.min(xf, g.len, prevLen) : 0;   // equal-power seam crossfade
+      const base = w - ov;
+      for (let i = 0; i < g.len; i++) {
+        const v = samples[g.a + i] || 0;
+        if (i < ov) { const t = (i + 1) / (ov + 1); out[base + i] = out[base + i] * Math.cos(t * Math.PI / 2) + v * Math.sin(t * Math.PI / 2); }
+        else out[base + i] = v;
+      }
+      w = base + g.len; prevLen = g.len;
+    }
+    return out.subarray(0, w);
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate, detectLoop, granularRearrange };
 })();
