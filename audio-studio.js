@@ -205,6 +205,13 @@
             <span>Time-stretch, keep pitch <small>(#34 — atempo)</small></span>
           </label>
 
+          <label class="as-stem-label" for="as-stem">Stem</label>
+          <select id="as-stem" class="ctrl">
+            <option value="">Full mix</option>
+            <option value="instrumental">Instrumental (remove vocal)</option>
+            <option value="acapella">Acapella (isolate vocal)</option>
+          </select>
+
           <button type="button" class="primary-btn wide" id="as-bounce">⬇ Bounce to file</button>
           <div id="as-bounce-status" class="as-status"></div>
 
@@ -448,6 +455,15 @@
     try {
       status.textContent = 'Rendering (offline, faster than real time)…';
       const rendered = await eng.bounce((p) => { status.textContent = `Rendering… ${Math.round(p * 100)}%`; }, { playbackRate: preservePitch ? 1 : undefined });
+
+      // #26 stem separation: split the rendered stereo buffer in place.
+      const stemMode = document.getElementById('as-stem')?.value;
+      if (stemMode && rendered.numberOfChannels >= 2 && window.FFAudioDSP) {
+        const [sl, sr] = window.FFAudioDSP.stemSeparate(
+          [rendered.getChannelData(0), rendered.getChannelData(1)], rendered.sampleRate, stemMode);
+        rendered.getChannelData(0).set(sl); rendered.getChannelData(1).set(sr);
+        status.textContent = `Rendered · ${stemMode}.`;
+      }
 
       // #28 gain-reduction meters: paint the last bounce's per-band GR.
       if (eng.lastGR) eng.lastGR.forEach((db, i) => {

@@ -267,5 +267,91 @@
     return { gr };
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress };
+  // ---------------------------------------------------------------------------
+  // Iterative radix-2 FFT (in-place, complex re/im arrays). Used by the spectral
+  // centre extractor. len must be a power of two.
+  // ---------------------------------------------------------------------------
+  function _fft(re, im, inverse) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) { const tr = re[i]; re[i] = re[j]; re[j] = tr; const ti = im[i]; im[i] = im[j]; im[j] = ti; }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = (inverse ? 2 : -2) * Math.PI / len;
+      const wr = Math.cos(ang), wi = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let cr = 1, ci = 0;
+        for (let k = 0; k < len / 2; k++) {
+          const ar = re[i + k], ai = im[i + k];
+          const br = re[i + k + len / 2], bi = im[i + k + len / 2];
+          const tr = br * cr - bi * ci, ti = br * ci + bi * cr;
+          re[i + k] = ar + tr; im[i + k] = ai + ti;
+          re[i + k + len / 2] = ar - tr; im[i + k + len / 2] = ai - ti;
+          const ncr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = ncr;
+        }
+      }
+    }
+    if (inverse) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+  }
+
+  // STFT centre extraction: per frequency bin, bins panned to the CENTRE (equal
+  // in L and R) are the vocal — keep them; bins panned to a side are instruments
+  // — attenuate. Overlap-add with a Hann window. This is what actually isolates a
+  // vocal, where a broadband correlation gate can't (overlapping content).
+  function _centerExtract(L, R, opts) {
+    const n = L.length, N = opts.fftSize || 2048, hop = N / 4, panWidth = opts.panWidth ?? 2;
+    const win = new Float32Array(N);
+    for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
+    const out = new Float32Array(n), norm = new Float32Array(n);
+    const lr = new Float32Array(N), li = new Float32Array(N), rr = new Float32Array(N), ri = new Float32Array(N);
+    for (let start = 0; start + N <= n + hop; start += hop) {
+      lr.fill(0); li.fill(0); rr.fill(0); ri.fill(0);
+      for (let i = 0; i < N; i++) { const s = start + i; if (s < n) { lr[i] = L[s] * win[i]; rr[i] = R[s] * win[i]; } }
+      _fft(lr, li, false); _fft(rr, ri, false);
+      for (let k = 0; k < N; k++) {
+        const magL = Math.hypot(lr[k], li[k]), magR = Math.hypot(rr[k], ri[k]);
+        const pan = magL / (magL + magR + 1e-9);              // 0.5 = centre
+        let w = 1 - panWidth * Math.abs(pan - 0.5) * 2;        // open at centre
+        if (w < 0) w = 0;
+        // mid spectrum × centre weight
+        lr[k] = (lr[k] + rr[k]) * 0.5 * w; li[k] = (li[k] + ri[k]) * 0.5 * w;
+      }
+      _fft(lr, li, true);
+      for (let i = 0; i < N; i++) { const s = start + i; if (s < n) { out[s] += lr[i] * win[i]; norm[s] += win[i] * win[i]; } }
+    }
+    for (let i = 0; i < n; i++) out[i] = norm[i] > 1e-6 ? out[i] / norm[i] : 0;
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // STEM SEPARATION (#26) — the naive-but-useful mid/side split. Lead vocals
+  // usually sit dead centre (equal in L and R) while the instruments are spread,
+  // so:
+  //   • INSTRUMENTAL: cancel the centre — out = L − R. Anything panned centre
+  //     (the vocal) disappears; the spread instruments survive. The classic
+  //     "OOPS" karaoke trick, and it's exact.
+  //   • ACAPELLA: keep the centre. Take the mid and GATE it by the running
+  //     L/R correlation — where the channels agree (centre = vocal) the gate is
+  //     open, where they diverge (sides = instruments) it closes. An estimate,
+  //     not surgical, but usable.
+  // Returns a new [L,R] pair; the input is not modified.
+  // ---------------------------------------------------------------------------
+  function stemSeparate(channels, sr, mode = 'instrumental', opts = {}) {
+    if (channels.length < 2) { const c = Float32Array.from(channels[0]); return [c, Float32Array.from(c)]; }
+    const L = channels[0], R = channels[1], n = L.length;
+    const oL = new Float32Array(n), oR = new Float32Array(n);
+    if (mode === 'instrumental') {
+      for (let i = 0; i < n; i++) { const d = (L[i] - R[i]) * 0.5; oL[i] = d; oR[i] = d; }
+      return [oL, oR];
+    }
+    // acapella: spectral centre extraction — keep the centre-panned bins (vocal),
+    // attenuate the side-panned bins (instruments), per frequency.
+    const centre = _centerExtract(L, R, opts);
+    return [centre, Float32Array.from(centre)];
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, lowpass, highShelf, midSideEQ, multibandCompress, stemSeparate };
 })();

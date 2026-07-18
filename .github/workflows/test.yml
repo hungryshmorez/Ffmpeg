@@ -174,3 +174,8 @@ jobs:
       # (mid-path lit, peak lowered, span widened); a still is left untouched.
       - name: Speed-up motion blur
         run: npm run test:speed-blur
+
+      # Stem separation (#26): instrumental cancels the centre vocal, spectral
+      # acapella lifts the vocal/instrument ratio; mono degrades gracefully.
+      - name: Stem separation
+        run: npm run test:stems

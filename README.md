@@ -163,10 +163,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/speed-blur.mjs`** verifies **motion blur on speed-up**: `frameBlend` smears a stepping
   dot along its path (a mid-path point lights though it was black in frame 0, the peak drops, the
   lit span widens into a trail) while a still is left untouched.
+- **`.test/stems.mjs`** verifies **stem separation**: instrumental cancels the centre vocal (0.249→
+  0.016) while keeping the panned instrument, and the spectral acapella lifts the vocal/instrument
+  ratio 1.79→7.23; mono input degrades gracefully.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, and `test:speed-blur` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, and `test:stems` in real headless Chromium on
 every push and pull request.
 
 ---
