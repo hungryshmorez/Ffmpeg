@@ -180,10 +180,12 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   byte-identity.
 - **`.test/stabilize.mjs`** verifies **stabilisation**: `globalMotion` is outlier-robust (median),
   and `stabilizePath` drops a jittery pan's acceleration (2.02→0.06) while preserving the pan travel.
+- **`.test/reframe.mjs`** verifies **auto-reframe**: the magnitude-weighted motion centroid tracks
+  the subject to each corner and returns null on a still field.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, and `test:stabilize` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, and `test:reframe` in real headless Chromium on
 every push and pull request.
 
 ---

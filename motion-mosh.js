@@ -522,6 +522,73 @@
     return corr;
   }
 
+  // ===========================================================================
+  // AUTO-REFRAME (#45) — crop a vertical (9:16) window that TRACKS THE SUBJECT.
+  // The subject is where the action is: the centre of mass of the motion field,
+  // weighted by vector magnitude. Follow that (smoothed) with the crop window
+  // and a horizontal 16:9 clip becomes a vertical one that keeps the moving
+  // subject in frame instead of a dumb centre crop.
+  // ===========================================================================
+
+  /** Centre of motion mass of a block field (px), or [null,null] if it's still. */
+  function motionCentroid(vec, cols, rows, blockSize) {
+    let sx = 0, sy = 0, sw = 0;
+    for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+      const i = (by * cols + bx) * 2, mag = Math.hypot(vec[i], vec[i + 1]);
+      sx += (bx + 0.5) * blockSize * mag; sy += (by + 0.5) * blockSize * mag; sw += mag;
+    }
+    return sw > 1e-6 ? [sx / sw, sy / sw] : [null, null];
+  }
+
+  /** Offline auto-reframe: track the motion centroid, crop a vertical window
+   *  around it (causal-smoothed), output a 9:16 clip → Media Bin. */
+  async function renderReframe(media, params, onProgress) {
+    const p = Object.assign({ blockSize: 16, motionRadius: 12, threshold: 0, aspect: 9 / 16, smoothRadius: 20, strength: 1 }, params || {});
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const sw = v.videoWidth || 640, sh = v.videoHeight || 360;
+    const outH = Math.round(Math.min(sh, 1280) / 2) * 2, outW = Math.round(outH * p.aspect / 2) * 2;
+    const cropW = Math.min(sw, Math.round(sh * p.aspect));
+    const cv = document.createElement('canvas'); cv.width = outW; cv.height = outH;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const est = document.createElement('canvas'); est.width = Math.min(320, sw); est.height = Math.round(est.width * sh / sw);
+    const m = new MotionMosher(est); m.setParams(p);
+    const alpha = 1 / Math.max(1, p.smoothRadius);
+    let camX = sw / 2, first = true;
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        const field = m.captureField(v);
+        if (field) {
+          const [mx] = motionCentroid(field.vec, field.cols, field.rows, p.blockSize);
+          if (mx != null) { const targetX = mx / est.width * sw; if (first) { camX = targetX; first = false; } else camX += (targetX - camX) * alpha * p.strength; }
+        }
+        const cropX = Math.max(0, Math.min(sw - cropW, camX - cropW / 2));
+        ctx.drawImage(v, cropX, 0, cropW, sh, 0, 0, outW, outH);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [VERTICAL].${ext}`, type);
+    window.logToConsole?.('ok', `[reframe] auto-reframed → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
   /** Offline stabiliser render. Uses a CAUSAL low-pass of the camera path (a
    *  real-time-style smoother — no second pass / frame buffering), shifting each
    *  frame toward the smoothed path. The tested cores (globalMotion +
@@ -955,5 +1022,6 @@
 
   window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips, renderFlowDisplace,
     renderVectorOverlay, globalMotion, stabilizePath, renderStabilize,
+    motionCentroid, renderReframe,
     recordVectors, replayVectors, serializeVectors, deserializeVectors };
 })();

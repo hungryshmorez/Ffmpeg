@@ -205,3 +205,8 @@ jobs:
       # stabilizePath drops a jittery pan's acceleration while keeping the pan.
       - name: Stabilisation
         run: npm run test:stabilize
+
+      # Auto-reframe (#45): the magnitude-weighted motion centroid tracks the
+      # subject to each corner and returns null on a still field.
+      - name: Auto-reframe
+        run: npm run test:reframe

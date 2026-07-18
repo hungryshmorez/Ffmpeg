@@ -155,4 +155,22 @@ window.WORKFLOWS_V5 = [
       });
     },
   },
+
+  // --- auto-reframe to vertical (#45), tracks the subject ---
+  {
+    id: 'auto-reframe',
+    name: 'Auto-Reframe → Vertical',
+    category: 'motion-speed',
+    description: 'Turns a horizontal clip into a 9:16 vertical one that FOLLOWS the action — it tracks the centre of motion (the subject) and pans the crop to keep it in frame, instead of a dumb centre crop that loses whatever’s moving.',
+    tags: ['reframe', 'vertical', '9:16', 'track', 'subject', 'social'],
+    icon: '📱', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFMosh.renderReframe(m, { blockSize: 16, motionRadius: 12, threshold: 0, aspect: 9 / 16, smoothRadius: 20, strength: 1 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Reframing — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
 ].flat();
