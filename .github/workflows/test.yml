@@ -245,3 +245,8 @@ jobs:
       # (0.5 s / 0.3 s, conf ~1.0) and scores unrepeating noise low.
       - name: Loop-point detection
         run: npm run test:loop-detect
+
+      # Workflow suggestions (#88): heuristics over probe metadata — talking-head
+      # → loudnorm/trim/reframe, vertical no-audio → music/social, 4K → downscale.
+      - name: Workflow suggestions
+        run: npm run test:suggest

@@ -2629,6 +2629,15 @@ function onSourceMetadataLoaded() {
   setTrimTimes(0, dur);
   updateFileInfo(null); // re-render with duration / resolution
   logToConsole('ok', `Source metadata: ${dur.toFixed(2)}s, ${v.videoWidth}×${v.videoHeight}`);
+
+  // #88 Suggest workflows that fit this clip, from the probe metadata.
+  try {
+    const sugg = window.FFSuggest?.suggest({
+      hasAudio: hasAudioStream(state.inputFile), hasVideo: (v.videoWidth || 0) > 0,
+      duration: dur, width: v.videoWidth || 0, height: v.videoHeight || 0,
+    });
+    if (sugg && sugg.length) logToConsole('', `Suggested for this clip: ${sugg.slice(0, 3).map((s) => s.label).join(' · ')}`);
+  } catch (_) {}
 }
 
 function loadSourcePreview(url, mime) {

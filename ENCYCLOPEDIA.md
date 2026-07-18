@@ -304,7 +304,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 85 | Auto colour-match across clips | You have the LUT generator; run it clip-to-clip. | 🟡 | Wire the LUT generator into a batch clip-to-clip pass. — *M* |
 | 86 | Auto loop-point detection | Find the two most similar frames for seamless GIFs. | ✅ | `FFAudioDSP.detectLoop` takes the normalised autocorrelation of the (decimated) signal over candidate loop lengths and returns the strongest peak — length, end sample, and a confidence. A "🔁 Find loop point" button in the Audio Studio reports it for the loaded clip. `.test/loop-detect.mjs` verifies a 0.5 s motif tiled 4× is detected at 0.5 s (conf 1.00), a 0.3 s motif at 0.3 s (not hard-coded), and unrepeating noise scores low (0.18). |
 | 87 | Content-aware fill | Remove objects (WebGPU compute). | 🔒 | WebGPU inpainting — research-grade. — *XL* |
-| 88 | Suggest a workflow from content | "Talking head → Silence Trim + Loudnorm." | ⬜ | Heuristics over the probe metadata. — *M* |
+| 88 | Suggest a workflow from content | "Talking head → Silence Trim + Loudnorm." | ✅ | `FFSuggest.suggest(meta)` ranks the workflows that fit a clip from the probe metadata (has audio? duration? aspect? resolution?) — a talking head gets Loudnorm + Trim Silence + Auto-Reframe, a vertical no-audio short gets Add Music + social export + Loop, a 4K clip gets Downscale. Wired into the source-loaded path (logs the top three). `.test/suggest.mjs` verifies the rankings and that audio-only steps don't appear for silent clips. |
 
 ### UX (89–96)
 
