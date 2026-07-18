@@ -94,6 +94,38 @@ window.WORKFLOWS_V4 = [
     },
   })),
 
+  // ---- HSL SECONDARY QUALIFIERS ----
+  {
+    id: 'secondary-sky',
+    name: 'Secondary — Punch the Sky',
+    category: 'color-grading',
+    description: 'A colour-selective grade that keys just the blue of the sky and deepens it — more saturation, a touch darker — without touching skin or foliage. A real HSL secondary, not a global push.',
+    tags: ['secondary', 'hsl', 'qualifier', 'sky', 'blue', 'grade'],
+    icon: '🌤️', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderHslQualify(m, { hueCenter: 210, hueWidth: 40, softness: 0.5, satMin: 0.15, lumMin: 0.2, satMul: 1.4, lumAdd: -0.05 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Secondary — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'secondary-skin',
+    name: 'Secondary — Warm the Skin',
+    category: 'color-grading',
+    description: 'Keys the orange skin-tone band and warms it slightly while leaving the rest of the frame alone — the classic skin secondary.',
+    tags: ['secondary', 'hsl', 'qualifier', 'skin', 'orange', 'grade'],
+    icon: '🧑', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderHslQualify(m, { hueCenter: 25, hueWidth: 22, softness: 0.6, satMin: 0.15, satMax: 0.85, lumMin: 0.2, lumMax: 0.9, hueShift: -4, satMul: 1.1, lumAdd: 0.03 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Secondary — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- POWER WINDOW ----
   {
     id: 'power-window-spotlight',

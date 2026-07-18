@@ -862,6 +862,97 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5k. HSL SECONDARY QUALIFIERS (#54) — grade just SKIN, or just SKY. Key a
+  //     hue / saturation / luma range (with soft edges), build a mask from it,
+  //     and apply a hue-shift / sat / luma adjustment only where the key matches.
+  //     The colourist's secondary — a colour-selective grade, not a global one.
+  // ===========================================================================
+
+  function _rgb2hsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    let h = 0, s = 0;
+    if (mx !== mn) {
+      const d = mx - mn;
+      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      if (mx === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (mx === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return [h * 360, s, l];
+  }
+  function _hue2rgb(p, q, t) { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; }
+  function _hsl2rgb(h, s, l) {
+    h = ((h % 360) + 360) % 360 / 360;
+    if (s === 0) { const v = l * 255; return [v, v, v]; }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    return [_hue2rgb(p, q, h + 1 / 3) * 255, _hue2rgb(p, q, h) * 255, _hue2rgb(p, q, h - 1 / 3) * 255];
+  }
+
+  /** HSL secondary qualifier + grade (in place). key: {hueCenter,hueWidth,satMin,
+   *  satMax,lumMin,lumMax,softness}; adjust: {hueShift,satMul,lumAdd}. */
+  function hslQualify(imgData, opts = {}) {
+    const hueCenter = opts.hueCenter ?? 20, hueWidth = opts.hueWidth ?? 30, soft = opts.softness ?? 0.4;
+    const satMin = opts.satMin ?? 0.1, satMax = opts.satMax ?? 1, lumMin = opts.lumMin ?? 0.1, lumMax = opts.lumMax ?? 0.95;
+    const hueShift = opts.hueShift ?? 0, satMul = opts.satMul ?? 1, lumAdd = opts.lumAdd ?? 0;
+    const { data } = imgData;
+    const angDiff = (a, b) => { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+    const softBand = (v, lo, hi) => { const f = (hi - lo) * soft + 1e-6; if (v < lo - f || v > hi + f) return 0; if (v < lo) return (v - (lo - f)) / f; if (v > hi) return ((hi + f) - v) / f; return 1; };
+    for (let i = 0; i < data.length; i += 4) {
+      const [h, s, l] = _rgb2hsl(data[i], data[i + 1], data[i + 2]);
+      const hd = angDiff(h, hueCenter);
+      let mask = hd <= hueWidth ? 1 : (hd >= hueWidth * (1 + soft) ? 0 : 1 - (hd - hueWidth) / (hueWidth * soft + 1e-6));
+      mask *= softBand(s, satMin, satMax) * softBand(l, lumMin, lumMax);
+      if (mask <= 0.0001) continue;
+      const [r2, g2, b2] = _hsl2rgb(h + hueShift, Math.max(0, Math.min(1, s * satMul)), Math.max(0, Math.min(1, l + lumAdd)));
+      data[i] = data[i] * (1 - mask) + r2 * mask;
+      data[i + 1] = data[i + 1] * (1 - mask) + g2 * mask;
+      data[i + 2] = data[i + 2] * (1 - mask) + b2 * mask;
+    }
+    return imgData;
+  }
+
+  /** Offline render: an HSL secondary over every frame → Media Bin. */
+  async function renderHslQualify(media, opts = {}, onProgress) {
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        hslQualify(img, opts);
+        ctx.putImageData(img, 0, 0);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [SECONDARY].${ext}`, type);
+    window.logToConsole?.('ok', `[hsl] secondary grade → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 5j. POWER WINDOWS / MASKS (#55) — grade PART of the frame. A shape mask
   //     (ellipse or rectangle, with a feathered edge) limits a brightness /
   //     contrast / saturation adjustment to a region, blended by the mask so the
@@ -1221,6 +1312,7 @@ vec2 _rotTC(vec2 tc, float a) {
     FilmGrain, filmGrain, renderFilmGrain, frameBlend, renderSpeedBlur,
     lensDistort, renderLens, LENS_PROFILES,
     rollingShutter, renderRollingShutter,
-    Deflicker, renderDeflicker, powerWindow, renderPowerWindow, Sparkles,
+    Deflicker, renderDeflicker, powerWindow, renderPowerWindow,
+    hslQualify, renderHslQualify, Sparkles,
   };
 })();

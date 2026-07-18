@@ -235,3 +235,8 @@ jobs:
       # brightens, outside is untouched, the feathered edge is partial, invert flips.
       - name: Power windows
         run: npm run test:power-window
+
+      # HSL secondaries (#54): key a hue range — qualifying red and hue-shifting
+      # turns the red half green while blue is untouched; unmatched hue selects nothing.
+      - name: HSL secondaries
+        run: npm run test:hsl-qualify
