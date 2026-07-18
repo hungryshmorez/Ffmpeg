@@ -175,10 +175,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/lens.mjs`** verifies **lens distortion + CA**: barrel distortion bows a straight line
   (top x=3 vs mid x=22), chromatic aberration fringes the edges (|R−B|=255) but not the centre, and
   the no-op profile is a byte-identity.
+- **`.test/rolling-shutter.mjs`** verifies **rolling shutter / jello**: shear slants a vertical line,
+  the opposite shear corrects it back to straight, wobble bends it (jello), and the no-op is a
+  byte-identity.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, and `test:lens` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, and `test:rolling-shutter` in real headless Chromium on
 every push and pull request.
 
 ---

@@ -94,6 +94,38 @@ window.WORKFLOWS_V4 = [
     },
   })),
 
+  // ---- ROLLING SHUTTER / JELLO ----
+  {
+    id: 'jello-sim',
+    name: 'Rolling Shutter (jello)',
+    category: 'retro-analog',
+    description: 'Simulates the CMOS rolling-shutter wobble — each row is captured a hair later, so the frame skews and wobbles like handheld phone video during fast motion. A per-row time-skew model, not a filter.',
+    tags: ['rolling-shutter', 'jello', 'wobble', 'cmos', 'skew', 'phone'],
+    icon: '🍮', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderRollingShutter(m, { shear: 0.15, wobble: 0.6, wobbleFreq: 2 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Jello — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'jello-correct',
+    name: 'De-jello (correct skew)',
+    category: 'motion-speed',
+    description: 'The inverse — counter-shears each row to straighten a rolling-shutter skew, taking the lean out of fast-pan footage.',
+    tags: ['rolling-shutter', 'correct', 'de-skew', 'stabilise', 'straighten'],
+    icon: '📐', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderRollingShutter(m, { shear: -0.15, wobble: 0 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`De-jello — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- SPEED-UP WITH MOTION BLUR ----
   {
     id: 'speed-blur-4x',

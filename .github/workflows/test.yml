@@ -195,3 +195,8 @@ jobs:
       # aberration fringes the edges (not the centre), no-op is a near-identity.
       - name: Lens distortion + CA
         run: npm run test:lens
+
+      # Rolling shutter / jello (#46): shear slants a line, opposite shear
+      # corrects it, wobble bends it; the no-op is a byte-identity.
+      - name: Rolling shutter (jello)
+        run: npm run test:rolling-shutter

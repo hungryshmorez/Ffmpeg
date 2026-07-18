@@ -884,6 +884,73 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5h. ROLLING SHUTTER / JELLO (#46) — sim AND correct. A CMOS sensor reads one
+  //     row at a time, so during fast horizontal motion each row is captured a
+  //     hair later than the one above → the frame SKEWS (a vertical edge leans),
+  //     and vibration makes it WOBBLE (the jello). We model it as a per-row
+  //     horizontal shift: a linear shear (the skew) plus an optional sinusoid
+  //     (the wobble). Correcting is the same model with the opposite shear.
+  // ===========================================================================
+
+  /** Per-row horizontal shift: shear·(y−mid) + wobble·sin. In place. */
+  function rollingShutter(imgData, opts = {}) {
+    const shear = opts.shear ?? 0.25, wobble = opts.wobble ?? 0, wobbleFreq = opts.wobbleFreq ?? 2;
+    const { data, width: w, height: h } = imgData;
+    const src = new Uint8ClampedArray(data);
+    const mid = (h - 1) / 2;
+    for (let y = 0; y < h; y++) {
+      const off = Math.round(shear * (y - mid) + wobble * Math.sin(2 * Math.PI * wobbleFreq * y / h) * w * 0.05);
+      for (let x = 0; x < w; x++) {
+        let sx = x - off; if (sx < 0) sx = 0; else if (sx > w - 1) sx = w - 1;
+        const di = (y * w + x) * 4, si = (y * w + sx) * 4;
+        data[di] = src[si]; data[di + 1] = src[si + 1]; data[di + 2] = src[si + 2]; data[di + 3] = 255;
+      }
+    }
+    return imgData;
+  }
+
+  /** Offline render: rolling-shutter sim or correction over a clip → Media Bin. */
+  async function renderRollingShutter(media, opts = {}, onProgress) {
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(960, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    let frame = 0;
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        // animate the wobble phase per frame so the jello lives
+        rollingShutter(img, { ...opts, wobbleFreq: (opts.wobbleFreq ?? 2) + Math.sin(frame * 0.3) * 0.5 });
+        ctx.putImageData(img, 0, 0); frame++;
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [JELLO].${ext}`, type);
+    window.logToConsole?.('ok', `[jello] rolling shutter → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 5f. MOTION BLUR ON SPEED-UP (#43) — a 4× timelapse that DROPS frames strobes;
   //     a 4× timelapse that BLENDS the frames it would have dropped smears the
   //     motion smoothly, the way a long exposure does. frameBlend averages a
@@ -1008,6 +1075,7 @@ vec2 _rotTC(vec2 tc, float a) {
     pixelSort, pixelSortMasked, sortBands, renderPixelSort,
     FeedbackTunnel, renderFeedback, halation, renderHalation,
     FilmGrain, filmGrain, renderFilmGrain, frameBlend, renderSpeedBlur,
-    lensDistort, renderLens, LENS_PROFILES, Sparkles,
+    lensDistort, renderLens, LENS_PROFILES,
+    rollingShutter, renderRollingShutter, Sparkles,
   };
 })();
