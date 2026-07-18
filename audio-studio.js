@@ -83,6 +83,13 @@
         ['width', 'Width', 0, 2, 0.01, (v) => `${Math.round(v * 100)}%`],
       ],
     },
+    {
+      id: 'master', name: 'Master Limiter', icon: '🧱',
+      desc: 'Lookahead brickwall on the bounce. Ceiling at 0 dB is off; pull it down to catch peaks without clipping.',
+      params: [
+        ['limiterCeiling', 'Ceiling', -12, 0, 0.1, (v) => v >= -0.05 ? 'off' : `${v.toFixed(1)} dB`],
+      ],
+    },
   ];
 
   let eng = null, media = null, vizRaf = 0;

@@ -137,3 +137,9 @@ jobs:
       # (corr +1), width=2 wider than width=1.
       - name: Stereo width + correlation
         run: npm run test:stereo-width
+
+      # Lookahead limiter (#29): spikes at 2.0 come back with no sample over the
+      # ceiling (transient caught, not overshot); an under-ceiling signal is
+      # untouched; an end-to-end bounce caps at the set dB ceiling.
+      - name: Master limiter
+        run: npm run test:limiter

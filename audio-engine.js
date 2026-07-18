@@ -62,6 +62,9 @@
 
     // stereo (#31)
     width: 1.0,          // 0 – 2   (mid/side width; 1 = neutral, 0 = mono)
+
+    // master limiter (#29) — applied at bounce (lookahead needs a full buffer)
+    limiterCeiling: 0,   // -12 – 0 dBFS  (0 = off; below 0 engages the limiter)
   };
 
   const PRESETS = [
@@ -472,6 +475,18 @@
       // Restore the live context.
       this.ctx = live;
       this.nodes = {};
+
+      // Master lookahead limiter (#29). Lookahead needs the whole buffer, so it
+      // runs here on the rendered PCM (in place — getChannelData is the backing
+      // Float32Array, so toWav reads the limited samples).
+      if (P.limiterCeiling < -0.01 && window.FFAudioDSP) {
+        const chans = [];
+        for (let c = 0; c < rendered.numberOfChannels; c++) chans.push(rendered.getChannelData(c));
+        window.FFAudioDSP.limiter(chans, rendered.sampleRate, {
+          ceiling: Math.pow(10, P.limiterCeiling / 20), lookaheadMs: 5, releaseMs: 60,
+        });
+      }
+      onProgress?.(0.8);
 
       return rendered;   // AudioBuffer
     }

@@ -145,10 +145,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/stereo-width.mjs`** verifies **stereo width + correlation**: the DSP core on synthesised
   PCM (mono → +1, anti-phase → −1), then an end-to-end offline bounce through the real engine graph
   where width=0 renders mono and width=2 is measurably wider than width=1.
+- **`.test/limiter.mjs`** verifies the **lookahead limiter**: spikes at 2.0 come back with no sample
+  over the ceiling (transient caught, not overshot), an under-ceiling signal is untouched, and an
+  end-to-end bounce caps the rendered output at the set dB ceiling.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, and `test:stereo-width` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, and `test:limiter` in real headless Chromium on
 every push and pull request.
 
 ---

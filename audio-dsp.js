@@ -46,5 +46,49 @@
     return mid < 1e-12 ? 0 : Math.sqrt(side / mid);
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount };
+  // ---------------------------------------------------------------------------
+  // LOOKAHEAD LIMITER (#29) — a real one. A plain limiter reacts AFTER a peak
+  // has already passed, so the transient overshoots. This looks AHEAD by
+  // `lookaheadMs`: it computes the gain reduction each peak will need and starts
+  // pulling the gain down BEFORE the peak arrives, so nothing crosses the
+  // ceiling. Gain is shared across channels to preserve the stereo image, and
+  // released smoothly so it breathes instead of pumping.
+  // ---------------------------------------------------------------------------
+  function limiter(channels, sr, opts = {}) {
+    const ceiling = opts.ceiling ?? 0.9;          // linear (e.g. 10^(-1/20))
+    const lookaheadMs = opts.lookaheadMs ?? 5;
+    const releaseMs = opts.releaseMs ?? 60;
+    const n = channels[0] ? channels[0].length : 0;
+    if (!n) return channels;
+    const w = Math.max(1, Math.round(lookaheadMs * sr / 1000));
+    const relCoef = Math.exp(-1 / Math.max(1, releaseMs * sr / 1000));
+
+    // per-sample peak across all channels, then the gain each sample demands
+    const target = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      let p = 0;
+      for (let c = 0; c < channels.length; c++) { const a = Math.abs(channels[c][i]); if (a > p) p = a; }
+      target[i] = p > ceiling ? ceiling / p : 1;
+    }
+    // sliding-window MIN of the demanded gain over [i, i+w] (O(n) deque) so the
+    // reduction is in place `w` samples early — that's the lookahead.
+    const tmin = new Float32Array(n);
+    const dq = new Int32Array(n); let head = 0, tail = 0;
+    for (let j = 0; j < n; j++) {
+      while (tail > head && target[dq[tail - 1]] >= target[j]) tail--;
+      dq[tail++] = j;
+      while (dq[head] < j - w) head++;
+      tmin[j] = target[dq[head]];
+    }
+    // apply: instant attack down to the (pre-empted) target, smooth release up
+    let g = 1;
+    for (let i = 0; i < n; i++) {
+      const want = tmin[Math.min(n - 1, i + w)];
+      g = want < g ? want : want + (g - want) * relCoef;
+      for (let c = 0; c < channels.length; c++) channels[c][i] *= g;
+    }
+    return channels;
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter };
 })();
