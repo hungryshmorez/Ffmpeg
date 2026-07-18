@@ -260,3 +260,8 @@ jobs:
       # the top spaced-apart moments in time order.
       - name: Highlight reel
         run: npm run test:highlights
+
+      # Beat-synced launch (#78): the launch quantiser lands a trigger on the next
+      # beat/bar at a given tempo (500/2000 ms at 120 BPM), immediate on-grid.
+      - name: Beat-synced launch
+        run: npm run test:launch-quantize

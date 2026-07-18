@@ -42,5 +42,18 @@
     return out;
   }
 
-  window.FFBeatSync = { snapToBeats, beatSegments, assembleOnBeats };
+  // --- beat-synced launching (#78) ------------------------------------------
+  const beatMs = (bpm) => 60000 / Math.max(1, bpm);
+  const GRID = { sixteenth: 0.25, eighth: 0.5, beat: 1, bar: 4, '2bar': 8 };
+
+  /** Given how long the transport has been running, the tempo, and a quantise
+   *  unit, return the next grid time and the delay until it. On-grid → delay 0. */
+  function nextGridTime(elapsedMs, bpm, unit = 'bar') {
+    const grid = beatMs(bpm) * (GRID[unit] ?? 1);
+    const idx = Math.ceil(elapsedMs / grid - 1e-9);      // tolerate exact-boundary FP
+    const at = idx * grid;
+    return { at, delay: Math.max(0, at - elapsedMs), grid };
+  }
+
+  window.FFBeatSync = { snapToBeats, beatSegments, assembleOnBeats, beatMs, nextGridTime, GRID };
 })();

@@ -289,7 +289,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 75 | Pattern banks (8, switch on the bar) | Recall sequencer patterns. | ⬜ | Save/recall + bar-quantised switch. — *M* |
 | 76 | Automation recording | Record knob moves, play back. | ⬜ | Param automation lanes. — *L* |
 | 77 | Panic key (instant reset) | Non-negotiable on stage. | ✅ | PANIC button + `0` key drop every latched/held trigger, the sequencer, chaos, strobe and mosh and reset the patch. Also revived the whole VJ keyboard — `bindKeys()` was defined but never called, so hold=stab / shift=latch was dead. `.test/panic.mjs` 3/3. |
-| 78 | Beat-synced clip launching | Clips start on the next bar. | ⬜ | Quantise launches to the beat grid. — *M* |
+| 78 | Beat-synced clip launching | Clips start on the next bar. | ✅ | `FFBeatSync.nextGridTime(elapsed, bpm, unit)` returns the next beat/bar/2-bar grid time and the delay to it; the VJ deck records the transport start and its `launch(id)` defers a pad to that grid (lighting it "queued" while it waits) when the "⚡ Launch" quantise is set. `.test/launch-quantize.mjs` verifies at 120 BPM a launch 300 ms in fires at 500 ms (beat) or 2000 ms (bar), on-grid fires immediately, and the tempo scales the grid. |
 | 79 | NDI / virtual-camera output | Feed OBS/Zoom. | 🔒 | No browser NDI/virtual-cam without a native bridge. — *XL* |
 | 80 | Second-screen / projector output | Full-screen visuals on an external display. | ⬜ | Present the canvas to a second window/screen. — *M* |
 

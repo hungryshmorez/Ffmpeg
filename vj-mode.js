@@ -60,6 +60,8 @@
     lastFrame: performance.now(),
     strobeOn: false,
     beatSync: false,
+    launchQ: 'off',             // #78 beat-synced launch quantise: off|beat|bar|2bar
+    playStart: 0,               // transport start (performance.now) for launch quantise
   };
 
   let engine = null;            // the TripCam engine driving the visuals
@@ -240,8 +242,23 @@
     if (S.playing) return stop();
     S.playing = true;
     S.step = 0;
+    S.playStart = performance.now();
     document.getElementById('vj-play').textContent = '⏸';
     tick();
+  }
+
+  // #78 Beat-synced launch — quantise a trigger to the next beat/bar. When the
+  // sequencer is stopped, or quantise is off, it fires immediately. Otherwise it
+  // waits (via FFBeatSync.nextGridTime) so pads land on the grid, and lights the
+  // pad "queued" while it waits.
+  function launch(id) {
+    if (S.launchQ === 'off' || !S.playing || !window.FFBeatSync) return fire(id, false);
+    const elapsed = performance.now() - S.playStart;
+    const { delay } = window.FFBeatSync.nextGridTime(elapsed, S.bpm, S.launchQ);
+    const pad = document.querySelector(`.vj-pad[data-t="${id}"]`);
+    if (delay < 12) return fire(id, false);
+    pad?.classList.add('queued');
+    setTimeout(() => { pad?.classList.remove('queued'); if (S.playing) fire(id, false); }, delay);
   }
 
   function stop() {
@@ -383,6 +400,12 @@
             <span id="vj-bpm-v">120</span> BPM
           </label>
           <button type="button" id="vj-sync" class="mini-btn">🎵 Sync to audio</button>
+          <select id="vj-launchq" class="ctrl" title="Beat-synced launch — pads fire on the grid (#78)">
+            <option value="off">⚡ Launch: now</option>
+            <option value="beat">On beat</option>
+            <option value="bar">On bar</option>
+            <option value="2bar">Every 2 bars</option>
+          </select>
           <button type="button" id="vj-midi-learn" class="mini-btn vj-learn">🎹 MIDI Learn</button>
           <select id="vj-source" class="ctrl">
             <option value="webcam">📹 Webcam</option>
@@ -471,11 +494,13 @@
     const pads = document.getElementById('vj-pads');
     pads.addEventListener('pointerdown', (e) => {
       const b = e.target.closest('.vj-pad');
-      if (b) fire(b.dataset.t, true);
+      if (!b) return;
+      if (S.launchQ !== 'off') launch(b.dataset.t);   // #78 quantised latch launch
+      else fire(b.dataset.t, true);                   // momentary
     });
     pads.addEventListener('pointerup', (e) => {
       const b = e.target.closest('.vj-pad');
-      if (b) release(b.dataset.t);
+      if (b && S.launchQ === 'off') release(b.dataset.t);
     });
 
     document.getElementById('vj-grid').addEventListener('click', (e) => {
@@ -491,6 +516,7 @@
     document.getElementById('vj-tap').addEventListener('click', tap);
     document.getElementById('vj-sync').addEventListener('click', syncToAudio);
 
+    document.getElementById('vj-launchq')?.addEventListener('change', (e) => { S.launchQ = e.target.value; });
     document.getElementById('vj-bpm').addEventListener('input', (e) => {
       S.bpm = +e.target.value;
       document.getElementById('vj-bpm-v').textContent = S.bpm;
