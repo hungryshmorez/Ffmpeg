@@ -445,6 +445,27 @@
     }
 
     // -------------------------------------------------------------------------
+    // OPTICAL-FLOW FRAME INTERPOLATION (#41) — synthesise the frame at time t in
+    // between A and B by warping A FORWARD along the flow by t and B BACKWARD by
+    // (1−t), then cross-dissolving. A moving object lands at its IN-BETWEEN
+    // position — real slow-mo, not a duplicated (frozen) frame.
+    // -------------------------------------------------------------------------
+    interpolate(a, b, vec, cols, rows, w, h, t) {
+      if (t <= 0) return Uint8ClampedArray.from(a);
+      if (t >= 1) return Uint8ClampedArray.from(b);
+      const wa = this.displaceByFlow(a, vec, cols, rows, w, h, { scale: t });         // A pushed +t·flow
+      const wb = this.displaceByFlow(b, vec, cols, rows, w, h, { scale: -(1 - t) });  // B pulled −(1−t)·flow
+      const out = new Uint8ClampedArray(a.length);
+      for (let i = 0; i < out.length; i += 4) {
+        out[i] = wa[i] * (1 - t) + wb[i] * t;
+        out[i + 1] = wa[i + 1] * (1 - t) + wb[i + 1] * t;
+        out[i + 2] = wa[i + 2] * (1 - t) + wb[i + 2] * t;
+        out[i + 3] = 255;
+      }
+      return out;
+    }
+
+    // -------------------------------------------------------------------------
     // VECTOR OVERLAY (#57) — draw the current motion field as arrows. On by
     // default in the overlay render; genuinely useful for dialling a mosh in and
     // a good look in its own right. Draws onto ANY 2-D context (the mosher's own
@@ -722,6 +743,64 @@
   // per-pixel displacement map on THAT SAME frame. The scene warps like liquid
   // where it moves and stays sharp where it's still. Offline → Media Bin.
   // ===========================================================================
+
+  // ===========================================================================
+  // OPTICAL-FLOW SLOW-MO (#41) — insert `factor−1` interpolated frames between
+  // each pair, so a clip plays back smoothly slowed rather than juddering on
+  // duplicated frames. Offline → Media Bin.
+  // ===========================================================================
+  async function renderInterpolate(media, params, onProgress) {
+    const p = Object.assign({ blockSize: 16, motionRadius: 16, threshold: 0, factor: 2 }, params || {});
+    const factor = Math.max(2, Math.round(p.factor));
+    const v = document.createElement('video');
+    v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const grab = document.createElement('canvas'); grab.width = w; grab.height = h;
+    const gctx = grab.getContext('2d', { willReadFrequently: true });
+    const m = new MotionMosher(cv); m.setParams(p);
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    let prev = null;
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        gctx.drawImage(v, 0, 0, w, h);
+        const cur = gctx.getImageData(0, 0, w, h);
+        const field = m.captureField(v);          // flow prev→cur
+        if (prev && field) {
+          for (let k = 1; k < factor; k++) {       // the in-between frames
+            const t = k / factor;
+            const mid = m.interpolate(prev.data, cur.data, field.vec, field.cols, field.rows, w, h, t);
+            ctx.putImageData(new ImageData(mid, w, h), 0, 0);
+          }
+        }
+        ctx.putImageData(cur, 0, 0);               // the real frame
+        prev = cur;
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [${factor}x SLOMO].${ext}`, type);
+    window.logToConsole?.('ok', `[slomo] ${factor}× optical-flow → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
 
   async function renderFlowDisplace(media, params, onProgress) {
     const p = Object.assign({ blockSize: 16, motionRadius: 12, threshold: 1, scale: 3 }, params || {});
@@ -1022,6 +1101,6 @@
 
   window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips, renderFlowDisplace,
     renderVectorOverlay, globalMotion, stabilizePath, renderStabilize,
-    motionCentroid, renderReframe,
+    motionCentroid, renderReframe, renderInterpolate,
     recordVectors, replayVectors, serializeVectors, deserializeVectors };
 })();

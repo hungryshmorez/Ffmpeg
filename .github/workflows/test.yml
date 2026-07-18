@@ -220,3 +220,8 @@ jobs:
       # 6th (beyond the old max) — screen-blend → yellow; count clamps to [2,8].
       - name: N-layer compositor
         run: npm run test:n-layers
+
+      # Optical-flow interpolation (#41): interpolate(A,B,flow,t) lands a moving
+      # object at its in-between position (midpoint at t=0.5), endpoints exact.
+      - name: Optical-flow interpolation
+        run: npm run test:interpolate

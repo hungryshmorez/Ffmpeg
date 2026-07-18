@@ -156,6 +156,24 @@ window.WORKFLOWS_V5 = [
     },
   },
 
+  // --- optical-flow slow-mo (#41) ---
+  {
+    id: 'flow-slomo',
+    name: 'Slow-Mo (optical flow)',
+    category: 'motion-speed',
+    description: 'Real slow motion — synthesises the in-between frames by warping along the motion field, so movement lands at its true intermediate position instead of juddering on duplicated frames. 2× smoother slow-mo from any clip.',
+    tags: ['slowmo', 'slow-motion', 'interpolation', 'optical-flow', 'retime', 'smooth'],
+    icon: '🐢', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFMosh.renderInterpolate(m, { blockSize: 16, motionRadius: 16, threshold: 0, factor: 2 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Slow-mo — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // --- auto-reframe to vertical (#45), tracks the subject ---
   {
     id: 'auto-reframe',
