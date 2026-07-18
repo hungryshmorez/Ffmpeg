@@ -63,6 +63,10 @@
     // stereo (#31)
     width: 1.0,          // 0 – 2   (mid/side width; 1 = neutral, 0 = mono)
 
+    // mid/side EQ (#30) — applied at bounce (needs the full stereo buffer)
+    msMonoBelow: 0,      // 0 – 300 Hz  (0 = off; high-pass the side → mono bass)
+    msWidenDb: 0,        // 0 – 12 dB   (high-shelf boost on the side → wider highs)
+
     // sidechain duck (#27) — applied at bounce (kick detected from the sub band)
     sidechainAmount: 0,  // 0 – 1   (0 = off; depth of the pump under each kick)
 
@@ -489,6 +493,12 @@
       if (window.FFAudioDSP) {
         const chans = [];
         for (let c = 0; c < rendered.numberOfChannels; c++) chans.push(rendered.getChannelData(c));
+        // Mid/side EQ (#30) — shape the stereo field before dynamics.
+        if (P.msMonoBelow > 0 || P.msWidenDb !== 0) {
+          window.FFAudioDSP.midSideEQ(chans, rendered.sampleRate, {
+            monoBelowHz: P.msMonoBelow, widenAboveHz: 3000, widenDb: P.msWidenDb,
+          });
+        }
         // Sidechain duck (#27) — pump first, so the transient shaper and limiter
         // act on the already-ducked mix.
         if (P.sidechainAmount > 0) {

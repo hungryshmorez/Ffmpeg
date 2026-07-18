@@ -161,5 +161,51 @@
     return channels;
   }
 
-  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck };
+  // ---------------------------------------------------------------------------
+  // BIQUADS (RBJ cookbook) — used by the mid/side EQ. Direct Form I, in place.
+  // ---------------------------------------------------------------------------
+  function _biquad(data, b0, b1, b2, a0, a1, a2) {
+    b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < data.length; i++) {
+      const x0 = data[i];
+      const y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+      x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+      data[i] = y0;
+    }
+    return data;
+  }
+  function highpass(data, sr, f0, Q = 0.707) {
+    const w = 2 * Math.PI * f0 / sr, c = Math.cos(w), s = Math.sin(w), al = s / (2 * Q);
+    return _biquad(data, (1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al);
+  }
+  function highShelf(data, sr, f0, gainDb, S = 1) {
+    const A = Math.pow(10, gainDb / 40), w = 2 * Math.PI * f0 / sr, c = Math.cos(w), s = Math.sin(w);
+    const al = s / 2 * Math.sqrt((A + 1 / A) * (1 / S - 1) + 2), sq = 2 * Math.sqrt(A) * al;
+    return _biquad(data,
+      A * ((A + 1) + (A - 1) * c + sq), -2 * A * ((A - 1) + (A + 1) * c), A * ((A + 1) + (A - 1) * c - sq),
+      (A + 1) - (A - 1) * c + sq, 2 * ((A - 1) - (A + 1) * c), (A + 1) - (A - 1) * c - sq);
+  }
+
+  // ---------------------------------------------------------------------------
+  // MID/SIDE EQ (#30) — the two moves everyone actually wants: MONO THE BASS
+  // (high-pass the side so low frequencies collapse to the centre — tight, mono
+  // sub) and WIDEN THE HIGHS (a high-shelf boost on the side so the top end
+  // opens up). EQ the side band, leave the mid alone. Needs stereo.
+  // ---------------------------------------------------------------------------
+  function midSideEQ(channels, sr, opts = {}) {
+    const monoBelowHz = opts.monoBelowHz ?? 0;
+    const widenAboveHz = opts.widenAboveHz ?? 0;
+    const widenDb = opts.widenDb ?? 0;
+    if (channels.length < 2 || (monoBelowHz <= 0 && widenDb === 0)) return channels;
+    const L = channels[0], R = channels[1], n = L.length;
+    const mid = new Float32Array(n), side = new Float32Array(n);
+    for (let i = 0; i < n; i++) { mid[i] = (L[i] + R[i]) * 0.5; side[i] = (L[i] - R[i]) * 0.5; }
+    if (monoBelowHz > 0) highpass(side, sr, monoBelowHz, 0.707);
+    if (widenAboveHz > 0 && widenDb !== 0) highShelf(side, sr, widenAboveHz, widenDb);
+    for (let i = 0; i < n; i++) { L[i] = mid[i] + side[i]; R[i] = mid[i] - side[i]; }
+    return channels;
+  }
+
+  window.FFAudioDSP = { widthSample, widthChannels, correlation, widthAmount, limiter, transientShaper, sidechainDuck, highpass, highShelf, midSideEQ };
 })();

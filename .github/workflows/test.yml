@@ -153,3 +153,8 @@ jobs:
       # level dips after each kick and recovers before the next; amount=0 is off.
       - name: Sidechain duck
         run: npm run test:sidechain
+
+      # Mid/side EQ (#30): mono-the-bass collapses the low side, widen-the-highs
+      # lifts the high side, neutral is untouched.
+      - name: Mid/side EQ
+        run: npm run test:ms-eq

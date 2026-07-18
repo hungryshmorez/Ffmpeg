@@ -84,6 +84,14 @@
       ],
     },
     {
+      id: 'mseq', name: 'M/S EQ', icon: '↔️',
+      desc: 'Mono the bass and widen the highs on bounce. Tightens the low end, opens the top.',
+      params: [
+        ['msMonoBelow', 'Mono Bass', 0, 300, 5, (v) => v === 0 ? 'off' : `<${v.toFixed(0)} Hz`],
+        ['msWidenDb',   'Widen',     0, 12,  0.5, (v) => v === 0 ? 'off' : `+${v.toFixed(1)} dB`],
+      ],
+    },
+    {
       id: 'sidechain', name: 'Sidechain', icon: '🫀',
       desc: 'The pump. Detects the kick in the low end and ducks the whole mix under it on bounce. 0% is off.',
       params: [
