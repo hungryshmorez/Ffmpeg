@@ -142,10 +142,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/halation.mjs`** verifies **halation & bloom** deterministically: a bright spot bleeds a
   reddish glow into its black surroundings, while a below-threshold frame and a fully black frame
   barely change.
+- **`.test/stereo-width.mjs`** verifies **stereo width + correlation**: the DSP core on synthesised
+  PCM (mono → +1, anti-phase → −1), then an end-to-end offline bounce through the real engine graph
+  where width=0 renders mono and width=2 is measurably wider than width=1.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, and `test:halation` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, and `test:stereo-width` in real headless Chromium on
 every push and pull request.
 
 ---

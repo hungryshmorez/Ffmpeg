@@ -131,3 +131,9 @@ jobs:
       # with a reddish tint; a dim frame and a black frame barely change.
       - name: Halation & bloom
         run: npm run test:halation
+
+      # Stereo width + correlation (#31): the DSP core on synthesised PCM, then
+      # an end-to-end offline bounce through the real graph — width=0 → mono
+      # (corr +1), width=2 wider than width=1.
+      - name: Stereo width + correlation
+        run: npm run test:stereo-width

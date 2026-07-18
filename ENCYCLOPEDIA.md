@@ -227,7 +227,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 28 | Multiband compression (3-band + GR meters) | Standard mastering. | ⬜ | 3 crossover bands + gain-reduction meters. — *L* |
 | 29 | Limiter with lookahead | Not just `alimiter`. | ⬜ | Lookahead limiter node. — *M* |
 | 30 | Mid/side EQ | Widen highs, mono the bass. | ⬜ | M/S matrix around the EQ. — *M* |
-| 31 | Stereo width + correlation meter | See when you've gone out of phase. | ⬜ | Width control + correlation meter. — *M* |
+| 31 | Stereo width + correlation meter | See when you've gone out of phase. | ✅ | Mid/side width matrix inserted after the final gain in the live graph (four gains → a 2-in merger), applied live AND at bounce; a Width knob in a new "Stereo" rack module. Split analysers feed a live correlation meter (`AudioEngine.getCorrelation` → `FFAudioDSP.correlation`). `audio-dsp.js` holds the pure maths. `.test/stereo-width.mjs` verifies correlation on synthetic PCM and renders a stereo buffer through the real graph — width=0 → mono (corr +1), width=2 wider than width=1. |
 | 32 | Automatic gain staging | Warn when the rack clips into the reverb. | ⬜ | Inter-node level checks + warnings. — *S–M* |
 | 33 | A/B vs a reference track, loudness-matched | Honest comparison. | ⬜ | Reference load + LUFS-match + toggle. — *M* |
 | 34 | Time-stretch, keep pitch (phase vocoder) | `speed` shouldn't shift pitch. | ✅ | — |

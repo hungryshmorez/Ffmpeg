@@ -59,6 +59,9 @@
     reverbRoom: 1.5,     // 0.5 – 5   (IR decay curve)
     reverbDecay: 2.5,    // 0.2 – 10 s (IR length)
     reverbMix: 0.0,      // 0 – 1
+
+    // stereo (#31)
+    width: 1.0,          // 0 – 2   (mid/side width; 1 = neutral, 0 = mono)
   };
 
   const PRESETS = [
@@ -270,11 +273,42 @@
       n.reverb.connect(n.reverbWet);
       n.reverbWet.connect(n.gain);
 
-      n.gain.connect(n.analyser);
+      // ---- STEREO WIDTH (#31) — mid/side matrix on the final mix ----
+      // outL = 0.5(1+w)·L + 0.5(1-w)·R ; outR = 0.5(1-w)·L + 0.5(1+w)·R.
+      // w=1 → identity (bypass), w=0 → mono sum, w>1 → widened. Four gains feed
+      // a 2-in merger; connections to the same merger input sum.
+      n.widthSplit = ctx.createChannelSplitter(2);
+      n.widthMerge = ctx.createChannelMerger(2);
+      n.wLL = ctx.createGain(); n.wRL = ctx.createGain();
+      n.wLR = ctx.createGain(); n.wRR = ctx.createGain();
+      n.gain.connect(n.widthSplit);
+      n.widthSplit.connect(n.wLL, 0); n.widthSplit.connect(n.wLR, 0);   // L → both outs
+      n.widthSplit.connect(n.wRL, 1); n.widthSplit.connect(n.wRR, 1);   // R → both outs
+      n.wLL.connect(n.widthMerge, 0, 0); n.wRL.connect(n.widthMerge, 0, 0);   // → out L
+      n.wLR.connect(n.widthMerge, 0, 1); n.wRR.connect(n.widthMerge, 0, 1);   // → out R
+
+      // ---- CORRELATION METER (#31) — split analysers on the widened output ----
+      n.corrSplit = ctx.createChannelSplitter(2);
+      n.corrL = ctx.createAnalyser(); n.corrL.fftSize = 2048;
+      n.corrR = ctx.createAnalyser(); n.corrR.fftSize = 2048;
+      n.widthMerge.connect(n.corrSplit);
+      n.corrSplit.connect(n.corrL, 0);
+      n.corrSplit.connect(n.corrR, 1);
+
+      n.widthMerge.connect(n.analyser);
       n.analyser.connect(ctx.destination);
 
       this.nodes = n;
       this.applyParams(this.params);
+    }
+
+    /** Live phase-correlation read [-1,1] off the split analysers, for the meter. */
+    getCorrelation() {
+      const n = this.nodes;
+      if (!n.corrL || !n.corrR || !window.FFAudioDSP) return 0;
+      const L = new Float32Array(n.corrL.fftSize), R = new Float32Array(n.corrR.fftSize);
+      n.corrL.getFloatTimeDomainData(L); n.corrR.getFloatTimeDomainData(R);
+      return window.FFAudioDSP.correlation(L, R);
     }
 
     /** Live parameter update. This is what makes it feel like an instrument. */
@@ -317,6 +351,13 @@
         n._irRoom = P.reverbRoom; n._irDecay = P.reverbDecay;
       }
       set(n.reverbWet.gain, P.reverbMix);
+
+      // Stereo width mid/side matrix (#31).
+      if (n.wLL) {
+        const w = P.width == null ? 1 : P.width;
+        set(n.wLL.gain, 0.5 * (1 + w)); set(n.wRR.gain, 0.5 * (1 + w));
+        set(n.wLR.gain, 0.5 * (1 - w)); set(n.wRL.gain, 0.5 * (1 - w));
+      }
 
       // Speed + pitch both ride on playbackRate + detune of the live source.
       if (this.src) {
@@ -419,8 +460,9 @@
       src.playbackRate.value = renderRate;
       if (src.detune) src.detune.value = P.pitch * 100;
       src.connect(this.nodes.bass);
-      this.nodes.analyser.disconnect();
-      this.nodes.gain.connect(off.destination);
+      // Render through the FULL graph (incl. the stereo-width matrix, #31) — it
+      // already routes n.gain → width → analyser → off.destination. Bypassing to
+      // gain here would drop the width stage from the bounce.
       src.start(0);
 
       onProgress?.(0.1);

@@ -25,6 +25,7 @@
     "test:vector-overlay": "node .test/vector-overlay.mjs",
     "test:scopes": "node .test/scopes.mjs",
     "test:halation": "node .test/halation.mjs",
+    "test:stereo-width": "node .test/stereo-width.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

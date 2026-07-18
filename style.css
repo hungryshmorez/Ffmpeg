@@ -2372,6 +2372,13 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 /* rack */
 .as-rack{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
 .as-module{background:#141414;border:1px solid #242424;border-radius:8px;padding:12px;transition:.2s}
+/* #31 correlation meter */
+.as-corr{margin-top:10px;display:flex;align-items:center;gap:8px;font-size:10px}
+.as-corr label{opacity:.7;min-width:64px}
+.as-corr-track{position:relative;flex:1;height:8px;background:#0d0d0d;border-radius:4px;overflow:hidden}
+.as-corr-fill{position:absolute;top:0;height:100%;width:0;left:50%;background:#4caf70;transition:width .08s,left .08s,background .2s}
+.as-corr-zero{position:absolute;top:0;left:50%;width:1px;height:100%;background:#3a3a3a}
+.as-corr output{min-width:30px;text-align:right;font-variant-numeric:tabular-nums;opacity:.85}
 .as-module.off{opacity:.45}
 .as-module.off:hover{opacity:.8}
 .as-mod-head{display:flex;gap:9px;align-items:flex-start;margin-bottom:10px;

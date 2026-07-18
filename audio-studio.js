@@ -76,6 +76,13 @@
         ['distortionTone',   'Tone',  0, 1,   0.01, (v) => `${Math.round(v * 100)}%`],
       ],
     },
+    {
+      id: 'stereo', name: 'Stereo', icon: '🎧',
+      desc: '100% is neutral, 0% is mono, above widens. Watch the correlation meter.',
+      params: [
+        ['width', 'Width', 0, 2, 0.01, (v) => `${Math.round(v * 100)}%`],
+      ],
+    },
   ];
 
   let eng = null, media = null, vizRaf = 0;
@@ -203,6 +210,17 @@
             </div>`).join('')}
         </div>
       </div>`).join('');
+
+    // Correlation meter (#31) lives inside the Stereo module.
+    const stereoMod = document.querySelector('.as-module[data-m="stereo"]');
+    if (stereoMod) {
+      const meter = document.createElement('div');
+      meter.className = 'as-corr';
+      meter.innerHTML = `<label>Correlation</label>
+        <div class="as-corr-track"><div class="as-corr-fill" id="as-corr-fill"></div><div class="as-corr-zero"></div></div>
+        <output id="as-corr-v">—</output>`;
+      stereoMod.appendChild(meter);
+    }
 
     // Mastering chains (from the ffmpeg workflow library)
     const chains = (window.ALL_WORKFLOWS || []).filter((w) => w.category === 'audio-mastering');
@@ -346,6 +364,20 @@
             }
           }
         }
+      }
+      // Correlation meter (#31): -1 (out of phase) … 0 … +1 (mono). Fill grows
+      // from the centre; red when negative (phase trouble), green when positive.
+      const corr = eng?.getCorrelation?.();
+      if (corr != null) {
+        const fill = document.getElementById('as-corr-fill');
+        const out = document.getElementById('as-corr-v');
+        if (fill) {
+          const pct = Math.abs(corr) * 50;                 // half-width max
+          fill.style.width = pct + '%';
+          fill.style.left = corr >= 0 ? '50%' : (50 - pct) + '%';
+          fill.style.background = corr < 0 ? '#e0533f' : (corr < 0.4 ? '#e0a53f' : '#4caf70');
+        }
+        if (out) out.textContent = corr.toFixed(2);
       }
       vizRaf = requestAnimationFrame(loop);
     };
