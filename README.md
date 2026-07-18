@@ -139,10 +139,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/scopes.mjs`** verifies the **vectorscope + waveform** deterministically: a grey frame
   plots at the vectorscope centre while saturated red and blue push apart, and a dark→bright gradient
   makes the waveform's luma trace rise from bottom to top.
+- **`.test/halation.mjs`** verifies **halation & bloom** deterministically: a bright spot bleeds a
+  reddish glow into its black surroundings, while a below-threshold frame and a fully black frame
+  barely change.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, and `test:scopes` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, and `test:halation` in real headless Chromium on
 every push and pull request.
 
 ---

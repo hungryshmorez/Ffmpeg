@@ -575,6 +575,114 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5d. HALATION & BLOOM (#48) — a PHYSICAL light-bleed pass, not procedural
+  //     noise. Threshold the bright parts of the frame, blur that bright layer,
+  //     tint it (real halation is reddish — the film's anti-halation backing
+  //     fails around the brightest highlights), and SCREEN it back over the
+  //     original. Highlights bloom and bleed into their surroundings.
+  // ===========================================================================
+
+  // Separable box blur of one RGB buffer (alpha left at 255). `r` px radius,
+  // `passes` box passes ≈ a Gaussian. Operates on a fresh Float32 accumulator.
+  function _boxBlur(data, w, h, r, passes) {
+    if (r < 1) return data;
+    let src = Float32Array.from(data);
+    const tmp = new Float32Array(src.length);
+    const win = r * 2 + 1;
+    for (let pass = 0; pass < passes; pass++) {
+      // horizontal
+      for (let y = 0; y < h; y++) {
+        for (let c = 0; c < 3; c++) {
+          let sum = 0;
+          for (let x = -r; x <= r; x++) { const xx = x < 0 ? 0 : x >= w ? w - 1 : x; sum += src[(y * w + xx) * 4 + c]; }
+          for (let x = 0; x < w; x++) {
+            tmp[(y * w + x) * 4 + c] = sum / win;
+            const xo = x - r < 0 ? 0 : x - r, xi = x + r + 1 >= w ? w - 1 : x + r + 1;
+            sum += src[(y * w + xi) * 4 + c] - src[(y * w + xo) * 4 + c];
+          }
+        }
+      }
+      // vertical
+      for (let x = 0; x < w; x++) {
+        for (let c = 0; c < 3; c++) {
+          let sum = 0;
+          for (let y = -r; y <= r; y++) { const yy = y < 0 ? 0 : y >= h ? h - 1 : y; sum += tmp[(yy * w + x) * 4 + c]; }
+          for (let y = 0; y < h; y++) {
+            src[(y * w + x) * 4 + c] = sum / win;
+            const yo = y - r < 0 ? 0 : y - r, yi = y + r + 1 >= h ? h - 1 : y + r + 1;
+            sum += tmp[(yi * w + x) * 4 + c] - tmp[(yo * w + x) * 4 + c];
+          }
+        }
+      }
+    }
+    return src;
+  }
+
+  /** Halation / bloom over one frame, in place. Returns the same ImageData. */
+  function halation(imgData, opts = {}) {
+    const { threshold = 0.72, radius = 8, intensity = 0.9, passes = 3, tint = [1.0, 0.55, 0.35] } = opts;
+    const { data, width: w, height: h } = imgData;
+    // 1. bright-pass: keep only what's above the threshold, black elsewhere
+    const bright = new Uint8ClampedArray(data.length);
+    const th = threshold * 255;
+    for (let i = 0; i < data.length; i += 4) {
+      const luma = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      const k = luma > th ? (luma - th) / (255 - th) : 0;   // soft knee above threshold
+      bright[i] = data[i] * k; bright[i + 1] = data[i + 1] * k; bright[i + 2] = data[i + 2] * k; bright[i + 3] = 255;
+    }
+    // 2. blur the bright layer
+    const blurred = _boxBlur(bright, w, h, radius, passes);
+    // 3. tint + SCREEN back over the original: screen(a,b)=1-(1-a)(1-b)
+    for (let i = 0; i < data.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const base = data[i + c] / 255;
+        const glow = Math.min(1, (blurred[i + c] / 255) * intensity * tint[c]);
+        data[i + c] = Math.round((1 - (1 - base) * (1 - glow)) * 255);
+      }
+    }
+    return imgData;
+  }
+
+  /** Offline render: halation over every frame of a clip → Media Bin. */
+  async function renderHalation(media, opts = {}, onProgress) {
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(960, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        halation(img, opts);
+        ctx.putImageData(img, 0, 0);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [HALATION].${ext}`, type);
+    window.logToConsole?.('ok', `[halation] bloom → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 6. SPARKLE / PARTICLE OVERLAY — with gravity. Drawn on top of the shader.
   // ===========================================================================
 
@@ -633,6 +741,6 @@ vec2 _rotTC(vec2 tc, float a) {
     ChaosEngine, CHAOS_DEFAULTS, GLITCH,
     EFFECT_DEFAULTS, applyEffectDefaults,
     pixelSort, pixelSortMasked, sortBands, renderPixelSort,
-    FeedbackTunnel, renderFeedback, Sparkles,
+    FeedbackTunnel, renderFeedback, halation, renderHalation, Sparkles,
   };
 })();

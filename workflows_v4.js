@@ -76,6 +76,24 @@ window.WORKFLOWS_V4 = [
     },
   },
 
+  // ---- HALATION & BLOOM ----
+  {
+    id: 'halation-bloom',
+    name: 'Halation & Bloom',
+    category: 'artistic-stylize',
+    description: 'A physical light-bleed pass — the brightest highlights are thresholded, blurred, tinted red, and screened back so they bloom and bleed into their surroundings the way real film halates around blown-out light. Not procedural noise.',
+    tags: ['halation', 'bloom', 'glow', 'film', 'highlight', 'light'],
+    icon: '🌟', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderHalation(m, { threshold: 0.72, radius: 8, intensity: 0.9, passes: 3, tint: [1.0, 0.55, 0.35] }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Halation — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- FEEDBACK TUNNEL ----
   {
     id: 'feedback-tunnel',

@@ -126,3 +126,8 @@ jobs:
       # red/blue push apart, and the luma trace rises on a dark→bright gradient.
       - name: Colour scopes
         run: npm run test:scopes
+
+      # Halation & bloom (#48): a bright spot blooms into its black surroundings
+      # with a reddish tint; a dim frame and a black frame barely change.
+      - name: Halation & bloom
+        run: npm run test:halation

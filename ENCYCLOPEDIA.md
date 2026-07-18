@@ -249,7 +249,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 45 | Auto-reframe (track subject) | Crop toward motion for vertical. | ⬜ | Dominant-motion tracker → crop path. — *L* |
 | 46 | Rolling-shutter / jello (sim + correct) | Both directions. | ⬜ | Row-time skew model. — *L* |
 | 47 | Real film grain (plate-based) | Not procedural noise. | ⬜ | Grain-plate overlay library. — *M* |
-| 48 | Halation & bloom (physical pass) | Proper light bleed. | ⬜ | Threshold → blur → screen. — *M* |
+| 48 | Halation & bloom (physical pass) | Proper light bleed. | ✅ | `FFShaderPlus.halation` — bright-pass (soft knee above threshold) → separable box blur → reddish tint → screen back over the original. Real light bleed, not procedural noise. `renderHalation` applies it per-frame → Media Bin. Workflow "🌟 Halation & Bloom". `.test/halation.mjs` verifies a bright spot blooms into black surroundings with a reddish tint, and dim/black frames barely change. |
 | 49 | Lens distortion + CA profiles | Named-lens profiles. | ⬜ | Profile table + `lenscorrection`/CA shader. — *M* |
 | 50 | Deflicker for timelapse | Even out exposure flicker. | ⬜ | `deflicker` filter surfaced. — *S* |
 | 51 | Vectorscope + waveform monitor | Real colour scopes. | ✅ | `scopes.js` — `vectorscope` plots per-pixel chroma (Cb,Cr) as a scatter (neutral greys centre, saturated hues push to the rim); `waveform` plots per-column luma up the Y axis. Both pure ImageData→ImageData. Live "Scopes" preview mode (`startScopesLoop`) paints them off the source video. `.test/scopes.mjs` verifies grey→centre, red/blue apart, and the luma trace rising on a gradient. |
