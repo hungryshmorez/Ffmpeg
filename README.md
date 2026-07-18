@@ -191,10 +191,12 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/interpolate.mjs`** verifies **optical-flow interpolation**: a block that moves 20 px lands
   at the midpoint (x=31.5) when interpolated at t=0.5, a quarter/three-quarters along at t=0.25/0.75,
   and t=0/1 return the source frames exactly.
+- **`.test/deflicker.mjs`** verifies **deflicker**: a 128±40 flicker's frame-brightness variance
+  collapses (796→3) while a slow 80→180 ramp is preserved (Δ75) and a steady sequence is unchanged.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, and `test:interpolate` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, and `test:deflicker` in real headless Chromium on
 every push and pull request.
 
 ---

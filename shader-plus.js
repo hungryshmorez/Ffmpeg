@@ -796,6 +796,72 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5i. DEFLICKER (#50) — timelapses shot on aperture-priority flicker as the
+  //     exposure hunts frame to frame. We track a SMOOTHED running mean of the
+  //     frame brightness and scale each frame's gain so its mean sits on that
+  //     smooth curve — the fast exposure jitter is cancelled, the slow day/night
+  //     brightness change is kept.
+  // ===========================================================================
+
+  class Deflicker {
+    constructor(opts = {}) {
+      this.smooth = opts.smooth ?? 0.1;       // running-mean update rate (lower = smoother target)
+      this.strength = opts.strength ?? 1;     // 0..1 how fully to correct
+      this.running = null;
+    }
+    _mean(data) { let s = 0; const n = data.length / 4; for (let i = 0; i < data.length; i += 4) s += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114; return s / n; }
+    /** Correct one frame toward the smoothed running mean. In place. */
+    process(imgData) {
+      const d = imgData.data, mean = this._mean(d);
+      if (this.running == null) this.running = mean;
+      else this.running = this.running * (1 - this.smooth) + mean * this.smooth;
+      const gain = 1 + (this.running / (mean + 1e-6) - 1) * this.strength;
+      for (let i = 0; i < d.length; i += 4) { d[i] *= gain; d[i + 1] *= gain; d[i + 2] *= gain; }
+      return imgData;
+    }
+  }
+
+  /** Offline render: deflicker every frame of a clip → Media Bin. */
+  async function renderDeflicker(media, opts = {}, onProgress) {
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const df = new Deflicker(opts);
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        df.process(img);
+        ctx.putImageData(img, 0, 0);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [DEFLICKER].${ext}`, type);
+    window.logToConsole?.('ok', `[deflicker] → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 5g. LENS DISTORTION + CHROMATIC ABERRATION (#49) — named-lens profiles. A
   //     radial remap bends straight lines (barrel k1<0 bows them out, pincushion
   //     k1>0 pulls them in), and sampling R/G/B at slightly different radii gives
@@ -1076,6 +1142,7 @@ vec2 _rotTC(vec2 tc, float a) {
     FeedbackTunnel, renderFeedback, halation, renderHalation,
     FilmGrain, filmGrain, renderFilmGrain, frameBlend, renderSpeedBlur,
     lensDistort, renderLens, LENS_PROFILES,
-    rollingShutter, renderRollingShutter, Sparkles,
+    rollingShutter, renderRollingShutter,
+    Deflicker, renderDeflicker, Sparkles,
   };
 })();

@@ -94,6 +94,23 @@ window.WORKFLOWS_V4 = [
     },
   })),
 
+  // ---- DEFLICKER ----
+  {
+    id: 'deflicker',
+    name: 'Deflicker (timelapse)',
+    category: 'motion-speed',
+    description: 'Evens out the exposure flicker that plagues aperture-priority timelapses — tracks a smoothed running brightness and scales each frame onto it, killing the fast jitter while keeping the slow day→night change.',
+    tags: ['deflicker', 'timelapse', 'flicker', 'exposure', 'stabilise'],
+    icon: '💡', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderDeflicker(m, { smooth: 0.1, strength: 1 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Deflicker — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- ROLLING SHUTTER / JELLO ----
   {
     id: 'jello-sim',
