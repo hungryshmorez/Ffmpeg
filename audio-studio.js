@@ -265,6 +265,32 @@
       mbMod.appendChild(gr);
     }
 
+    // #38 user impulse-response upload lives inside the Reverb module.
+    const revMod = document.querySelector('.as-module[data-m="reverb"]');
+    if (revMod) {
+      const ir = document.createElement('div');
+      ir.className = 'as-ir';
+      ir.innerHTML = `<label class="mini-btn" for="as-ir-file">＋ Load IR</label>
+        <input type="file" id="as-ir-file" accept="audio/*" hidden>
+        <button type="button" class="mini-btn" id="as-ir-clear" hidden>Generated</button>
+        <span id="as-ir-name" class="dim">generated</span>`;
+      revMod.appendChild(ir);
+      ir.querySelector('#as-ir-file').addEventListener('change', async (e) => {
+        const f = e.target.files[0]; if (!f || !eng) return;
+        try {
+          const buf = await eng.ctx.decodeAudioData(await f.arrayBuffer());
+          const info = eng.loadIR(buf);
+          document.getElementById('as-ir-name').textContent = `${f.name} (${info.seconds.toFixed(1)}s)`;
+          document.getElementById('as-ir-clear').hidden = false;
+          window.logToConsole?.('ok', `[reverb] loaded IR: ${f.name}`);
+        } catch (err) { window.logToConsole?.('error', `[reverb] IR load failed: ${err.message}`); }
+      });
+      ir.querySelector('#as-ir-clear').addEventListener('click', () => {
+        eng?.clearIR(); document.getElementById('as-ir-name').textContent = 'generated';
+        document.getElementById('as-ir-clear').hidden = true;
+      });
+    }
+
     // Correlation meter (#31) lives inside the Stereo module.
     const stereoMod = document.querySelector('.as-module[data-m="stereo"]');
     if (stereoMod) {

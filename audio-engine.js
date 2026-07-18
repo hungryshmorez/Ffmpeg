@@ -319,6 +319,36 @@
       this.applyParams(this.params);
     }
 
+    /** #38 Load a user impulse response (an AudioBuffer) for convolution reverb. */
+    loadIR(audioBuffer) {
+      const nch = audioBuffer.numberOfChannels;
+      this._irChannels = [];
+      for (let c = 0; c < nch; c++) this._irChannels.push(Float32Array.from(audioBuffer.getChannelData(c)));
+      this._irSR = audioBuffer.sampleRate;
+      this._irId = (this._irId || 0) + 1;
+      if (this.nodes && this.nodes.reverb) this.nodes._userIRid = -1;   // force rebuild
+      if (this.nodes && this.nodes.gain) this.applyParams({});
+      return { channels: nch, seconds: audioBuffer.length / audioBuffer.sampleRate };
+    }
+
+    /** Revert to the generated reverb IR. */
+    clearIR() { this._irChannels = null; this._irId = (this._irId || 0) + 1; if (this.nodes) { this.nodes._irRoom = null; this.nodes._userIRid = -1; } if (this.nodes && this.nodes.gain) this.applyParams({}); }
+
+    /** Build an AudioBuffer of the stored IR in `ctx` (linear-resampled to its sr). */
+    _irBuffer(ctx) {
+      const src = this._irChannels, sr = ctx.sampleRate, ratio = sr / this._irSR;
+      const outLen = Math.max(1, Math.round(src[0].length * ratio));
+      const buf = ctx.createBuffer(src.length, outLen, sr);
+      for (let c = 0; c < src.length; c++) {
+        const s = src[c], d = buf.getChannelData(c);
+        for (let i = 0; i < outLen; i++) {
+          const pos = i / ratio, i0 = Math.floor(pos), frac = pos - i0;
+          d[i] = (s[i0] || 0) * (1 - frac) + (s[i0 + 1] || 0) * frac;
+        }
+      }
+      return buf;
+    }
+
     /** Live phase-correlation read [-1,1] off the split analysers, for the meter. */
     getCorrelation() {
       const n = this.nodes;
@@ -363,9 +393,14 @@
       set(n.delayFB.gain, P.delayFeedback);
       set(n.delayWet.gain, P.delayMix);
 
-      if (P.reverbMix > 0 && (!n._irRoom || n._irRoom !== P.reverbRoom || n._irDecay !== P.reverbDecay)) {
-        n.reverb.buffer = makeIR(this.ctx, P.reverbDecay, P.reverbRoom);
-        n._irRoom = P.reverbRoom; n._irDecay = P.reverbDecay;
+      if (P.reverbMix > 0) {
+        if (this._irChannels) {
+          // #38 user impulse response — rebuild per context (live/offline) once.
+          if (n._userIRid !== this._irId) { n.reverb.buffer = this._irBuffer(this.ctx); n._userIRid = this._irId; n._irRoom = null; }
+        } else if (!n._irRoom || n._irRoom !== P.reverbRoom || n._irDecay !== P.reverbDecay) {
+          n.reverb.buffer = makeIR(this.ctx, P.reverbDecay, P.reverbRoom);
+          n._irRoom = P.reverbRoom; n._irDecay = P.reverbDecay; n._userIRid = -1;
+        }
       }
       set(n.reverbWet.gain, P.reverbMix);
 

@@ -179,3 +179,8 @@ jobs:
       # acapella lifts the vocal/instrument ratio; mono degrades gracefully.
       - name: Stem separation
         run: npm run test:stems
+
+      # Convolution reverb from a user IR (#38): a click through a 2-tap IR
+      # echoes at the tap — and only with the IR loaded (dry is silent there).
+      - name: Convolution reverb (user IR)
+        run: npm run test:conv-reverb

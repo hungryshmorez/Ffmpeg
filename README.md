@@ -166,10 +166,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/stems.mjs`** verifies **stem separation**: instrumental cancels the centre vocal (0.249→
   0.016) while keeping the panned instrument, and the spectral acapella lifts the vocal/instrument
   ratio 1.79→7.23; mono input degrades gracefully.
+- **`.test/conv-reverb.mjs`** verifies **convolution reverb from a user IR**: a click bounced through
+  a hand-built 2-tap impulse response echoes at the tap position, and only when the IR is loaded (the
+  dry render is silent there).
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, and `test:stems` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, and `test:conv-reverb` in real headless Chromium on
 every push and pull request.
 
 ---
