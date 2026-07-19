@@ -366,3 +366,8 @@ jobs:
       # derive BPM, and slave the VJ sequencer's transport + playhead to it.
       - name: MIDI clock sync (slave)
         run: npm run test:midi-in
+
+      # Half-res motion estimation (#18): coarse-to-fine block matching recovers
+      # the same flow field as the full search for far fewer SAD ops.
+      - name: Half-res motion estimation
+        run: npm run test:half-res-motion

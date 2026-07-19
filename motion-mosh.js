@@ -52,12 +52,18 @@
     bloomIterations: 1,   // #61 bloom: apply the displacement N times (further smear).
     motionMask: false,    // #59 masking: low-motion blocks show the CLEAN frame instead
     maskMotion: 2,        //     of the smear. maskMotion = magnitude cutoff (px).
+    hierarchical: false,  // #18 coarse-to-fine estimation (half-res estimate,
+                          //     full-res refine) — fewer SAD ops on big frames.
   };
 
   class MotionMosher {
     constructor(canvas) {
       this.cv = canvas;
-      this.ctx = canvas.getContext('2d', { willReadFrequently: true });
+      // #18 — estimation (SAD / pyramid) needs no canvas, so allow a null one
+      // for headless flow computation via FFMosh.estimateFlow.
+      this.ctx = canvas ? canvas.getContext('2d', { willReadFrequently: true }) : null;
+      this._sadCalls = 0;   // #18 instrumentation (cost accounting)
+      this._sadPixels = 0;
       this.p = { ...DEFAULTS };
 
       this.prevY = null;      // previous luma plane (for matching)
@@ -116,7 +122,92 @@
           n++;
         }
       }
+      this._sadCalls++; this._sadPixels += n;   // #18 cost accounting
       return n ? cost / n : Infinity;
+    }
+
+    // #18 — box-downscale a luma plane 2× (2×2 average). Cheap and enough for a
+    // coarse motion guess.
+    _downscaleLuma(Y, w, h) {
+      const hw = Math.max(1, w >> 1), hh = Math.max(1, h >> 1);
+      const out = new Float32Array(hw * hh);
+      for (let y = 0; y < hh; y++) {
+        const sy = y * 2, sy1 = Math.min(h - 1, sy + 1);
+        for (let x = 0; x < hw; x++) {
+          const sx = x * 2, sx1 = Math.min(w - 1, sx + 1);
+          out[y * hw + x] = (Y[sy * w + sx] + Y[sy * w + sx1] + Y[sy1 * w + sx] + Y[sy1 * w + sx1]) * 0.25;
+        }
+      }
+      return { Y: out, w: hw, h: hh };
+    }
+
+    // #18 — HALF-RES ESTIMATE, FULL-RES APPLY. Run the wide block search on a
+    // half-size frame (¼ the pixels), then refine each full-res block in a tiny
+    // window around 2× the coarse vector. Same motion field, far fewer SAD ops
+    // than a full-radius search at native resolution.
+    _estimateHierarchical(curY, prevY, w, h) {
+      const bs = this.p.blockSize;
+      const cols = Math.ceil(w / bs), rows = Math.ceil(h / bs);
+      const vec = new Float32Array(cols * rows * 2);
+
+      // 1) coarse RAW search at half resolution
+      const cH = this._downscaleLuma(curY, w, h), pH = this._downscaleLuma(prevY, w, h);
+      const hw = cH.w, hh = cH.h;
+      const ccols = Math.ceil(hw / bs), crows = Math.ceil(hh / bs);
+      const coarse = new Float32Array(ccols * crows * 2);
+      const R = Math.max(2, this.p.motionRadius | 0);
+      const cstep = bs >= 16 ? 2 : 1;
+      for (let by = 0; by < crows; by++) {
+        for (let bx = 0; bx < ccols; bx++) {
+          const x0 = bx * bs, y0 = by * bs;
+          const bw = Math.min(bs, hw - x0), bh = Math.min(bs, hh - y0);
+          let gx = 0, gy = 0;
+          if (bx > 0) { const i = (by * ccols + (bx - 1)) * 2; gx = coarse[i]; gy = coarse[i + 1]; }
+          let bestDx = 0, bestDy = 0, best = Infinity;
+          for (let dy = -R; dy <= R; dy++) {
+            for (let dx = -R; dx <= R; dx++) {
+              const c = this._sad(cH.Y, pH.Y, hw, hh, x0, y0, bw, bh, (gx + dx) | 0, (gy + dy) | 0, cstep);
+              if (c < best) { best = c; bestDx = (gx + dx) | 0; bestDy = (gy + dy) | 0; }
+            }
+          }
+          const i = (by * ccols + bx) * 2; coarse[i] = bestDx; coarse[i + 1] = bestDy;
+        }
+      }
+
+      // 2) full-res refine around the 2× coarse predictor, with the same shaping
+      const refineR = 2, step = bs >= 16 ? 2 : 1;
+      let totalSAD = 0, blocks = 0;
+      for (let by = 0; by < rows; by++) {
+        for (let bx = 0; bx < cols; bx++) {
+          const x0 = bx * bs, y0 = by * bs;
+          const bw = Math.min(bs, w - x0), bh = Math.min(bs, h - y0);
+          const cbx = Math.min(ccols - 1, bx >> 1), cby = Math.min(crows - 1, by >> 1);
+          const ci = (cby * ccols + cbx) * 2;
+          const gx = coarse[ci] * 2, gy = coarse[ci + 1] * 2;
+          let bestDx = gx | 0, bestDy = gy | 0, best = Infinity;
+          for (let dy = -refineR; dy <= refineR; dy++) {
+            for (let dx = -refineR; dx <= refineR; dx++) {
+              const c = this._sad(curY, prevY, w, h, x0, y0, bw, bh, (gx + dx) | 0, (gy + dy) | 0, step);
+              if (c < best) { best = c; bestDx = (gx + dx) | 0; bestDy = (gy + dy) | 0; }
+            }
+          }
+          const i = (by * cols + bx) * 2;
+          if (best < this.p.threshold) { vec[i] = 0; vec[i + 1] = 0; }
+          else {
+            let vx = bestDx, vy = bestDy;
+            const amp = this.p.amplify;
+            if (amp !== 1) {
+              const mag = Math.hypot(vx, vy);
+              if (mag > 0) { const rr = Math.max(2, this.p.motionRadius); const shaped = Math.pow(Math.min(1, mag / rr), amp) * rr; const k = shaped / mag; vx *= k; vy *= k; }
+            }
+            vx *= this.p.directionX; vy *= this.p.directionY;
+            vec[i] = vx; vec[i + 1] = vy;
+          }
+          totalSAD += best; blocks++;
+        }
+      }
+      this.lastSAD = blocks ? totalSAD / blocks : 0;
+      return { vec, cols, rows };
     }
 
     // -------------------------------------------------------------------------
@@ -125,6 +216,9 @@
     // the full-size search. Without this the search is far too slow for video.
     // -------------------------------------------------------------------------
     _estimate(curY, prevY, w, h) {
+      // #18 — coarse-to-fine when enabled (default off keeps the exact legacy
+      // full-search behaviour for everything already relying on it).
+      if (this.p.hierarchical) return this._estimateHierarchical(curY, prevY, w, h);
       const bs = this.p.blockSize;
       const cols = Math.ceil(w / bs), rows = Math.ceil(h / bs);
       const vec = new Float32Array(cols * rows * 2);
@@ -1120,7 +1214,18 @@
     return { w: o.w, h: o.h, blockSize: o.blockSize, cols: o.cols, rows: o.rows, frames, name: o.name };
   }
 
-  window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips, renderFlowDisplace,
+  // #18 — headless flow estimation for a luma pair. mode 'full' | 'half'
+  // (coarse-to-fine). Returns the field plus SAD-cost accounting so callers /
+  // tests can compare the two paths.
+  function estimateFlow(curY, prevY, w, h, opts) {
+    const m = new MotionMosher(null);
+    m.setParams(Object.assign({}, opts, { hierarchical: (opts && opts.mode === 'half') }));
+    m._sadCalls = 0; m._sadPixels = 0;
+    const res = m._estimate(curY, prevY, w, h);
+    return { vec: res.vec, cols: res.cols, rows: res.rows, sadCalls: m._sadCalls, sadPixels: m._sadPixels, lastSAD: m.lastSAD };
+  }
+
+  window.FFMosh = { MotionMosher, DEFAULTS, estimateFlow, renderFile, renderTwoClips, renderFlowDisplace,
     renderVectorOverlay, globalMotion, stabilizePath, renderStabilize,
     motionCentroid, renderReframe, renderInterpolate,
     recordVectors, replayVectors, serializeVectors, deserializeVectors };

@@ -70,6 +70,7 @@
     "test:fx-chain": "node .test/fx-chain.mjs",
     "test:midi-out": "node .test/midi-out.mjs",
     "test:midi-in": "node .test/midi-in.mjs",
+    "test:half-res-motion": "node .test/half-res-motion.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },
