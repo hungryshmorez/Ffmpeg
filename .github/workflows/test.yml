@@ -305,3 +305,8 @@ jobs:
       # valueAt is sample-and-hold, stateAt gives the whole patch, and it round-trips.
       - name: Automation recording
         run: npm run test:automation
+
+      # Live record → Media Bin: the TripCam/VJ record path hands back a
+      # non-empty video that DECODES to real frames and lands in the bin.
+      - name: Live effect record → bin
+        run: npm run test:live-record

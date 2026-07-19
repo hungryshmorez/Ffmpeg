@@ -432,6 +432,7 @@
         <div class="vj-hud">
           <span id="vj-fps" class="vj-fps">— fps</span>
           <span id="vj-midi-status" class="vj-midi">MIDI: —</span>
+          <button type="button" id="vj-rec-video" class="vj-rec-video" title="Record the live VJ output → Media Bin (then add more with ffmpeg)">🔴 REC → Bin</button>
         </div>
       </div>
 
@@ -593,6 +594,14 @@
       log(`Learning… move a knob or hit a pad to bind it to "${target}".`);
     });
 
+    // Record the live VJ visual output to the Media Bin (reuses TripCam's
+    // MediaRecorder → addBlobToBin path). What lands is an ordinary bin clip you
+    // can then run more ffmpeg over.
+    document.getElementById('vj-rec-video')?.addEventListener('click', (e) => {
+      const cv = document.getElementById('vj-canvas');
+      if (e.target.classList.contains('recording')) { window.TripCam?.stopRec(); e.target.classList.remove('recording'); e.target.textContent = '🔴 REC → Bin'; log('Stopped — VJ recording saved to the Media Bin.', 'ok'); }
+      else if (window.TripCam?.startRec) { window.TripCam.startRec(cv, 30); e.target.classList.add('recording'); e.target.textContent = '⏹ STOP'; log('Recording VJ output → Media Bin…'); }
+    });
     document.getElementById('vj-source').addEventListener('change', (e) => setSource(e.target.value));
 
     // HOT CUES — stored jump points in the source video. Click to jump,

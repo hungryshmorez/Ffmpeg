@@ -224,10 +224,13 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
   sequencer pattern (deep-copied), an empty bank is safe, and a recall while playing queues for the bar.
 - **`.test/automation.mjs`** verifies **automation recording**: moves are time-stamped from the take
   start, `valueAt` is sample-and-hold, `stateAt` gives the whole patch, and the take round-trips.
+- **`.test/live-record.mjs`** verifies the **live record → Media Bin** path (TripCam and the VJ deck):
+  recording an animated canvas hands back a non-empty video that decodes to real frames and lands in
+  the bin as an ordinary clip (so any ffmpeg workflow can then run on it).
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, `test:pitch-snap`, `test:gain-staging`, `test:retime-toggle`, `test:curves`, `test:pattern-banks`, and `test:automation` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, `test:pitch-snap`, `test:gain-staging`, `test:retime-toggle`, `test:curves`, `test:pattern-banks`, `test:automation`, and `test:live-record` in real headless Chromium on
 every push and pull request.
 
 ---
