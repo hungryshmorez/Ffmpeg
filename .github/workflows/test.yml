@@ -344,3 +344,9 @@ jobs:
       # a step edit and re-syncs the grid, staying in lockstep with controls.
       - name: App-wide undo (custom state)
         run: npm run test:undo-custom
+
+      # Live FX preview: the Preview tab runs the source through the shared
+      # effect engine (look ops + real FFShaderPlus shader passes) and records
+      # the canvas into the Media Bin as a decodable clip.
+      - name: Live FX preview + Record to Bin
+        run: npm run test:preview-fx

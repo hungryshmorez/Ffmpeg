@@ -2261,6 +2261,7 @@
         <button class="mode-btn"        data-mode="falsecolor" type="button">False Color</button>
         <button class="mode-btn"        data-mode="scopes" type="button">Scopes</button>
         <button class="mode-btn"        data-mode="wipe" type="button">Wipe</button>
+        <button class="mode-btn"        data-mode="fx" type="button">✨ Live FX</button>
       </div>
 
       <div class="preview-stage" id="preview-stage">
@@ -2304,6 +2305,16 @@
             <div class="wipe-handle" id="wipe-handle">◀</div>
           </div>
           <div class="wipe-help">Drag the divider to compare source (left) with output (right).</div>
+        </div>
+        <!-- Live FX mode: the source through the shared effect engine -->
+        <div class="preview-mode preview-fx" id="pmode-fx">
+          <canvas id="pv-fx" class="fx-canvas" width="480" height="270"></canvas>
+          <div class="fx-controls" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px">
+            <label>Effect <select id="pv-fx-effect" class="ctrl"></select></label>
+            <label>Amount <input type="range" id="pv-fx-amt" min="0" max="2" step="0.05" value="1"></label>
+            <button type="button" id="pv-fx-rec" class="primary-btn">🔴 Record → Bin</button>
+          </div>
+          <p class="muted small" style="margin-top:8px">Live preview of your source through the shared effect engine — the same look engine the glitch workflows and Trip Cam use. <strong>Record</strong> bakes it to the Media Bin so you can stack more with ffmpeg on top.</p>
         </div>
         <div class="preview-mode preview-compare" id="pmode-compare">
           <div class="compare-grid">
@@ -2485,6 +2496,7 @@
     <script src="hover-preview.js"></script>
     <script src="wf-thumbs.js"></script>
     <script src="onboarding.js"></script>
+    <script src="preview-fx.js"></script>
     <script src="audio-intel.js"></script>
     <script src="clips.js"></script>
     <script src="vj-mode.js"></script>
