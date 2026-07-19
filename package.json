@@ -57,6 +57,7 @@
     "test:gain-staging": "node .test/gain-staging.mjs",
     "test:retime-toggle": "node .test/retime-toggle.mjs",
     "test:curves": "node .test/curves.mjs",
+    "test:pattern-banks": "node .test/pattern-banks.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

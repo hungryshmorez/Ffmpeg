@@ -295,3 +295,8 @@ jobs:
       # is a no-op, a lift hits (128→190), invert gives 255−i, per-channel is isolated.
       - name: Tone curves
         run: npm run test:curves
+
+      # Pattern banks (#75): save/recall a sequencer pattern (deep-copied), an
+      # empty bank is safe, and a recall while playing queues for the next bar.
+      - name: Pattern banks
+        run: npm run test:pattern-banks

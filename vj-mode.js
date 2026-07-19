@@ -62,6 +62,8 @@
     beatSync: false,
     launchQ: 'off',             // #78 beat-synced launch quantise: off|beat|bar|2bar
     playStart: 0,               // transport start (performance.now) for launch quantise
+    banks: new Array(8).fill(null),  // #75 pattern banks (deep-cloned patterns)
+    pendingBank: -1,            // a bank queued to switch on the next bar
   };
 
   let engine = null;            // the TripCam engine driving the visuals
@@ -297,8 +299,36 @@
     log('PANIC — all effects reset.', 'ok');
   }
 
+  // #75 PATTERN BANKS — 8 slots. Save the current 16-step pattern to a slot,
+  // recall a slot. Recalls made while playing are QUANTISED to the next bar
+  // (they apply when the sequencer wraps to step 0) so the switch lands on the
+  // downbeat; stopped, they apply immediately.
+  function clonePattern(p) { const o = {}; for (const k of Object.keys(p)) o[k] = p[k].slice(); return o; }
+  function saveBank(i) { if (i < 0 || i >= S.banks.length) return; S.banks[i] = clonePattern(S.pattern); syncBankButtons(); log(`Saved pattern to bank ${i + 1}.`, 'ok'); }
+  function applyBank(i) { if (!S.banks[i]) return; S.pattern = clonePattern(S.banks[i]); syncGrid(); syncBankButtons(); }
+  function recallBank(i) {
+    if (i < 0 || i >= S.banks.length || !S.banks[i]) return;
+    if (S.playing) { S.pendingBank = i; syncBankButtons(); log(`Bank ${i + 1} queued — switches on the next bar.`); }
+    else { applyBank(i); log(`Recalled bank ${i + 1}.`, 'ok'); }
+  }
+  function syncGrid() {
+    document.querySelectorAll('.vj-cell').forEach((c) => {
+      const on = !!(S.pattern[c.dataset.t] && S.pattern[c.dataset.t][+c.dataset.s]);
+      c.classList.toggle('on', on);
+    });
+  }
+  function syncBankButtons() {
+    document.querySelectorAll('.vj-bank').forEach((b) => {
+      const i = +b.dataset.b;
+      b.classList.toggle('filled', !!S.banks[i]);
+      b.classList.toggle('queued', S.pendingBank === i);
+    });
+  }
+
   function tick() {
     if (!S.playing) return;
+
+    if (S.step === 0 && S.pendingBank >= 0) { applyBank(S.pendingBank); S.pendingBank = -1; }  // #75 bar-quantised switch
 
     document.querySelectorAll('.vj-step').forEach((el) =>
       el.classList.toggle('now', +el.dataset.s === S.step));
@@ -452,6 +482,10 @@
             <small>Click a cell to fire that effect on that 16th. Effects lock to the beat.</small>
           </div>
           <div id="vj-grid" class="vj-grid"></div>
+          <div class="vj-banks" id="vj-banks" title="Pattern banks (#75) — click to recall on the bar · Shift+click to save">
+            <span class="vj-banks-l">BANKS</span>
+            ${Array.from({ length: 8 }, (_, i) => `<button type="button" class="vj-bank" data-b="${i}">${i + 1}</button>`).join('')}
+          </div>
         </div>
 
         <p class="vj-hint">
@@ -509,6 +543,15 @@
       const { t, s } = c.dataset;
       S.pattern[t][+s] = !S.pattern[t][+s];
       c.classList.toggle('on', S.pattern[t][+s]);
+    });
+
+    // #75 pattern banks — click to recall (bar-quantised while playing),
+    // Shift+click to save the current pattern.
+    document.getElementById('vj-banks')?.addEventListener('click', (e) => {
+      const b = e.target.closest('.vj-bank');
+      if (!b) return;
+      const i = +b.dataset.b;
+      if (e.shiftKey) saveBank(i); else recallBank(i);
     });
 
     document.getElementById('vj-play').addEventListener('click', play);
@@ -649,7 +692,7 @@
   }
   function renderMappings() { /* mappings render into the learn button title */ }
 
-  window.FFVJ = { build, TRIGGERS, fire, release, panic, S };
+  window.FFVJ = { build, TRIGGERS, fire, release, panic, saveBank, recallBank, applyBank, S };
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('[data-tab="vj"]')?.addEventListener('click', build);
