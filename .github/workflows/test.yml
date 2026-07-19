@@ -350,3 +350,9 @@ jobs:
       # the canvas into the Media Bin as a decodable clip.
       - name: Live FX preview + Record to Bin
         run: npm run test:preview-fx
+
+      # Effect chains (#73): stack effects in order on the Live FX surface;
+      # order matters, disabled stages skip, add/move/toggle/remove, serialize,
+      # and the chain drives the preview loop over the single picker.
+      - name: Effect chains
+        run: npm run test:fx-chain

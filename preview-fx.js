@@ -76,7 +76,11 @@
       if (HP() && HP().testFrame) { const tf = HP().testFrame(W, H); _offCtx.putImageData(tf, 0, 0); }
     }
     let img = _offCtx.getImageData(0, 0, W, H);
-    img = applyEffect(img, _curId, _amt);
+    // #73 — if an effect chain is stacked, apply the whole chain in order;
+    // otherwise fall back to the single picked effect.
+    const chain = global.FFFxChain && global.FFFxChain.preview;
+    if (chain && chain.hasActive()) img = chain.apply(img);
+    else img = applyEffect(img, _curId, _amt);
     if (dst.width !== W) dst.width = W;
     if (dst.height !== H) dst.height = H;
     ctx.putImageData(img, 0, 0);

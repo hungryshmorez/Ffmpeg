@@ -67,6 +67,7 @@
     "test:onboarding": "node .test/onboarding.mjs",
     "test:undo-custom": "node .test/undo-custom.mjs",
     "test:preview-fx": "node .test/preview-fx.mjs",
+    "test:fx-chain": "node .test/fx-chain.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

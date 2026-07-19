@@ -2312,8 +2312,10 @@
           <div class="fx-controls" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px">
             <label>Effect <select id="pv-fx-effect" class="ctrl"></select></label>
             <label>Amount <input type="range" id="pv-fx-amt" min="0" max="2" step="0.05" value="1"></label>
+            <button type="button" id="pv-fx-add" class="secondary-btn" title="Stack this effect onto the chain">＋ Add to chain</button>
             <button type="button" id="pv-fx-rec" class="primary-btn">🔴 Record → Bin</button>
           </div>
+          <div class="fx-chain" id="pv-fx-chain" style="margin-top:8px" title="Effect chain — applied top to bottom"></div>
           <p class="muted small" style="margin-top:8px">Live preview of your source through the shared effect engine — the same look engine the glitch workflows and Trip Cam use. <strong>Record</strong> bakes it to the Media Bin so you can stack more with ffmpeg on top.</p>
         </div>
         <div class="preview-mode preview-compare" id="pmode-compare">
@@ -2497,6 +2499,7 @@
     <script src="wf-thumbs.js"></script>
     <script src="onboarding.js"></script>
     <script src="preview-fx.js"></script>
+    <script src="fx-chain.js"></script>
     <script src="audio-intel.js"></script>
     <script src="clips.js"></script>
     <script src="vj-mode.js"></script>
