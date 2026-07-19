@@ -428,3 +428,9 @@ jobs:
       # output decodes to ~60 frames at 480p — plus the OPFS-disabled fallback.
       - name: OPFS→bin→workflow handoff
         run: npm run test:opfs-bin-workflow
+
+      # Streaming demux input (Phase 1.1): hwaccel.feedDemuxer feeds the WebCodecs
+      # demuxer block-by-block from an OPFS stream with byte-exact, contiguous
+      # fileStart offsets — so a hardware transcode never materialises the file.
+      - name: Streaming demux input
+        run: npm run test:hw-demux-stream

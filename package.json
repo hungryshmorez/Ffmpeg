@@ -85,7 +85,8 @@
     "test:accel-router": "node .test/accel-router.mjs",
     "test:opfs-stream": "node .test/opfs-stream.mjs",
     "test:opfs-upload": "node .test/opfs-upload.mjs",
-    "test:opfs-bin-workflow": "node .test/opfs-bin-workflow.mjs"
+    "test:opfs-bin-workflow": "node .test/opfs-bin-workflow.mjs",
+    "test:hw-demux-stream": "node .test/hw-demux-stream.mjs"
   },
   "engines": {
     "node": ">=18"
