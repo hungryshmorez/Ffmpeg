@@ -342,12 +342,18 @@ All three are fixed and verified by the tests above.
 | `datamosh.js`, `motion-mosh.js` | datamosh + SAD motion estimation |
 | `audio-engine.js`, `audio-studio.js`, `audio-intel.js` | Web Audio rack, studio UI, key/BPM/loudness intelligence |
 | `beat-detection.js`, `waveform.js` | energy-variance beat detection, waveform rendering |
-| `vj-mode.js` | MIDI learn, sequencer, tap tempo, hot cues, triggers/pads |
+| `vj-mode.js` | MIDI learn, sequencer, tap tempo, hot cues, triggers/pads (external-clock slave hooks) |
+| `midi-out.js`, `midi-in.js` | MIDI clock/notes out from the sequencer; MIDI clock-in (slave) that drives it |
+| `preview-fx.js`, `fx-chain.js` | Live FX preview + Record→Bin; ordered per-layer effect chains |
+| `hover-preview.js`, `wf-thumbs.js` | derived-look engine: workflow hover-preview + baked card thumbnails |
+| `onboarding.js`, `prefs.js`, `mem-budget.js` | onboarding tour; preferences panel; unified memory-budget readout |
+| `segment-encode.js` | parallel segment encoding (time-split → pooled encode → concat) |
+| `audio-dsp.js` | the audio DSP library (width, limiter, multiband, mid/side EQ, stems, pitch/loop detection) |
 | `performance.js` | adaptive quality (FPS-driven load-shedding), global intensity, `Compositor` engine + 16 blend modes |
 | `compositor-ui.js` | the Layer Compositor deck (layer strips, blend/opacity/solo/mute, crossfader, hot cues) over `FFPerf.Compositor` |
 | `nodegraph.js` | node-graph editor (27 node types) |
 | `clips.js` | Clip Studio (its own tab): clip library, take numbers, touch/drag reorder, sequence export |
-| `workflows*.js` | the 199 workflow definitions across 16 categories |
+| `workflows*.js` | the 215 workflow definitions across 16 categories |
 | `storage.js`, `opfs.js` | autosave + OPFS persistence |
 | `navigation.js`, `tools.js`, `analysis.js`, `agents.js` | tab nav, misc tools, analysis, agent helpers |
 

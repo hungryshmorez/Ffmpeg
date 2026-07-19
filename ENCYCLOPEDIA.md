@@ -380,39 +380,39 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 8. ✅ **Keyboard-shortcut coverage + cheat sheet** (#96) — `?` toggle, `[`/`]` tab cycle, `Alt+1‑8`
    jumps, grouped auto-generated cheat sheet; verified by `.test/shortcuts.mjs`.
 
-### Phase C — The layer compositor & live deck (the big VJ surface)
-9. ✅ **Compositor UI** built + verified (`compositor-ui.js`, `.test/compositor.mjs`): layer strips,
-   16 blend modes, opacity, solo/mute, per-layer hot cues, crossfader, master. ⬜ Remaining:
-   crossfader curve options (#74), per-layer effect chains (#73), N-layer support (#72).
-10. ⬜ **Automation recording** (#76), **pattern banks** (#75), **beat-synced launching** (#78),
-    **panic key** (#77), **MIDI clock in/out** (#69/#71), **second-screen output** (#80).
+### Phase C — The layer compositor & live deck (the big VJ surface) — done
+9. ✅ **Compositor UI** (`compositor-ui.js`, `.test/compositor.mjs`): layer strips, 16 blend modes,
+   opacity, solo/mute, per-layer hot cues, crossfader, master — plus crossfader curves (#74),
+   per-layer effect chains (#73), N-layer support (#72).
+10. ✅ **Automation recording** (#76), **pattern banks** (#75), **beat-synced launching** (#78),
+    **panic key** (#77), **MIDI clock in/out** (#69/#71). ⬜ Remaining: **second-screen output** (#80).
 
-### Phase D — The mosh/glitch family (build on the SAD estimator)
-11. ⬜ Directional mosh, masking, amplification curve, bloom (#58–61) — small, share the vector field.
-12. ⬜ **Datamosh between two clips** (#62) + persistent vector recording (#63) — the headline.
+### Phase D — The mosh/glitch family (build on the SAD estimator) — done
+11. ✅ Directional mosh, masking, amplification curve, bloom (#58–61) — share the vector field.
+12. ✅ **Datamosh between two clips** (#62) + persistent vector recording (#63).
 13. ✅ masked pixel sort (#64), databend (#66), feedback transforms (#67), flow displacement (#68).
 
-### Phase E — Audio depth
-14. ⬜ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),
+### Phase E — Audio depth — done
+14. ✅ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),
     gain-staging warnings (#32), A/B reference (#33), transient shaper (#39), stems (#40).
-15. ⬜ Beat-grid chopping (#36), granular (#37), pitch-snap to key (#35), user IR reverb (#38),
+15. ✅ Beat-grid chopping (#36), granular (#37), pitch-snap to key (#35), user IR reverb (#38),
     stem separation (#26).
 
-### Phase F — Video/colour depth
-16. ⬜ Colour tools: vectorscope/waveform (#51), curves spline (#53), HSL qualifiers (#54),
+### Phase F — Video/colour depth — done
+16. ✅ Colour tools: vectorscope/waveform (#51), curves spline (#53), HSL qualifiers (#54),
     power windows (#55), auto colour-match (#85).
-17. ⬜ Motion tools: optical-flow interp (#41), stabilisation from vectors (#44), auto-reframe (#45),
+17. ✅ Motion tools: optical-flow interp (#41), stabilisation from vectors (#44), auto-reframe (#45),
     motion blur (#43), deflicker (#50), film grain (#47), halation/bloom (#48), lens profiles (#49).
 
-### Phase G — Intelligence
-18. ⬜ Highlight detection (#82), auto beat-sync edit (#83), loop-point detection (#86),
-    workflow suggestion (#88). Then the model-dependent ones (Whisper #81, shot classification #84,
-    content-aware fill #87) as they become feasible.
+### Phase G — Intelligence — mostly done
+18. ✅ Highlight detection (#82), auto beat-sync edit (#83), loop-point detection (#86),
+    workflow suggestion (#88). ⬜ Remaining are model-dependent: Whisper (#81), and the
+    🔒-blocked shot classification (#84) / content-aware fill (#87).
 
 ### Phase H — Performance & architecture (do continuously, verify each step)
-19. ⬜ Shader program cache (#19), texture pooling (#20), half-res estimation (#18),
-    OffscreenCanvas worker (#14), motion estimation in a worker (#15), WASM SIMD (#16),
-    parallel segment encoding (#21), unified memory budget (#24), preload-on-hover (#23).
+19. Partly done: ✅ half-res estimation (#18), parallel segment encoding (#21), unified memory
+    budget (#24). ⬜ Remaining: shader program cache (#19), texture pooling (#20), OffscreenCanvas
+    worker (#14), motion estimation in a worker (#15), preload-on-hover (#23), and 🔒 WASM SIMD (#16).
 20. ⬜ Refactors, gated behind the CI from Phase A: split `app.js` (#97), single state store (#98),
     event bus (#99). **Do these last** — highest blast radius; they only pay off once tests guard them.
 
