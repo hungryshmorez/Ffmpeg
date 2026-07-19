@@ -290,3 +290,8 @@ jobs:
       # one sharp block at the midpoint, 'blend' cross-dissolves to two ghosts.
       - name: Retime method toggle
         run: npm run test:retime-toggle
+
+      # Tone curves (#53): a curve LUT passes through its control points — identity
+      # is a no-op, a lift hits (128→190), invert gives 255−i, per-channel is isolated.
+      - name: Tone curves
+        run: npm run test:curves

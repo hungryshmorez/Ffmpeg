@@ -862,6 +862,82 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5l. CURVES (#53) — the colourist's tone curve. The speed panel already has a
+  //     draggable-spline widget; this is the colour half: build a 256-entry LUT
+  //     from control points (piecewise-linear through them) and map each channel
+  //     through it. Master (RGB) or per-channel R/G/B for split-tone grades.
+  // ===========================================================================
+
+  /** Control points [[x,y],…] in 0..255 → a 256-entry LUT (endpoints filled). */
+  function buildCurveLUT(points, size = 256) {
+    const pts = points.slice().sort((a, b) => a[0] - b[0]);
+    if (!pts.length) { const id = new Uint8ClampedArray(size); for (let i = 0; i < size; i++) id[i] = i; return id; }
+    if (pts[0][0] > 0) pts.unshift([0, pts[0][1]]);
+    if (pts[pts.length - 1][0] < size - 1) pts.push([size - 1, pts[pts.length - 1][1]]);
+    const lut = new Uint8ClampedArray(size);
+    let seg = 0;
+    for (let x = 0; x < size; x++) {
+      while (seg < pts.length - 2 && x > pts[seg + 1][0]) seg++;
+      const [x0, y0] = pts[seg], [x1, y1] = pts[seg + 1];
+      const t = x1 > x0 ? (x - x0) / (x1 - x0) : 0;
+      lut[x] = y0 + (y1 - y0) * t;
+    }
+    return lut;
+  }
+
+  /** Map channels through LUTs. opts: {rgb} master, or {r,g,b} per-channel. */
+  function applyCurve(imgData, opts = {}) {
+    const lr = opts.r || opts.rgb, lg = opts.g || opts.rgb, lb = opts.b || opts.rgb;
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (lr) d[i] = lr[d[i]];
+      if (lg) d[i + 1] = lg[d[i + 1]];
+      if (lb) d[i + 2] = lb[d[i + 2]];
+    }
+    return imgData;
+  }
+
+  /** Offline render: a tone curve over every frame → Media Bin. */
+  async function renderCurve(media, points, onProgress) {
+    const lut = buildCurveLUT(points);
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        applyCurve(img, { rgb: lut });
+        ctx.putImageData(img, 0, 0);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [CURVE].${ext}`, type);
+    window.logToConsole?.('ok', `[curve] tone curve → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 5k. HSL SECONDARY QUALIFIERS (#54) — grade just SKIN, or just SKY. Key a
   //     hue / saturation / luma range (with soft edges), build a mask from it,
   //     and apply a hue-shift / sat / luma adjustment only where the key matches.
@@ -1313,6 +1389,6 @@ vec2 _rotTC(vec2 tc, float a) {
     lensDistort, renderLens, LENS_PROFILES,
     rollingShutter, renderRollingShutter,
     Deflicker, renderDeflicker, powerWindow, renderPowerWindow,
-    hslQualify, renderHslQualify, Sparkles,
+    hslQualify, renderHslQualify, buildCurveLUT, applyCurve, renderCurve, Sparkles,
   };
 })();

@@ -94,6 +94,38 @@ window.WORKFLOWS_V4 = [
     },
   })),
 
+  // ---- TONE CURVES ----
+  {
+    id: 'curve-film-contrast',
+    name: 'Curve — Film Contrast',
+    category: 'color-grading',
+    description: 'A gentle S-curve on the master tone curve — lifts the shadows a touch and rolls off the highlights for a filmic contrast, the classic first move in a grade. Piecewise curve through real control points, applied per frame.',
+    tags: ['curves', 'contrast', 's-curve', 'film', 'tone', 'grade'],
+    icon: '📈', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderCurve(m, [[0, 12], [64, 54], [128, 128], [192, 205], [255, 246]], (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Curve — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'curve-faded-matte',
+    name: 'Curve — Faded Matte',
+    category: 'color-grading',
+    description: 'Raises the black point and pulls the whites down — the “lifted blacks” matte look, done on the tone curve rather than a wash overlay.',
+    tags: ['curves', 'matte', 'faded', 'lifted-blacks', 'tone', 'grade'],
+    icon: '🎞️', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderCurve(m, [[0, 34], [128, 130], [255, 226]], (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Curve — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- HSL SECONDARY QUALIFIERS ----
   {
     id: 'secondary-sky',
