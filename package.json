@@ -81,6 +81,7 @@
     "test:undo-desync": "node .test/undo-desync.mjs",
     "test:audio-robustness": "node .test/audio-robustness.mjs",
     "test:a11y-grid": "node .test/a11y-grid.mjs",
+    "test:progress-tabs-a11y": "node .test/progress-tabs-a11y.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

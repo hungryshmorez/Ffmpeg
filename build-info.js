@@ -13,7 +13,7 @@
     version: 'v10.4.0',
     built:   '2026-07-14',
     modules: 48,                  // mirrors ls *.js
-    cssBraces: { open: 858, close: 858 },
+    cssBraces: { open: 866, close: 866 },
     pinnings: {
       '@ffmpeg/ffmpeg': '0.12.10',
       '@ffmpeg/util':   '0.12.1',

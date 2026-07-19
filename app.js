@@ -3506,12 +3506,28 @@ function setDownloadEnabled(enabled) {
   const btn = document.getElementById('btn-download');
   if (btn) btn.disabled = !enabled;
 }
+// UX — ffmpeg.wasm's `progress` value is jittery: it can jump backward mid-run
+// and it sits at 0 during the encoder warmup. We clamp AND make it MONOTONIC
+// within a run (pct<=0 resets it, e.g. at the start of a render), and show an
+// indeterminate "working…" pulse while progress is still 0, so the bar never
+// goes backward and never looks frozen. ARIA is kept in sync for AT.
 function setProgress(pct) {
+  let p = Math.max(0, Math.min(100, +pct || 0));
+  if (p <= 0) state._lastProgress = 0;                 // a fresh run resets the ceiling
+  else p = state._lastProgress = Math.max(p, state._lastProgress || 0);
+  const w = `${p}%`;
   const f = document.getElementById('progress-fill');
-  if (f) f.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-  // v4 PART A1: mirror into the action-bar progress fill.
+  if (f) f.style.width = w;
   const ab = document.getElementById('ab-progress-fill');
-  if (ab) ab.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  if (ab) ab.style.width = w;
+  const track = document.getElementById('progress-track');
+  if (track) {
+    track.setAttribute('aria-valuenow', String(Math.round(p)));
+    // pulse while we're processing but ffmpeg hasn't reported real progress yet
+    const indeterminate = state.isProcessing && p <= 0;
+    track.classList.toggle('indeterminate', indeterminate);
+    if (indeterminate) track.removeAttribute('aria-valuenow');   // "busy, amount unknown"
+  }
 }
 function setProgressText(t) {
   const el = document.getElementById('progress-text');
@@ -6245,8 +6261,13 @@ function switchTab(name) {
     target.classList.add('active');
     target.style.display = 'block';
   }
-  // Update buttons
-  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  // Update buttons — visual + ARIA tab state + roving tabindex (WAI tablist).
+  $$('#tab-bar .tab-btn').forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.tabIndex = on ? 0 : -1;
+  });
   stateV2.activeTab = name;
   // Re-render the preview player if needed
   if (name === 'preview') syncPreviewMode();
@@ -6257,6 +6278,26 @@ function bindTabs() {
   $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
+  // UX/a11y — arrow-key navigation across the tab bar (WAI tablist pattern):
+  // ←/→ (and Home/End) move to the previous/next visible tab and activate it.
+  const bar = document.getElementById('tab-bar');
+  if (bar && !bar.__tabnav) {
+    bar.__tabnav = true;
+    bar.addEventListener('keydown', (e) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const tabs = $$('#tab-bar .tab-btn').filter(b => !b.hidden && b.offsetParent !== null);
+      if (!tabs.length) return;
+      const cur = tabs.findIndex(b => b.dataset.tab === stateV2.activeTab);
+      let next = cur;
+      if (e.key === 'ArrowRight') next = (cur + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft') next = (cur - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = tabs.length - 1;
+      e.preventDefault();
+      switchTab(tabs[next].dataset.tab);
+      tabs[next].focus();
+    });
+  }
   // Keyboard: Alt+1..8 to jump to a tab. Covers every tab (the old map stopped
   // at 4 and missed Studio / Trip Cam / VJ / Graph). Skips tabs the current mode
   // has hidden.

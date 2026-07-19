@@ -2407,11 +2407,12 @@
        Bottom: full-width progress bar + status
        ========================================================================= -->
   <footer class="bottom-bar">
-    <div class="progress-track">
+    <div class="progress-track" id="progress-track" role="progressbar"
+         aria-label="Processing progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
       <div class="progress-fill" id="progress-fill" style="width:0%"></div>
     </div>
     <div class="progress-meta">
-      <span id="progress-text">Idle</span>
+      <span id="progress-text" aria-live="polite">Idle</span>
     </div>
   </footer>
 
