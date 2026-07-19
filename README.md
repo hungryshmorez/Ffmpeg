@@ -17,14 +17,16 @@ datamosh, master audio, and perform live visuals, all client-side.
 
 | Area | Highlights |
 |---|---|
-| **Convert & compress** | 199 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
-| **Colour & video** | false-colour exposure, vectorscope + waveform monitor, speed ramping with a draggable curve, before/after wipe, node graph (27 node types). |
-| **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors), motion-vector overlay, optical-flow warp, feedback tunnel, auto-glitch/chaos engine, masked pixel sort. |
-| **Audio studio** | real-time Web Audio rack (23 knobs, 12 presets, 7 modules), spectrogram, phase-vocoder time-stretch (keeps pitch), key/BPM detection, semantic macros. |
-| **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, 16-step sequencer, tap tempo, adaptive-quality load-shedding. |
-| **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code. |
+| **Convert & compress** | 215 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. Each workflow card shows a **baked thumbnail** of its look and a **live hover-preview** on your own clip. |
+| **Colour & video** | false-colour exposure, vectorscope + waveform monitor, speed ramping with a draggable curve, before/after wipe, **auto colour-match between clips**, node graph (27 node types). |
+| **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors, with a half-res coarse-to-fine fast path), motion-vector overlay, optical-flow warp, feedback tunnel, auto-glitch/chaos engine, masked pixel sort. |
+| **Audio studio** | real-time Web Audio rack (31 knobs, 12 presets, 13 modules), spectrogram, phase-vocoder time-stretch (keeps pitch), key/BPM detection, semantic macros. |
+| **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, **MIDI clock in (slave) + MIDI out**, 16-step sequencer, tap tempo, **per-layer effect chains**, adaptive-quality load-shedding. |
+| **Preview** | a **Live FX** mode runs your source through the shared effect engine in real time and records it straight to the Media Bin for further ffmpeg work. |
+| **UX** | app-wide undo/redo (incl. non-DOM state), a dismissible onboarding tour, a preferences panel, a keyboard cheat sheet, and a unified memory-budget readout. |
+| **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code, **68 headless-Chromium test suites** run in CI on every push. |
 
-The build metadata is generated, not claimed: **31 JS modules · 199 workflows · 825/825
+The build metadata is generated, not claimed: **47 JS modules · 215 workflows · 851/851
 balanced CSS braces · 27 node-graph types · 11 trip-cam effects.** See
 [`scripts/generate-changelog.js`](./scripts/generate-changelog.js) and
 [`build-info.js`](./build-info.js) (the single source of truth).

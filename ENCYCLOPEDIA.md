@@ -46,6 +46,32 @@ and *Risk* flags how likely the change is to break the working app.
 
 ## Part 0 — Current verified state
 
+### The 100 Ways — scoreboard
+
+| Status | Count | Items |
+|---|---|---|
+| ✅ **Done** (verified by running) | **81 / 100** | everything not listed below |
+| 🟡 **Partial** | 1 | #7 golden-file tests |
+| ⬜ **To do** | 11 | #8 self-test panel · #14 OffscreenCanvas/Worker shaders · #15 motion est. in a Worker · #19 shader-program cache · #20 texture pooling · #23 preload core on hover · #80 second-screen · #81 Whisper.wasm · #97 split `app.js` · #98 single state source · #99 event bus |
+| 🔒 **Blocked** (needs real hardware/toolchain) | 6 | #13 WebCodecs ship · #16 WASM SIMD SAD · #65 true DCT · #79 NDI/virtual-cam · #84 shot-type classify · #87 content-aware fill |
+| ❌ **Dropped** | 1 | #70 Ableton Link (browsers can't speak Link without a native bridge) |
+
+What's left is now almost entirely **infrastructure** (Workers, pooling, the big `app.js`
+refactors) and **hardware/environment-gated** work — the correctness, audio, video, glitch,
+live/VJ, intelligence and UX feature work is complete. The remaining ⬜ items that touch
+GPU state (#14/#15/#19/#20) are codeable but can't be *verified* honestly in the current
+headless build (no proprietary codecs / limited GL), and the architecture items (#97–99) are
+pure refactors with no user-facing capability, so they're deliberately deferred over
+destabilising the working app.
+
+Verified this development pass (each shipped as its own commit with a headless-Chromium test):
+**#85** auto colour-match · **#94** hover-preview · **#93** workflow thumbnails · **#90**
+onboarding tour · **#89** app-wide undo (custom state) · **Live FX preview + Record→Bin** ·
+**#73** per-layer effect chains · **#71** MIDI out · **#69** MIDI clock slave · **#18**
+half-res motion estimation · **#24** unified memory budget · **#21** parallel segment encoding.
+
+### Verified feature ledger
+
 Before planning the future, here is the honest present. Everything in this list is in the
 v10.4 build at the repo root and was confirmed by *executing it in a headless browser*, not
 by grep or `node -c`.
@@ -333,13 +359,19 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 
 ## Part 3 — The integration roadmap (if we add ALL of them)
 
+> **Historical plan.** This was the original phase ordering. Most of it is now shipped —
+> **Part 0's scoreboard is the authoritative, up-to-date status** (81/100 done). Phases B–F
+> below are essentially complete; what genuinely remains is the infrastructure/architecture
+> work (Workers, pooling, the `app.js` refactors) and the hardware-gated items. The phases
+> are kept for the reasoning about *ordering and de-risking*, not as a live checklist.
+
 Doing everything is a program, not a task. Ordered so each phase de-risks the next.
 
-### Phase A — Lock the foundation (mostly done)
+### Phase A — Lock the foundation (done)
 1. ✅ Round trip 5/5, frames-not-bytes, exit codes, error capture, version stamp, changelog.
 2. ✅ Playwright test + golden matrix.
-3. ⬜ **#100 CI file** — add `.github/workflows/test.yml` running `npm test` + `npm run test:workflows` on push. *(This is the single highest-leverage remaining item: it makes every phase below cheaper by catching regressions automatically.)*
-4. ⬜ **#8 self-test panel** — expose the smoke tests in-app.
+3. ✅ **#100 CI file** — `.github/workflows/test.yml` runs `npm test` + the whole `test:*` suite (68 suites) on every push and PR.
+4. ⬜ **#8 self-test panel** — expose the smoke tests in-app. *(`runSelfTest()` exists; the visible panel is the remaining bit.)*
 
 ### Phase B — Finish what's already half-built (fast wins)
 5. 🟡 Wire the **global-intensity slider** + **hot cues** back into `vj-mode.js` (dropped in v10.4's reduced copy). — *S each.*
