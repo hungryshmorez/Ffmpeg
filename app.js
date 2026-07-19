@@ -2016,6 +2016,26 @@ function renderMediaBin() {
   updateBinMultiToolbar();
   if (typeof updateActionBar === 'function') updateActionBar();
   if (typeof syncGlobalBinDrawer === 'function') syncGlobalBinDrawer();
+
+  // UX — keyboard-navigable, accessible media bin: arrows move between clips,
+  // Enter opens, Delete removes, [ / ] reorder, x toggles batch-select. One tab
+  // stop instead of (clips × 4) buttons.
+  if (window.FFGridNav) {
+    window.FFGridNav.enhance(strip, {
+      itemSelector: '.media-bin-card',
+      label: 'Media bin',
+      selectedSelector: '.media-bin-card.active',
+      onActivate: (card) => card.click(),
+      onKey: (e, card) => {
+        const id = card.dataset.mediaId;
+        if (e.key === 'Delete' || e.key === 'Backspace') { card.querySelector('.bin-card-remove')?.click(); return true; }
+        if (e.key === '[') { card.querySelector('[data-reorder="up"]')?.click(); return true; }
+        if (e.key === ']') { card.querySelector('[data-reorder="down"]')?.click(); return true; }
+        if (e.key === 'x' || e.key === 'X') { const cb = card.querySelector('.bin-card-checkbox'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return true; }
+        return false;
+      },
+    });
+  }
 }
 
 // Tiny extension → codec hint map. We no longer run a deep

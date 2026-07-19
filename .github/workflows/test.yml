@@ -405,3 +405,8 @@ jobs:
       # F7/F8 — hostile-audio decode guards + WebAudio node/context hygiene.
       - name: Audio robustness (F7/F8)
         run: npm run test:audio-robustness
+
+      # UX redesign — keyboard-navigable, accessible card grids (media bin +
+      # workflow library): ARIA listbox, roving tabindex, one tab stop.
+      - name: Accessible card grids
+        run: npm run test:a11y-grid

@@ -2720,3 +2720,47 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 .comp-xf #comp-xf { width: 120px; }
 .comp-mo #comp-master-op { width: 100px; }
 @media (max-width: 640px) { .comp-layers { grid-template-columns: 1fr; } }
+
+/* =========================================================================
+   UX REDESIGN — accessible focus + touch ergonomics
+   ========================================================================= */
+
+/* Keyboard-only focus ring on the card grids (mouse clicks stay clean). */
+.wf-card:focus-visible,
+.media-bin-card:focus-visible {
+  outline: 3px solid var(--accent, #00d4ff);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+/* The roving-tabindex container itself never shows a ring — its item does. */
+#workflows-grid:focus,
+#global-bin-strip:focus { outline: none; }
+
+/* The selected media-bin card reads as selected for AT and sighted users. */
+.media-bin-card[aria-selected="true"] { box-shadow: inset 0 0 0 2px var(--accent, #00d4ff); }
+
+/* Restore a visible focus ring for every interactive control for keyboard users
+   (many were `outline:none`). Uses :focus-visible so mouse users don't see it. */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent, #00d4ff);
+  outline-offset: 1px;
+}
+
+/* Touch ergonomics: on coarse (finger) pointers, guarantee every tap target is
+   at least 44x44px — the WCAG / platform minimum. Applied only to touch so the
+   dense desktop mouse UI is unchanged. */
+@media (pointer: coarse) {
+  .bin-card-remove,
+  .bin-reorder,
+  .bin-card-checkbox,
+  .wf-info-btn,
+  .wf-actions button,
+  .mini-btn,
+  .tab-btn,
+  .mode-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .bin-card-checkbox { transform: scale(1.4); }
+}
