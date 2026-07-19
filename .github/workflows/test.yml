@@ -361,3 +361,8 @@ jobs:
       # against an injected output (physical Web-MIDI delivery is device-gated).
       - name: MIDI output
         run: npm run test:midi-out
+
+      # MIDI clock slave (#69): decode an incoming 24-PPQN clock (6 pulses/step),
+      # derive BPM, and slave the VJ sequencer's transport + playhead to it.
+      - name: MIDI clock sync (slave)
+        run: npm run test:midi-in

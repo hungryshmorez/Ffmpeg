@@ -290,6 +290,14 @@
     for (const id of [...S.active]) release(id);
   }
 
+  // ---- #69 external clock (MIDI clock slave) --------------------------------
+  // When slaved, the internal setTimeout scheduler is off and an outside clock
+  // calls stepTick() once per 16th note.
+  function setExternalClock(on) { S.extClock = !!on; if (S.extClock) clearTimeout(S.timer); }
+  function extStart() { S.extClock = true; S.playing = true; S.step = 0; S.playStart = performance.now(); const b = document.getElementById('vj-play'); if (b) b.textContent = '⏸'; }
+  function extStop() { stop(); }
+  function stepTick() { if (S.playing) stepBody(); }
+
   // ===========================================================================
   // PANIC — kill everything, instantly. The one control a live tool can't ship
   // without: latched/held triggers, the sequencer, chaos, strobe and mosh all
@@ -345,7 +353,10 @@
     });
   }
 
-  function tick() {
+  // One step of the sequencer: bank switch on the bar, light the playhead, fire
+  // the hits on this step, then advance. Split out from tick() so an EXTERNAL
+  // clock (#69 MIDI clock slave) can drive it one step at a time.
+  function stepBody() {
     if (!S.playing) return;
 
     if (S.step === 0 && S.pendingBank >= 0) { applyBank(S.pendingBank); S.pendingBank = -1; }  // #75 bar-quantised switch
@@ -358,7 +369,12 @@
     }
 
     S.step = (S.step + 1) % S.steps;
-    S.timer = setTimeout(tick, stepMs());
+  }
+
+  function tick() {
+    if (!S.playing) return;
+    stepBody();
+    if (!S.extClock) S.timer = setTimeout(tick, stepMs());   // internal clock only
   }
 
   /** Tap tempo — the only way anyone actually sets a BPM in a dark room. */
@@ -742,7 +758,8 @@
   }
   function renderMappings() { /* mappings render into the learn button title */ }
 
-  window.FFVJ = { build, TRIGGERS, fire, release, panic, saveBank, recallBank, applyBank, automation: () => auto, S };
+  window.FFVJ = { build, TRIGGERS, fire, release, panic, saveBank, recallBank, applyBank, automation: () => auto, S,
+    setExternalClock, extStart, extStop, stepTick };
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('[data-tab="vj"]')?.addEventListener('click', build);
