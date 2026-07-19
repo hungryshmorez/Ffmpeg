@@ -382,3 +382,14 @@ jobs:
       # frame count as the source.
       - name: Parallel segment encoding
         run: npm run test:segment-encode
+
+      # Hardening (P0 audit fixes):
+      # F2 — GPU texture/FBO leak on adaptive-quality resize is reclaimed.
+      - name: GL texture leak (F2)
+        run: npm run test:gl-texture-leak
+      # F3 — WebGL context loss halts + rebuilds instead of bricking the canvas.
+      - name: GL context-loss recovery (F3)
+        run: npm run test:gl-context-loss
+      # F1 — over-budget MEMFS writes are refused before they OOM the wasm heap.
+      - name: Memory write guard (F1)
+        run: npm run test:mem-write-guard

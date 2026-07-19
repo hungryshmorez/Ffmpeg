@@ -499,6 +499,24 @@ async function refreshHeapGauge() {
   return bytes;
 }
 
+// F1 — guard a MEMFS write against the device memory budget BEFORE the file is
+// materialised (arrayBuffer) and copied into the wasm heap. A multi-GB file
+// otherwise blows the 2 GB wasm ceiling and aborts the whole ffmpeg instance,
+// killing every later render. Returns true if the write is safe; on refusal it
+// surfaces a real, actionable error instead of a silent tab death.
+function guardMemfsWrite(bytes, label) {
+  try {
+    if (!window.FFMemBudget || typeof window.FFMemBudget.checkWrite !== 'function') return true;
+    const chk = window.FFMemBudget.checkWrite(bytes, state.memfsBytes || 0);
+    if (!chk.ok) {
+      logToConsole('error', `Cannot load ${label || 'file'}: ${chk.reason}`);
+      try { if (typeof showInfo === 'function') showInfo('File too large for memory', chk.reason); } catch (_) {}
+      return false;
+    }
+  } catch (_) { /* budget check must never itself block a normal write */ }
+  return true;
+}
+
 /** Delete a list of MEMFS files, ignoring misses. Always safe to call. */
 async function memfsPurge(names) {
   for (const n of names) {
@@ -1595,6 +1613,15 @@ async function handleFilesUpload(fileList) {
 
     setEngineStatus('yellow', `Engine: Reading ${file.name}…`);
 
+    // F1 — refuse an over-budget file before it can OOM the wasm heap.
+    if (!guardMemfsWrite(file.size || 0, file.name)) {
+      media._status = 'error';
+      media._error = 'File too large for available memory.';
+      renderMediaBin();
+      setEngineStatus('green', 'Engine: Ready');
+      continue;
+    }
+
     // ---- BLOCKING path: get the file into MEMFS + a quick native
     // probe so the Run button can enable. Each step is instrumented
     // (writeFile is wrapped with a 30s timeout by instrumentFfmpeg).
@@ -2061,10 +2088,22 @@ async function addOutputToBin({ blob, name, mime, ext, sourceName, workflowName,
   const virtualName = nextVirtualName(ext || cls.ext);
   const blobUrl = URL.createObjectURL(blob);
   const size = blob.size;
-  const u8 = new Uint8Array(await blob.arrayBuffer());
-  try { await ff.deleteFile(virtualName); } catch (_) {}
-  try { await ff.writeFile(virtualName, u8); } catch (err) {
-    logToConsole('err', 'Failed to write output to MEMFS: ' + (err && err.message || err));
+  // F1 — if the output won't fit the budget, keep the downloadable blob but
+  // skip the MEMFS copy (writing it would abort the heap). The clip is still
+  // saved and downloadable; it just can't be re-processed in-tab until the bin
+  // is trimmed. Never silently lose a produced result.
+  let _memfsWritten = false;
+  if (guardMemfsWrite(size, name)) {
+    try {
+      const u8 = new Uint8Array(await blob.arrayBuffer());
+      try { await ff.deleteFile(virtualName); } catch (_) {}
+      await ff.writeFile(virtualName, u8);
+      _memfsWritten = true;
+    } catch (err) {
+      logToConsole('err', 'Failed to write output to MEMFS: ' + (err && err.message || err));
+    }
+  } else {
+    logToConsole('warn', `Output kept for download but not re-imported (over memory budget).`);
   }
   let displayName = name;
   if (workflowName && !displayName.includes(`[${workflowName}]`)) {
