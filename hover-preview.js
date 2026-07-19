@@ -299,6 +299,17 @@
     ctx.fillStyle = '#c98a5e'; ctx.fillRect(w * 0.38, h * 0.2, w * 0.24, h * 0.24);
   }
 
+  // Return the synthetic reference frame as an ImageData at any size. Shared
+  // with the workflow-thumbnail engine (#93) so both show the same canonical
+  // subject (colour bars + skin patch + gradient).
+  function testFrame(w, h) {
+    if (typeof document === 'undefined') return null;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    drawTestFrame(x, w, h);
+    return x.getImageData(0, 0, w, h);
+  }
+
   // Capture the current source frame into an offscreen ImageData at preview size.
   function captureSourceFrame() {
     if (typeof document === 'undefined') return null;
@@ -409,7 +420,7 @@
     else boot();
   }
 
-  const API = { OPS, applyLook, deriveLook, showFor, hide, attach, captureSourceFrame, PREVIEW_W, PREVIEW_H };
+  const API = { OPS, applyLook, deriveLook, showFor, hide, attach, captureSourceFrame, testFrame, PREVIEW_W, PREVIEW_H };
   global.FFHoverPreview = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
 })(typeof window !== 'undefined' ? window : globalThis);

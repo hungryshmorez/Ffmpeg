@@ -326,3 +326,9 @@ jobs:
       # showFor paints the overlay canvas and hovering a card reveals it.
       - name: Workflow hover-preview
         run: npm run test:hover-preview
+
+      # Workflow thumbnails (#93): each card's baked thumbnail is the look
+      # applied to a canonical frame; grayscale→gray tile, saturate widens
+      # spread, decorate() injects one non-blank thumb per card.
+      - name: Workflow thumbnails
+        run: npm run test:wf-thumbs

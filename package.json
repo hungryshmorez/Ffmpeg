@@ -63,6 +63,7 @@
     "test:prefs": "node .test/prefs.mjs",
     "test:color-match": "node .test/color-match.mjs",
     "test:hover-preview": "node .test/hover-preview.mjs",
+    "test:wf-thumbs": "node .test/wf-thumbs.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },
