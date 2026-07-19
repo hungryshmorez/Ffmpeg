@@ -285,3 +285,8 @@ jobs:
       # clips; loudnessMatch brings a mix onto a reference's RMS.
       - name: Gain staging + A/B
         run: npm run test:gain-staging
+
+      # Retime toggle (#56): the same in-between frame two ways — 'flow' warps to
+      # one sharp block at the midpoint, 'blend' cross-dissolves to two ghosts.
+      - name: Retime method toggle
+        run: npm run test:retime-toggle

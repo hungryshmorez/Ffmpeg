@@ -174,6 +174,24 @@ window.WORKFLOWS_V5 = [
     },
   },
 
+  // --- retime method toggle (#56): the blend alternative to flow slow-mo ---
+  {
+    id: 'blend-slomo',
+    name: 'Slow-Mo (frame blend)',
+    category: 'motion-speed',
+    description: 'The other retime method — cross-dissolves neighbouring frames instead of warping along the motion. Cheaper and softer than optical-flow slow-mo (moving objects ghost rather than land sharp); the classic frame-mix look. Pair with “Slow-Mo (optical flow)” and pick per shot.',
+    tags: ['slowmo', 'frame-blend', 'retime', 'dissolve', 'toggle'],
+    icon: '🐌', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderSpeedBlur(m, { factor: 2 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Frame-blend slow-mo — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // --- auto-reframe to vertical (#45), tracks the subject ---
   {
     id: 'auto-reframe',

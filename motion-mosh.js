@@ -466,6 +466,27 @@
     }
 
     // -------------------------------------------------------------------------
+    // RETIME METHOD TOGGLE (#56) — the same in-between frame two ways. FLOW warps
+    // along the motion so a moving object lands at ONE in-between position (sharp
+    // slow-mo). BLEND cross-dissolves, so a moving object shows as TWO ghosts (the
+    // cheap frame-mix look). Same call, one `method` switch — the choice a retime
+    // panel offers.
+    // -------------------------------------------------------------------------
+    retime(a, b, vec, cols, rows, w, h, t, method = 'flow') {
+      if (method === 'blend') {
+        const out = new Uint8ClampedArray(a.length);
+        for (let i = 0; i < out.length; i += 4) {
+          out[i] = a[i] * (1 - t) + b[i] * t;
+          out[i + 1] = a[i + 1] * (1 - t) + b[i + 1] * t;
+          out[i + 2] = a[i + 2] * (1 - t) + b[i + 2] * t;
+          out[i + 3] = 255;
+        }
+        return out;
+      }
+      return this.interpolate(a, b, vec, cols, rows, w, h, t);
+    }
+
+    // -------------------------------------------------------------------------
     // VECTOR OVERLAY (#57) — draw the current motion field as arrows. On by
     // default in the overlay render; genuinely useful for dialling a mosh in and
     // a good look in its own right. Draws onto ANY 2-D context (the mosher's own
