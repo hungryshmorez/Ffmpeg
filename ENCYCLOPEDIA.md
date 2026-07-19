@@ -281,7 +281,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | # | Feature | What it is / the vision | Status | What's left |
 |---|---|---|---|---|
 | 69 | MIDI clock sync (slave) | Play with anyone. | ⬜ | Sync sequencer to incoming MIDI clock. — *M* |
-| 70 | Ableton Link | Networked tempo. | 🔒 | No browser Link without a bridge. — *L* |
+| 70 | Ableton Link | Networked tempo. | ❌ | Dropped — browsers can't speak Link without a native bridge, and it's out of scope for a client-side tool. Tap tempo + audio beat-lock cover the need. |
 | 71 | MIDI output | Send clock/notes so lights follow. | ⬜ | MIDI-out from the sequencer. — *S–M* |
 | 72 | More than 4 layers + mixer strip | Real mixer. | ✅ | The `Compositor` engine already takes any layer count; `FFComp.setLayerCount(n)` (＋/− in the deck head) rebuilds the mixer for 2–8 layers, regenerating the strips, crossfader options and wiring. `.test/n-layers.mjs` grows the deck to 6 in the real app, loads a clip into layer 5 (beyond the old max), and screen-blends it over a red base → yellow centre pixel (frames, not bytes); the count clamps to [2,8]. |
 | 73 | Per-layer effect chains | Each layer its own shader stack. | ⬜ | Effect chain per layer. — *L* |
