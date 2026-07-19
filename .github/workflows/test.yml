@@ -420,3 +420,8 @@ jobs:
       # a search + "Active only" filter that collapses the wall to what's used.
       - name: Editor section disclosure
         run: npm run test:section-filter
+
+      # UX redesign — right-click / Shift+F10 context menus on bin + workflow
+      # cards (accessible role=menu, arrow nav, Escape / click-outside close).
+      - name: Card context menus
+        run: npm run test:context-menu

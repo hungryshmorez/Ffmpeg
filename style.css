@@ -2810,3 +2810,24 @@ details.section[hidden] { display: none; }
 @media (pointer: coarse) {
   .section-filter .section-btn, .section-filter .section-search { min-height: 44px; }
 }
+
+/* =========================================================================
+   UX REDESIGN — context menu (right-click / Shift+F10)
+   ========================================================================= */
+.ff-context-menu {
+  position: fixed; z-index: 9600; min-width: 190px;
+  background: #12151c; border: 1px solid #2a2f3a; border-radius: 10px;
+  padding: 5px; box-shadow: 0 12px 40px rgba(0,0,0,.55);
+  font: 13px/1.3 system-ui, sans-serif;
+}
+.ff-context-menu .ctx-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 10px; border: 0; border-radius: 7px;
+  background: none; color: #e6e9ef; text-align: left; cursor: pointer;
+}
+.ff-context-menu .ctx-item:hover,
+.ff-context-menu .ctx-item:focus-visible { background: #20242e; outline: none; }
+.ff-context-menu .ctx-item[aria-disabled="true"] { opacity: .4; cursor: default; }
+.ff-context-menu .ctx-icon { width: 1.1em; text-align: center; opacity: .85; }
+.ff-context-menu .ctx-sep { height: 1px; margin: 5px 4px; background: #2a2f3a; }
+@media (pointer: coarse) { .ff-context-menu .ctx-item { min-height: 44px; } }

@@ -84,7 +84,8 @@
     "test:progress-tabs-a11y": "node .test/progress-tabs-a11y.mjs",
     "test:section-filter": "node .test/section-filter.mjs",
     "changelog": "node scripts/generate-changelog.js",
-    "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
+    "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js",
+    "test:context-menu": "node .test/context-menu.mjs"
   },
   "engines": {
     "node": ">=18"

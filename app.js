@@ -2017,6 +2017,21 @@ function renderMediaBin() {
   if (typeof updateActionBar === 'function') updateActionBar();
   if (typeof syncGlobalBinDrawer === 'function') syncGlobalBinDrawer();
 
+  // UX — right-click / Shift+F10 context menu on each bin clip.
+  if (window.FFContextMenu) {
+    window.FFContextMenu.attach(strip, {
+      itemSelector: '.media-bin-card',
+      items: (card) => [
+        { label: 'Open', icon: '▶', action: () => card.click() },
+        { label: 'Move earlier', icon: '◀', action: () => card.querySelector('[data-reorder="up"]')?.click() },
+        { label: 'Move later', icon: '▶', action: () => card.querySelector('[data-reorder="down"]')?.click() },
+        { separator: true },
+        { label: 'Select for batch', icon: '☑', action: () => { const cb = card.querySelector('.bin-card-checkbox'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } } },
+        { label: 'Remove from bin', icon: '🗑', action: () => card.querySelector('.bin-card-remove')?.click() },
+      ],
+    });
+  }
+
   // UX — keyboard-navigable, accessible media bin: arrows move between clips,
   // Enter opens, Delete removes, [ / ] reorder, x toggles batch-select. One tab
   // stop instead of (clips × 4) buttons.
