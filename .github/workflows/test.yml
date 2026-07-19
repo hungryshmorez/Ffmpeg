@@ -393,3 +393,12 @@ jobs:
       # F1 — over-budget MEMFS writes are refused before they OOM the wasm heap.
       - name: Memory write guard (F1)
         run: npm run test:mem-write-guard
+      # F4 — the single ffmpeg.wasm worker serializes all ops (no channel races).
+      - name: Worker serialization (F4)
+        run: npm run test:worker-serialization
+      # F5 — cancel takes the engine offline + clears the lock; no re-init race.
+      - name: Cancel/re-init race (F5)
+        run: npm run test:cancel-reinit
+      # F6 — undo/redo refused mid-render and across DOM-structure changes.
+      - name: Undo desync guards (F6)
+        run: npm run test:undo-desync

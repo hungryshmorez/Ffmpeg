@@ -902,23 +902,39 @@ function instrumentFfmpeg(ffmpeg) {
   // corruption only showed on real renders. Pass the value straight
   // through in ms; -1 / 0 / undefined all mean "no inner timeout" and
   // let ffRun's Promise.race be the only clock.
+  // F4 — SERIALIZE every worker op on this instance. ffmpeg.wasm 0.12.x has a
+  // single worker that can process only one message at a time; overlapping
+  // exec / readFile / writeFile / deleteFile from different callers (a render,
+  // the heap gauge, a probe, segment encode…) interleave their responses and
+  // corrupt the worker's message channel ("function signature mismatch" / hung
+  // exec). A promise-chain mutex guarantees strict FIFO ordering regardless of
+  // caller. Sequential callers (the render path) see no change — the queue is
+  // empty each time. terminate() intentionally BYPASSES this (it's an abort).
+  ffmpeg.__opQueue = Promise.resolve();
+  const serialize = (fn) => {
+    const run = ffmpeg.__opQueue.then(fn, fn);        // run after the prior op, pass or fail
+    ffmpeg.__opQueue = run.then(() => {}, () => {});   // a rejection must not wedge the chain
+    return run;
+  };
+
   const _exec = ffmpeg.exec.bind(ffmpeg);
   ffmpeg.exec = function(args, timeoutMs, signal) {
     const ms = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : -1;
-    return _exec(args, ms, signal);
+    return serialize(() => _exec(args, ms, signal));
   };
 
   // writeFile / readFile / deleteFile / load / terminate — wrap with
   // execWithTimeout. load() downloads the wasm, give it 120s; the
-  // others get the standard budgets.
+  // others get the standard budgets. All op wrappers also go through the
+  // serial queue so they never race a render on the shared worker.
   const wrap = (name, fn, defaultMs) => {
     return function() {
       const args = arguments;
-      return execWithTimeout(
+      return serialize(() => execWithTimeout(
         () => fn.apply(ffmpeg, args),
         defaultMs,
         name
-      );
+      ));
     };
   };
   ffmpeg.writeFile  = wrap('writeFile',  ffmpeg.writeFile.bind(ffmpeg),  TT.writeFile);
@@ -3184,6 +3200,9 @@ async function executeFFmpeg(args) {
     return null;
   }
   if (!state.ffmpeg) { logToConsoleThrottled('err', 'Engine not ready.'); return null; }
+  // F5 — refuse during the cancel/re-init window: state.ffmpeg may point at a
+  // terminated-and-reloading worker while engineReady is false.
+  if (!state.engineReady) { logToConsoleThrottled('warn', 'Engine restarting — try again in a moment.'); return null; }
   if (!state.inputFile) { logToConsole('err', 'No input file loaded.'); return null; }
   if (state.isProcessing) { logToConsole('warn', 'Already processing.'); return null; }
   if (state.cancelRequested) state.cancelRequested = false;
@@ -5342,6 +5361,18 @@ function _restoreCustom(custom) {
     try { h.restore(custom[name]); } catch (_) {}
   }
 }
+// F6 — a signature of the CURRENT undoable control set. When the DOM structure
+// changes (mixer strips added/removed, trip-cam slider list regenerated, layer
+// count changed) the id set changes, so a snapshot taken under a different
+// structure would restore only the ids that still exist — silently dropping the
+// rest while the custom providers restore their half → the UI and the graph
+// desync permanently. We stamp the signature into each snapshot and refuse to
+// apply one whose structure no longer matches.
+function _structSig() {
+  const ids = [];
+  $$('input, select, textarea').forEach(el => { if (el.id && !UNDO_SKIP_IDS.has(el.id)) ids.push(el.id); });
+  return ids.sort().join(',');
+}
 function _snapshotControls() {
   const snap = {};
   $$('input, select, textarea').forEach(el => {
@@ -5352,13 +5383,14 @@ function _snapshotControls() {
   });
   const custom = _captureCustom();
   if (custom) snap.__custom = custom;
+  snap.__sig = _structSig();
   return snap;
 }
 function _applySnapshot(snap) {
   state._undoSuspend = true;
   try {
     for (const [id, v] of Object.entries(snap)) {
-      if (id === '__custom') continue;              // handled by _restoreCustom
+      if (id === '__custom' || id === '__sig') continue;   // metadata, not controls
       const el = document.getElementById(id);
       if (!el) continue;
       if (el.type === 'checkbox') el.checked = !!v;
@@ -5414,17 +5446,31 @@ function scheduleUndoSnapshot() {
   }, UNDO_DEBOUNCE_MS);
 }
 function undoLastChange() {
+  // F6 — never mutate control state mid-render; args are captured at exec time
+  // so an undo underneath a running render desyncs the preview from the output.
+  if (state.isProcessing) { logToConsole('warn', 'Finish or cancel the render before undoing.'); return; }
   if (state.undoStack.length === 0) { logToConsole('', 'Nothing to undo.'); return; }
+  const prev = state.undoStack[state.undoStack.length - 1];        // peek before committing
+  if (prev.__sig != null && prev.__sig !== _structSig()) {
+    logToConsole('warn', 'Cannot undo across a layout change (layers/panel changed) — skipped to avoid desyncing the UI.');
+    return;
+  }
   const current = _snapshotControls();
-  const prev = state.undoStack.pop();
+  state.undoStack.pop();
   state.redoStack.push(current);
   _applySnapshot(prev);
   logToConsole('ok', `Undo (${state.undoStack.length} steps left)`);
 }
 function redoLastChange() {
+  if (state.isProcessing) { logToConsole('warn', 'Finish or cancel the render before redoing.'); return; }
   if (state.redoStack.length === 0) { logToConsole('', 'Nothing to redo.'); return; }
+  const next = state.redoStack[state.redoStack.length - 1];        // peek before committing
+  if (next.__sig != null && next.__sig !== _structSig()) {
+    logToConsole('warn', 'Cannot redo across a layout change (layers/panel changed) — skipped to avoid desyncing the UI.');
+    return;
+  }
   const current = _snapshotControls();
-  const next = state.redoStack.pop();
+  state.redoStack.pop();
   state.undoStack.push(current);
   _applySnapshot(next);
   logToConsole('ok', `Redo (${state.redoStack.length} steps left)`);
@@ -6008,9 +6054,18 @@ function cancelProcessing() {
   if (!state.isProcessing) return;
   state.cancelRequested = true;
   logToConsole('warn', 'Cancelling…');
+  // F5 — take the engine OFFLINE synchronously (before terminate) so no render
+  // can start against the worker we're about to kill and reload, and clear the
+  // processing lock NOW instead of relying solely on the aborted render's
+  // finally (whose timing can slip and leave the UI stuck "processing").
+  state.engineReady = false;
   try { state.ffmpeg && state.ffmpeg.terminate(); } catch (_) {}
-  setProgressText('Cancelling…');
-  // Re-init
+  state.isProcessing = false;
+  setControlsEnabled(false);           // stay disabled until the fresh engine is ready
+  setCancelVisible(false);
+  setProgressText('Cancelled — restarting engine…');
+  try { setEngineStatus('yellow', 'Engine: Restarting…'); } catch (_) {}
+  // Re-init a fresh worker; initFFmpeg() flips engineReady true when it resolves.
   setTimeout(() => { initFFmpeg(); }, 250);
 }
 

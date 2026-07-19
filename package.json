@@ -76,6 +76,9 @@
     "test:gl-texture-leak": "node .test/gl-texture-leak.mjs",
     "test:gl-context-loss": "node .test/gl-context-loss.mjs",
     "test:mem-write-guard": "node .test/mem-write-guard.mjs",
+    "test:worker-serialization": "node .test/worker-serialization.mjs",
+    "test:cancel-reinit": "node .test/cancel-reinit.mjs",
+    "test:undo-desync": "node .test/undo-desync.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },
