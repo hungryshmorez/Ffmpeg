@@ -402,3 +402,6 @@ jobs:
       # F6 — undo/redo refused mid-render and across DOM-structure changes.
       - name: Undo desync guards (F6)
         run: npm run test:undo-desync
+      # F7/F8 — hostile-audio decode guards + WebAudio node/context hygiene.
+      - name: Audio robustness (F7/F8)
+        run: npm run test:audio-robustness
