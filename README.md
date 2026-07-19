@@ -33,6 +33,32 @@ balanced CSS braces · 27 node-graph types · 11 trip-cam effects.** See
 
 ---
 
+## UX & accessibility
+
+A structural UX pass targets cognitive overload and keyboard/touch ergonomics —
+every behaviour is verified in headless Chromium (real focus movement, ARIA
+state, decoded layout), not assumed:
+
+- **Keyboard-navigable card grids** (`a11y-grid.js`) — the Media Bin and the
+  215-card Workflow grid are WAI-ARIA listboxes with a *single* tab stop and
+  roving-tabindex arrow navigation (was ~645 tab stops). Enter runs the primary
+  action; typed keys run secondary ones; inner buttons leave the tab order.
+- **Progressive disclosure** (`section-filter.js`) — the 33-section Editor column
+  gets a sticky search + "Active only" filter that collapses the wall to just the
+  sections you're using, with a live count.
+- **Context menus** (`context-menu.js`) — right-click or Shift+F10 on any bin
+  clip or workflow card opens an accessible `role=menu` with every action.
+- **Slider ergonomics** (`slider-ergonomics.js`) — double-click any slider to
+  reset it to its default; wheel over a focused slider to nudge (Shift = ×10).
+- **Honest progress + accessible tabs** — the progress bar is monotonic (never
+  jitters backward on ffmpeg's jumpy reports) with an indeterminate warmup pulse
+  and a live `role="progressbar"`; the tab bar is a real tablist (`aria-selected`,
+  roving tabindex, ←/→/Home/End).
+- **Touch & focus** — `:focus-visible` rings on all controls, `aria-selected`
+  styling, and guaranteed 44×44px tap targets on coarse pointers.
+
+---
+
 ## Running it
 
 The app needs **cross-origin isolation** (COOP/COEP headers) so ffmpeg.wasm can use
@@ -285,6 +311,11 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/audio-robustness.mjs`** (hardening F7/F8) asserts undecodable audio fails gracefully (`loadFile` throws a
   clear catchable error, `analyse` returns null and closes its context) and WebAudio hygiene (`stop()` disconnects
   the source, `dispose()` closes the AudioContext).
+- **`.test/a11y-grid.mjs`** (UX) — ARIA listbox, one tab stop, roving arrow nav, Enter/typed-key actions on the
+  media bin + workflow grid. **`.test/progress-tabs-a11y.mjs`** — monotonic + indeterminate progress with ARIA, and
+  an accessible tablist. **`.test/section-filter.mjs`** — the Editor "Active only"/search disclosure controller.
+  **`.test/context-menu.mjs`** — right-click/Shift+F10 menus. **`.test/slider-ergonomics.mjs`** — double-click-reset
+  and focused wheel-nudge across every slider.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
