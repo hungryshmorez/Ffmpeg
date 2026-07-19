@@ -430,3 +430,8 @@ jobs:
       # (focused) wheel-to-nudge across every slider, via delegation.
       - name: Slider ergonomics
         run: npm run test:slider-ergonomics
+
+      # UX redesign — ARIA for the existing Ctrl/Cmd+K command palette
+      # (role=dialog/combobox/listbox/option + aria-activedescendant).
+      - name: Command palette a11y
+        run: npm run test:palette-a11y

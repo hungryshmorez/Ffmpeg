@@ -86,7 +86,8 @@
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js",
     "test:context-menu": "node .test/context-menu.mjs",
-    "test:slider-ergonomics": "node .test/slider-ergonomics.mjs"
+    "test:slider-ergonomics": "node .test/slider-ergonomics.mjs",
+    "test:palette-a11y": "node .test/palette-a11y.mjs"
   },
   "engines": {
     "node": ">=18"
