@@ -320,3 +320,9 @@ jobs:
       # mean/std on the reference's; strength blends; self-match is identity.
       - name: Auto colour-match
         run: npm run test:color-match
+
+      # Hover-preview (#94): each workflow's look is derived from its real
+      # ffmpeg command + keyword heuristics and applied as per-pixel ops;
+      # showFor paints the overlay canvas and hovering a card reveals it.
+      - name: Workflow hover-preview
+        run: npm run test:hover-preview
