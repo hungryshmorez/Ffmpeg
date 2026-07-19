@@ -371,3 +371,8 @@ jobs:
       # the same flow field as the full search for far fewer SAD ops.
       - name: Half-res motion estimation
         run: npm run test:half-res-motion
+
+      # Memory budget (#24): MEMFS + GPU + VideoFrames + AudioBuffers unified
+      # into one device-derived budget with ok/warn/over status.
+      - name: Unified memory budget
+        run: npm run test:mem-budget

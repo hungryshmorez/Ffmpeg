@@ -216,7 +216,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 21 | Parallel segment encoding | Split at keyframes, encode N segments in a worker pool, concat. | ⬜ | Worker pool + concat demux. — *XL* |
 | 22 | Lazy-load the wasm core | 30 MB shouldn't download if you only came for the Audio Studio. | ✅ | — |
 | 23 | Preload core on Editor hover | Warm the core before it's needed. | ⬜ | Prefetch on hover/intent. — *S* |
-| 24 | A real memory budget | MEMFS + GPU + VideoFrames + AudioBuffers compete; show one number. | 🟡 | MEMFS gauge exists; unify GPU/audio into one budget readout. — *M* |
+| 24 | A real memory budget | MEMFS + GPU + VideoFrames + AudioBuffers compete; show one number. | ✅ | `FFMemBudget` — unifies every source into ONE number vs a device-derived budget. Per-source estimators (`textureBytes` RGBA8, `videoFrameBytes` RGBA/planar-YUV, `audioBufferBytes` Float32, `memfsBytesOf`); a live registry (`report`/`clear`/`breakdown`/`total`); `deviceBudgetBytes()` from `navigator.deviceMemory` (40 %, capped at the 2 GB wasm ceiling); and `status()` returning ok/warn/over at 75 %/90 %. `attach()` folds in the app's live `state.memfsBytes` and paints a `#mem-budget` readout beside the existing per-source MEMFS gauge (which it never rewrites). Fixed a real 32-bit-overflow bug found while building it (`bytes | 0` wrapped multi-GB figures to "0 B"). `.test/mem-budget.mjs` (7/7) verifies the estimators, sum/clear, the ok→warn→over thresholds, that the budget honours deviceMemory + the wasm cap, the readout + level class, the live-MEMFS fold-in, and that multi-GB figures format correctly. |
 
 ### Audio (25–40)
 
