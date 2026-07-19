@@ -93,7 +93,9 @@
 
   function fire(id, momentary) {
     const t = TRIGGERS[id];
-    if (!t || !engine) return;
+    if (!t) return;
+    window.FFMidiOut?.noteOnFor?.(id);          // #71 MIDI out (no-op if disabled)
+    if (!engine) return;
 
     if (t.effect) engine.setEffect(t.effect);
     if (t.params) engine.setParams(t.params);
@@ -126,7 +128,9 @@
 
   function release(id) {
     const t = TRIGGERS[id];
-    if (!t || !engine) return;
+    if (!t) return;
+    window.FFMidiOut?.noteOffFor?.(id);         // #71 MIDI out (no-op if disabled)
+    if (!engine) return;
     S.held.delete(id);
     S.active.delete(id);
 
@@ -295,6 +299,7 @@
   function panic() {
     for (const id of [...S.active, ...S.held]) release(id);   // release every trigger
     S.active.clear(); S.held.clear();
+    try { window.FFMidiOut?.allNotesOff?.(); window.FFMidiOut?.stopClock?.(); } catch (_) {}  // #71 silence MIDI too
     if (S.playing) stop();                                    // stop the sequencer
     try { chaos?.stop(); } catch (_) {}                        // kill the chaos engine
     S.strobeOn = false;

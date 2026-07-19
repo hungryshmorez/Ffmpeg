@@ -356,3 +356,8 @@ jobs:
       # and the chain drives the preview loop over the single picker.
       - name: Effect chains
         run: npm run test:fx-chain
+
+      # MIDI out (#71): 24-PPQN clock + note on/off from the sequencer, verified
+      # against an injected output (physical Web-MIDI delivery is device-gated).
+      - name: MIDI output
+        run: npm run test:midi-out
