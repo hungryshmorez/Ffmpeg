@@ -81,7 +81,8 @@
     "test:undo-desync": "node .test/undo-desync.mjs",
     "test:audio-robustness": "node .test/audio-robustness.mjs",
     "changelog": "node scripts/generate-changelog.js",
-    "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
+    "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js",
+    "test:accel-router": "node .test/accel-router.mjs"
   },
   "engines": {
     "node": ">=18"

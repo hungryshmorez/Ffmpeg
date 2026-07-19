@@ -405,3 +405,9 @@ jobs:
       # F7/F8 — hostile-audio decode guards + WebAudio node/context hygiene.
       - name: Audio robustness (F7/F8)
         run: npm run test:audio-robustness
+
+      # Accel router (Phase 4.2): the unified graceful-fallback layer — an
+      # accelerated path that is absent OR throws silently falls back to the
+      # wasm/WebGL path so no workflow ever goes down.
+      - name: Accel graceful-fallback router
+        run: npm run test:accel-router
