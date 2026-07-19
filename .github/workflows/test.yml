@@ -376,3 +376,9 @@ jobs:
       # into one device-derived budget with ok/warn/over status.
       - name: Unified memory budget
         run: npm run test:mem-budget
+
+      # Segment encoding (#21): time-split → per-segment encode (bounded
+      # concurrency pool) → concat copy; the real pipeline decodes to the same
+      # frame count as the source.
+      - name: Parallel segment encoding
+        run: npm run test:segment-encode

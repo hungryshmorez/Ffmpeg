@@ -72,6 +72,7 @@
     "test:midi-in": "node .test/midi-in.mjs",
     "test:half-res-motion": "node .test/half-res-motion.mjs",
     "test:mem-budget": "node .test/mem-budget.mjs",
+    "test:segment-encode": "node .test/segment-encode.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },
