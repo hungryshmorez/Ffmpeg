@@ -561,7 +561,19 @@
       const { t, s } = c.dataset;
       S.pattern[t][+s] = !S.pattern[t][+s];
       c.classList.toggle('on', S.pattern[t][+s]);
+      // #89 — the sequencer pattern is non-DOM state; flag it for the shared
+      // app undo stack so Ctrl+Z reverts step edits like any other change.
+      window.scheduleUndoSnapshot?.();
     });
+
+    // #89 — register the sequencer pattern as a custom-undo provider. capture()
+    // deep-clones the pattern; restore() puts it back and re-syncs the grid.
+    if (typeof window.registerUndoProvider === 'function') {
+      window.registerUndoProvider('vj-pattern', {
+        capture: () => clonePattern(S.pattern),
+        restore: (p) => { S.pattern = clonePattern(p); syncGrid(); },
+      });
+    }
 
     // #75 pattern banks — click to recall (bar-quantised while playing),
     // Shift+click to save the current pattern.

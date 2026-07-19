@@ -241,10 +241,14 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/onboarding.mjs`** verifies the **onboarding tour**: it auto-appears on first run at step 1 with the
   spotlight on the Add-media button, Next advances the steps and switches to a step's target tab, finishing gates
   it in `localStorage` and hides it, `start(false)` is a no-op once gated while the cheat-sheet button replays it.
+- **`.test/undo-custom.mjs`** verifies **app-wide undo of custom state**: a registered provider's non-DOM state
+  rides the shared undo stack in lockstep with a form control across a run of undo/redo (round-tripping to the
+  start), a null capture opts out cleanly, and app-level Undo reverts a real VJ sequencer step edit while keeping
+  the grid DOM and pattern state consistent.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, `test:pitch-snap`, `test:gain-staging`, `test:retime-toggle`, `test:curves`, `test:pattern-banks`, `test:automation`, `test:live-record`, `test:prefs`, `test:color-match`, `test:hover-preview`, `test:wf-thumbs`, and `test:onboarding` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, `test:pitch-snap`, `test:gain-staging`, `test:retime-toggle`, `test:curves`, `test:pattern-banks`, `test:automation`, `test:live-record`, `test:prefs`, `test:color-match`, `test:hover-preview`, `test:wf-thumbs`, `test:onboarding`, and `test:undo-custom` in real headless Chromium on
 every push and pull request.
 
 ---

@@ -5276,6 +5276,33 @@ const UNDO_SKIP_IDS = new Set([
   'file-input', 'text-font-upload', 'bin-url-input', 'text-font-upload-btn',
   'wf-search',
 ]);
+// #89 — custom-state undo providers. Modules with non-DOM state (the VJ
+// sequencer pattern, trip-cam params, the node graph…) register a
+// { capture, restore } pair; their serialised state rides along inside every
+// snapshot under the reserved `__custom` key and is restored on undo/redo, so
+// Ctrl+Z reaches beyond form controls into the whole app. capture() must
+// return a JSON-cloneable value (or null/undefined to sit this snapshot out).
+const UNDO_PROVIDERS = new Map();
+function registerUndoProvider(name, hooks) {
+  if (!name || !hooks || typeof hooks.capture !== 'function' || typeof hooks.restore !== 'function') return false;
+  UNDO_PROVIDERS.set(name, hooks);
+  return true;
+}
+function _captureCustom() {
+  if (UNDO_PROVIDERS.size === 0) return undefined;
+  const out = {};
+  for (const [name, h] of UNDO_PROVIDERS) {
+    try { const v = h.capture(); if (v !== undefined && v !== null) out[name] = v; } catch (_) {}
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+function _restoreCustom(custom) {
+  if (!custom) return;
+  for (const [name, h] of UNDO_PROVIDERS) {
+    if (!Object.prototype.hasOwnProperty.call(custom, name)) continue;
+    try { h.restore(custom[name]); } catch (_) {}
+  }
+}
 function _snapshotControls() {
   const snap = {};
   $$('input, select, textarea').forEach(el => {
@@ -5284,18 +5311,22 @@ function _snapshotControls() {
     if (el.type === 'checkbox') snap[el.id] = !!el.checked;
     else snap[el.id] = el.value;
   });
+  const custom = _captureCustom();
+  if (custom) snap.__custom = custom;
   return snap;
 }
 function _applySnapshot(snap) {
   state._undoSuspend = true;
   try {
     for (const [id, v] of Object.entries(snap)) {
+      if (id === '__custom') continue;              // handled by _restoreCustom
       const el = document.getElementById(id);
       if (!el) continue;
       if (el.type === 'checkbox') el.checked = !!v;
       else el.value = v;
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
+    _restoreCustom(snap.__custom);                  // #89 custom module state
   } finally {
     state._undoSuspend = false;
   }
@@ -5329,7 +5360,10 @@ function pushUndoSnapshot() {
 function _snapshotsEqual(a, b) {
   const ak = Object.keys(a), bk = Object.keys(b);
   if (ak.length !== bk.length) return false;
-  for (const k of ak) if (a[k] !== b[k]) return false;
+  for (const k of ak) {
+    if (k === '__custom') { if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return false; }
+    else if (a[k] !== b[k]) return false;
+  }
   return true;
 }
 function scheduleUndoSnapshot() {
@@ -5356,6 +5390,12 @@ function redoLastChange() {
   _applySnapshot(next);
   logToConsole('ok', `Redo (${state.redoStack.length} steps left)`);
 }
+
+// #89 — expose the undo hooks so any module can register non-DOM state and
+// flag a change for the shared undo stack.
+window.registerUndoProvider = registerUndoProvider;
+window.scheduleUndoSnapshot = scheduleUndoSnapshot;
+window.pushUndoSnapshot = pushUndoSnapshot;
 
 function resetAllControls() {
   for (const [id, v] of Object.entries(state.defaults)) {

@@ -338,3 +338,9 @@ jobs:
       # gates it, and the cheat-sheet button replays it.
       - name: Onboarding tour
         run: npm run test:onboarding
+
+      # App-wide undo (#89): non-DOM module state (the VJ sequencer pattern)
+      # rides the shared undo stack via registered providers; app Undo reverts
+      # a step edit and re-syncs the grid, staying in lockstep with controls.
+      - name: App-wide undo (custom state)
+        run: npm run test:undo-custom
