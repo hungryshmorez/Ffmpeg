@@ -316,7 +316,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 92 | Before/after wipe on every effect | Not just the preview tab. | ✅ (preview) | Extend the wipe to inline effect previews. — *M* |
 | 93 | Workflow thumbnails | Show what "Bleach Bypass" does. | ⬜ | Pre-rendered thumbnails per workflow. — *M* |
 | 94 | Hover-preview a workflow on the canvas | Preview before committing. | ⬜ | Live preview on hover. — *M* |
-| 95 | Preferences panel | Default codec/quality/autosave/theme. | ⬜ | Settings store + panel. — *S–M* |
+| 95 | Preferences panel | Default codec/quality/autosave/theme. | ✅ | `FFPrefs` — a localStorage-backed store (`all`/`get`/`set`/`reset`) with defaults for reduce-motion, default export format, workflow suggestions, delete-confirm and accent colour; `apply()` reflects them onto the document (a `reduce-motion` class + `--accent` var). A modal panel edits them, opened with the "," key. `.test/prefs.mjs` verifies defaults, that `set()` persists + applies, that prefs survive a reload and re-apply, that "," opens the modal, and that `reset()` restores defaults. |
 | 96 | Keyboard shortcuts for everything + cheat sheet | Discoverable. | ✅ | `?` toggles the sheet; `[`/`]` cycle tabs; `Alt+1‑8` jump to any tab (was 1‑4); the cheat sheet is grouped (Global / Navigation / VJ) and the VJ keys are auto-generated from `FFVJ.TRIGGERS` so they can't drift. `.test/shortcuts.mjs` drives the keyboard and reads UI state back (6/6). |
 
 ### Architecture (97–100)

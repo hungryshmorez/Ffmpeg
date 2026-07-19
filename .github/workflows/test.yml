@@ -310,3 +310,8 @@ jobs:
       # non-empty video that DECODES to real frames and lands in the bin.
       - name: Live effect record → bin
         run: npm run test:live-record
+
+      # Preferences (#95): defaults, set() persists + applies (reduce-motion,
+      # accent), survives a reload, "," opens the modal, reset restores defaults.
+      - name: Preferences panel
+        run: npm run test:prefs
