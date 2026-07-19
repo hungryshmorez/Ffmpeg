@@ -417,3 +417,14 @@ jobs:
       # and decodes to the same frame count. Falls back to memory off-OPFS.
       - name: OPFS block streaming
         run: npm run test:opfs-stream
+
+      # OPFS upload loader: fileToMemfs streams a File into MEMFS (frame-exact),
+      # OPFS path and forced-fallback path both decode to the same frames.
+      - name: OPFS upload → MEMFS
+        run: npm run test:opfs-upload
+
+      # OPFS → bin → wasm handoff: a real upload through the UI is binned via the
+      # OPFS load path, a standard downscale-480p workflow runs on it, and the
+      # output decodes to ~60 frames at 480p — plus the OPFS-disabled fallback.
+      - name: OPFS→bin→workflow handoff
+        run: npm run test:opfs-bin-workflow

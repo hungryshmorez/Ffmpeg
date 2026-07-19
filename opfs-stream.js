@@ -129,6 +129,28 @@
     return { bytes: total };
   }
 
+  // Upload → MEMFS via OPFS when available: the File is block-streamed into
+  // OPFS (never whole-in-heap for the transfer), then streamed into MEMFS. Off
+  // OPFS it falls back to the direct one-shot read. Output is identical either
+  // way. Routes through FFAccel so a browser without OPFS never breaks upload.
+  function fileToMemfs(ff, file, memfsName, opts) {
+    opts = opts || {};
+    const opfsName = opts.opfsName || `up_${Date.now().toString(36)}_${String(file && file.name || 'f').replace(/[^\w.-]/g, '_')}`;
+    return runAccel('opfs.fileToMemfs',
+      async () => {
+        await writeStream(opfsName, file, opts);            // File → OPFS, block by block
+        await toMemfs(ff, opfsName, memfsName, opts);       // OPFS → MEMFS
+        if (!opts.keepOpfs) await remove(opfsName);
+        return { via: 'opfs', opfsName: opts.keepOpfs ? opfsName : null };
+      },
+      async () => {
+        const buf = new Uint8Array(await file.arrayBuffer());
+        try { await ff.deleteFile(memfsName); } catch (_) {}
+        await ff.writeFile(memfsName, buf);
+        return { via: 'direct' };
+      });
+  }
+
   async function remove(name) {
     memStore.delete(name);
     if (opfsAvailable()) { try { const d = await _dir(); await d.removeEntry(name); } catch (_) {} }
@@ -142,7 +164,7 @@
     return opfsAvailable() ? accelerated().catch(() => fallback()) : fallback();
   }
 
-  const API = { writeStream, readChunks, readable, toMemfs, size, remove, available: opfsAvailable, DEFAULT_CHUNK, _memStore: memStore };
+  const API = { writeStream, readChunks, readable, toMemfs, fileToMemfs, size, remove, available: opfsAvailable, DEFAULT_CHUNK, _memStore: memStore };
   global.FFOpfsStream = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
 })(typeof window !== 'undefined' ? window : globalThis);

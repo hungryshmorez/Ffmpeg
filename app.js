@@ -1643,18 +1643,22 @@ async function handleFilesUpload(fileList) {
     // (writeFile is wrapped with a 30s timeout by instrumentFfmpeg).
     let data = null;
     try {
-      logToConsole('', `[up] 1/4 fetchFile ${file.name} (${file.size}B)…`);
-      try { console.log(`[up] 1/4 fetchFile ${file.name} (${file.size}B)`); } catch (_) {}
-      data = await FFmpegUtil.fetchFile(file);
-      logToConsole('ok', `[up] 1/4 done — ${data.length} bytes`);
-      try { console.log(`[up] 1/4 done — ${data.length} bytes`); } catch (_) {}
-
-      logToConsole('', `[up] 2/4 writeFile ${virtualName}…`);
-      try { console.log(`[up] 2/4 writeFile ${virtualName}`); } catch (_) {}
-      try { await ff.deleteFile(virtualName); } catch (_) { /* not present */ }
-      await ff.writeFile(virtualName, data);
-      logToConsole('ok', `[up] 2/4 done`);
-      try { console.log(`[up] 2/4 done`); } catch (_) {}
+      // Phase 1.3 — route the upload → MEMFS through OPFS block streaming when
+      // available (the File is streamed, not held whole in the JS heap), with a
+      // silent fallback to the direct fetchFile+writeFile path. Output identical.
+      if (window.FFOpfsStream && typeof window.FFOpfsStream.fileToMemfs === 'function') {
+        logToConsole('', `[up] 1/4 stream ${file.name} (${file.size}B) → MEMFS…`);
+        const res = await window.FFOpfsStream.fileToMemfs(ff, file, virtualName);
+        logToConsole('ok', `[up] 2/4 done via ${res && res.via || 'opfs'}`);
+      } else {
+        logToConsole('', `[up] 1/4 fetchFile ${file.name} (${file.size}B)…`);
+        try { console.log(`[up] 1/4 fetchFile ${file.name} (${file.size}B)`); } catch (_) {}
+        data = await FFmpegUtil.fetchFile(file);
+        logToConsole('ok', `[up] 1/4 done — ${data.length} bytes`);
+        try { await ff.deleteFile(virtualName); } catch (_) { /* not present */ }
+        await ff.writeFile(virtualName, data);
+        logToConsole('ok', `[up] 2/4 done`);
+      }
       media._status = 'loading';
     } catch (err) {
       media._status = 'error';
