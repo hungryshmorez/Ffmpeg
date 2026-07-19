@@ -68,6 +68,21 @@
 
   let engine = null;            // the TripCam engine driving the visuals
   let chaos = null, sparkles = null;
+  const auto = window.FFAutomation ? new window.FFAutomation.Automation() : { recording: false, record() {}, start() {}, stop() {}, length: 0, duration: () => 0, events: [] };  // #76
+
+  // #76 Play the recorded automation back — schedule each master-fader move.
+  function playAutomation() {
+    if (!auto.events || !auto.events.length) { log('No automation recorded yet.', 'warn'); return; }
+    log(`Playing automation — ${auto.events.length} moves.`);
+    const mst = document.getElementById('vj-master');
+    for (const ev of auto.events) {
+      if (ev.param !== 'master') continue;
+      setTimeout(() => {
+        if (mst) mst.value = ev.value;
+        if (engine && window.FFPerf?.Master) { window.FFPerf.Master.capture(engine); window.FFPerf.Master.set(ev.value, engine); window.FFPerf.Master.release(); }
+      }, ev.t * 1000);
+    }
+  }
   let mosher = null;            // the MotionMosher, when Datamosh is triggered
   let srcVideoEl = null;        // the <video> feeding the engine — hot cues seek it
   const cues = [];              // hot-cue jump points, per slot (seconds)
@@ -451,6 +466,8 @@
             <option value="full-chaos">Full Chaos</option>
           </select>
           <button type="button" id="vj-chaos" class="mini-btn">🎲 Auto-Glitch</button>
+          <button type="button" id="vj-auto-rec" class="mini-btn" title="Record master-fader automation (#76)">⏺ REC</button>
+          <button type="button" id="vj-auto-play" class="mini-btn" title="Play back recorded automation">▶ AUTO</button>
           <label class="vj-bpm-wrap" title="Global intensity — one knob toward neutral over every effect">
             <input type="range" id="vj-master" min="0" max="1" step="0.01" value="1">
             <span>MASTER</span>
@@ -606,9 +623,16 @@
     const mst = document.getElementById('vj-master');
     if (mst && window.FFPerf?.Master) {
       mst.addEventListener('pointerdown', () => { if (engine) window.FFPerf.Master.capture(engine); });
-      mst.addEventListener('input', (e) => { if (engine) window.FFPerf.Master.set(+e.target.value, engine); });
+      mst.addEventListener('input', (e) => { if (engine) window.FFPerf.Master.set(+e.target.value, engine); auto.record('master', +e.target.value, performance.now() / 1000); });
       mst.addEventListener('pointerup', () => window.FFPerf.Master.release());
     }
+
+    // #76 Automation — record master-fader moves, play them back.
+    document.getElementById('vj-auto-rec')?.addEventListener('click', (e) => {
+      if (auto.recording) { auto.stop(); e.target.classList.remove('on'); log(`Automation recorded — ${auto.length} moves, ${auto.duration().toFixed(1)}s.`, 'ok'); }
+      else { auto.start(performance.now() / 1000); e.target.classList.add('on'); log('Recording automation — move the MASTER fader…'); }
+    });
+    document.getElementById('vj-auto-play')?.addEventListener('click', () => playAutomation());
 
     // QUALITY — Auto lets the adaptive monitor shed load when FPS drops; the
     // named tiers lock a fixed quality. Backed by FFPerf.Perf (performance.js).
@@ -692,7 +716,7 @@
   }
   function renderMappings() { /* mappings render into the learn button title */ }
 
-  window.FFVJ = { build, TRIGGERS, fire, release, panic, saveBank, recallBank, applyBank, S };
+  window.FFVJ = { build, TRIGGERS, fire, release, panic, saveBank, recallBank, applyBank, automation: () => auto, S };
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('[data-tab="vj"]')?.addEventListener('click', build);

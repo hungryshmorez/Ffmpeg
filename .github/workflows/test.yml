@@ -300,3 +300,8 @@ jobs:
       # empty bank is safe, and a recall while playing queues for the next bar.
       - name: Pattern banks
         run: npm run test:pattern-banks
+
+      # Automation recording (#76): moves are time-stamped from the take start,
+      # valueAt is sample-and-hold, stateAt gives the whole patch, and it round-trips.
+      - name: Automation recording
+        run: npm run test:automation

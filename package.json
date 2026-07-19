@@ -58,6 +58,7 @@
     "test:retime-toggle": "node .test/retime-toggle.mjs",
     "test:curves": "node .test/curves.mjs",
     "test:pattern-banks": "node .test/pattern-banks.mjs",
+    "test:automation": "node .test/automation.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },
