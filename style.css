@@ -2779,3 +2779,34 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .progress-track.indeterminate .progress-fill { animation: none; width: 100% !important; opacity: .35; }
 }
+
+/* =========================================================================
+   UX REDESIGN — progressive disclosure: Editor section filter toolbar
+   ========================================================================= */
+.section-filter {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  padding: 8px; margin-bottom: 8px;
+  background: var(--panel, #12151c);
+  border-bottom: 1px solid var(--border, #2a2f3a);
+}
+.section-filter .section-search {
+  flex: 1 1 120px; min-width: 100px;
+  padding: 6px 8px; font-size: 13px;
+  background: #0d0f14; color: #e6e9ef;
+  border: 1px solid var(--border, #2a2f3a); border-radius: 7px;
+}
+.section-filter .section-btn {
+  padding: 6px 10px; font-size: 12px; cursor: pointer;
+  background: #20242e; color: #c3c9d4;
+  border: 1px solid var(--border, #2f3441); border-radius: 7px;
+}
+.section-filter .section-btn:hover { background: #262b36; }
+.section-filter .section-btn.on {
+  background: var(--accent, #00d4ff); color: #04121a; border-color: transparent; font-weight: 600;
+}
+.section-filter .section-count { font-size: 11px; color: #8a93a2; margin-left: auto; white-space: nowrap; }
+details.section[hidden] { display: none; }
+@media (pointer: coarse) {
+  .section-filter .section-btn, .section-filter .section-search { min-height: 44px; }
+}

@@ -415,3 +415,8 @@ jobs:
       # ARIA) and an accessible tablist (aria-selected, roving tabindex, arrows).
       - name: Progress + tablist a11y
         run: npm run test:progress-tabs-a11y
+
+      # UX redesign — progressive disclosure: the 33-section Editor column gets
+      # a search + "Active only" filter that collapses the wall to what's used.
+      - name: Editor section disclosure
+        run: npm run test:section-filter
