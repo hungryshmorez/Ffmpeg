@@ -54,6 +54,27 @@
     return { usedBytes, budgetBytes, pct, level, breakdown: breakdown() };
   }
 
+  // F1 — decide whether writing `addBytes` more into MEMFS is safe. The wasm
+  // heap is the hard limit (writeFile copies the whole file in), and during the
+  // write the file is ALSO resident in the JS heap (arrayBuffer) — so a single
+  // file over the cap, or a projected MEMFS total over budget, must be refused
+  // BEFORE materialising it, or the heap aborts and every later render dies.
+  function checkWrite(addBytes, currentMemfsBytes, budgetOverride) {
+    const add = Math.max(0, Math.floor(addBytes) || 0);
+    const cur = currentMemfsBytes != null ? Math.max(0, Math.floor(currentMemfsBytes) || 0)
+      : (() => { try { return (global.state && global.state.memfsBytes) || 0; } catch (_) { return 0; } })();
+    const budget = budgetOverride || deviceBudgetBytes();
+    // A single file that alone won't fit the wasm linear-memory ceiling.
+    if (add > HARD_CAP) {
+      return { ok: false, reason: `File is ${format(add)} — larger than the ${format(HARD_CAP)} browser wasm-heap ceiling. It cannot be processed in-tab.`, projected: add, budget };
+    }
+    const projected = cur + add;
+    if (projected > budget) {
+      return { ok: false, reason: `This ${format(add)} file would push in-memory usage to ${format(projected)}, over the ${format(budget)} budget for this device. Remove files from the bin or use a smaller/pre-trimmed clip.`, projected, budget };
+    }
+    return { ok: true, projected, budget };
+  }
+
   function format(bytes) {
     const b = Math.max(0, Math.floor(bytes) || 0);   // Math.floor, not `| 0` (32-bit overflow)
     if (b < 1024) return b + ' B';
@@ -117,7 +138,7 @@
   const API = {
     GB, HARD_CAP, WARN, OVER,
     deviceBudgetBytes, textureBytes, videoFrameBytes, audioBufferBytes, memfsBytesOf,
-    report, clear, breakdown, total, status, format, readoutString, renderInto, refresh, attach,
+    report, clear, breakdown, total, status, checkWrite, format, readoutString, renderInto, refresh, attach,
   };
   global.FFMemBudget = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

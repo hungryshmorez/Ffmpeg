@@ -163,8 +163,17 @@
     let buf = fileOrBuffer;
     if (!(buf instanceof AudioBuffer)) {
       const ac = new AC();
-      buf = await ac.decodeAudioData(await fileOrBuffer.arrayBuffer());
-      ac.close();
+      // F7/F8 — guard the decode and ALWAYS close the transient context, even on
+      // failure (otherwise a bad file both throws unhandled and leaks an
+      // AudioContext toward the browser's ~6-context limit).
+      try {
+        buf = await ac.decodeAudioData(await fileOrBuffer.arrayBuffer());
+      } catch (e) {
+        window.logToConsole?.('warn', '[intel] could not decode audio for analysis — skipped.');
+        return null;
+      } finally {
+        try { ac.close(); } catch (_) {}
+      }
     }
 
     window.logToConsole?.('', '[intel] analysing key and tempo…');

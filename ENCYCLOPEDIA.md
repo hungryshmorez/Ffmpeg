@@ -46,6 +46,32 @@ and *Risk* flags how likely the change is to break the working app.
 
 ## Part 0 — Current verified state
 
+### The 100 Ways — scoreboard
+
+| Status | Count | Items |
+|---|---|---|
+| ✅ **Done** (verified by running) | **81 / 100** | everything not listed below |
+| 🟡 **Partial** | 1 | #7 golden-file tests |
+| ⬜ **To do** | 11 | #8 self-test panel · #14 OffscreenCanvas/Worker shaders · #15 motion est. in a Worker · #19 shader-program cache · #20 texture pooling · #23 preload core on hover · #80 second-screen · #81 Whisper.wasm · #97 split `app.js` · #98 single state source · #99 event bus |
+| 🔒 **Blocked** (needs real hardware/toolchain) | 6 | #13 WebCodecs ship · #16 WASM SIMD SAD · #65 true DCT · #79 NDI/virtual-cam · #84 shot-type classify · #87 content-aware fill |
+| ❌ **Dropped** | 1 | #70 Ableton Link (browsers can't speak Link without a native bridge) |
+
+What's left is now almost entirely **infrastructure** (Workers, pooling, the big `app.js`
+refactors) and **hardware/environment-gated** work — the correctness, audio, video, glitch,
+live/VJ, intelligence and UX feature work is complete. The remaining ⬜ items that touch
+GPU state (#14/#15/#19/#20) are codeable but can't be *verified* honestly in the current
+headless build (no proprietary codecs / limited GL), and the architecture items (#97–99) are
+pure refactors with no user-facing capability, so they're deliberately deferred over
+destabilising the working app.
+
+Verified this development pass (each shipped as its own commit with a headless-Chromium test):
+**#85** auto colour-match · **#94** hover-preview · **#93** workflow thumbnails · **#90**
+onboarding tour · **#89** app-wide undo (custom state) · **Live FX preview + Record→Bin** ·
+**#73** per-layer effect chains · **#71** MIDI out · **#69** MIDI clock slave · **#18**
+half-res motion estimation · **#24** unified memory budget · **#21** parallel segment encoding.
+
+### Verified feature ledger
+
 Before planning the future, here is the honest present. Everything in this list is in the
 v10.4 build at the repo root and was confirmed by *executing it in a headless browser*, not
 by grep or `node -c`.
@@ -213,7 +239,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 18 | Half-res motion est., full-res apply | Vectors don't need pixel precision. | ✅ | Real coarse-to-fine block matching in `MotionMosher` (the comment long claimed a pyramid the code never had). With `hierarchical:true`, `_estimate` runs `_estimateHierarchical`: box-downscale both luma planes 2× (`_downscaleLuma`), do the wide-radius RAW search on the ¼-pixel frame, then refine each full-res block in a tiny ±2 window around 2× the coarse vector (with the same amplify/direction/threshold shaping). Default stays `false` so every existing renderer's behaviour is byte-identical. `FFMosh.estimateFlow(cur, prev, w, h, {mode})` exposes it headless with SAD cost accounting. `.test/half-res-motion.mjs` (4/4): on a known +4px shift both paths recover `globalMotion` [4.0, 0.0] with the per-block fields agreeing to Δ=0.00, the half path spends **40 % of the SAD pixel-ops** (692k→275k) and 4304 vs 10816 SAD calls, and the legacy full path stays deterministic/unchanged. Mosh-family/interpolate/flow-displace/stabilize/reframe regressions all still green. |
 | 19 | Cache compiled shader programs | We recompile 11 shaders per canvas. | ⬜ | Program cache keyed by source, shared across engine instances. — *S–M* |
 | 20 | Texture pooling | `_initTextures()` reallocates + GCs. | ⬜ | Pool + reuse GL textures. — *M* |
-| 21 | Parallel segment encoding | Split at keyframes, encode N segments in a worker pool, concat. | ⬜ | Worker pool + concat demux. — *XL* |
+| 21 | Parallel segment encoding | Split at keyframes, encode N segments in a worker pool, concat. | ✅ | `FFSegment` — splits a render into time SEGMENTS, encodes them through a bounded-concurrency pool, then concatenates with a stream copy. Wins: each segment is short so the wasm heap stays small (long renders stop OOM-ing), progress is per-segment, and given more than one FFmpeg instance the pool runs segments truly in parallel. `planSegments(duration,{segments|segmentSec})` tiles `[0,duration)` gap-free; `segmentArgs` rewrites a single-shot command into an input-seek segment (`-ss`/`-t`, old times dropped, output redirected); `concatList` builds the demuxer list; `runPool` caps in-flight work, preserves order, fails fast; `encodeSegments(io, baseArgs, out, opts)` orchestrates it over an injected `exec`/`writeFile` (so a caller can hand each worker its own instance via `execFor`). `.test/segment-encode.mjs` (6/6): the planner/args/list, the pool honouring the concurrency limit + ordering + fail-fast, and a REAL end-to-end run — a 2 s testsrc clip split into 2 segments and concatenated decodes (via ffmpeg, since headless Chromium lacks h264 `<video>`) to **exactly the source's 30 frames**, proving the pipeline is correct and full-length. |
 | 22 | Lazy-load the wasm core | 30 MB shouldn't download if you only came for the Audio Studio. | ✅ | — |
 | 23 | Preload core on Editor hover | Warm the core before it's needed. | ⬜ | Prefetch on hover/intent. — *S* |
 | 24 | A real memory budget | MEMFS + GPU + VideoFrames + AudioBuffers compete; show one number. | ✅ | `FFMemBudget` — unifies every source into ONE number vs a device-derived budget. Per-source estimators (`textureBytes` RGBA8, `videoFrameBytes` RGBA/planar-YUV, `audioBufferBytes` Float32, `memfsBytesOf`); a live registry (`report`/`clear`/`breakdown`/`total`); `deviceBudgetBytes()` from `navigator.deviceMemory` (40 %, capped at the 2 GB wasm ceiling); and `status()` returning ok/warn/over at 75 %/90 %. `attach()` folds in the app's live `state.memfsBytes` and paints a `#mem-budget` readout beside the existing per-source MEMFS gauge (which it never rewrites). Fixed a real 32-bit-overflow bug found while building it (`bytes | 0` wrapped multi-GB figures to "0 B"). `.test/mem-budget.mjs` (7/7) verifies the estimators, sum/clear, the ok→warn→over thresholds, that the budget honours deviceMemory + the wasm cap, the readout + level class, the live-MEMFS fold-in, and that multi-GB figures format correctly. |
@@ -333,13 +359,19 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 
 ## Part 3 — The integration roadmap (if we add ALL of them)
 
+> **Historical plan.** This was the original phase ordering. Most of it is now shipped —
+> **Part 0's scoreboard is the authoritative, up-to-date status** (81/100 done). Phases B–F
+> below are essentially complete; what genuinely remains is the infrastructure/architecture
+> work (Workers, pooling, the `app.js` refactors) and the hardware-gated items. The phases
+> are kept for the reasoning about *ordering and de-risking*, not as a live checklist.
+
 Doing everything is a program, not a task. Ordered so each phase de-risks the next.
 
-### Phase A — Lock the foundation (mostly done)
+### Phase A — Lock the foundation (done)
 1. ✅ Round trip 5/5, frames-not-bytes, exit codes, error capture, version stamp, changelog.
 2. ✅ Playwright test + golden matrix.
-3. ⬜ **#100 CI file** — add `.github/workflows/test.yml` running `npm test` + `npm run test:workflows` on push. *(This is the single highest-leverage remaining item: it makes every phase below cheaper by catching regressions automatically.)*
-4. ⬜ **#8 self-test panel** — expose the smoke tests in-app.
+3. ✅ **#100 CI file** — `.github/workflows/test.yml` runs `npm test` + the whole `test:*` suite (68 suites) on every push and PR.
+4. ⬜ **#8 self-test panel** — expose the smoke tests in-app. *(`runSelfTest()` exists; the visible panel is the remaining bit.)*
 
 ### Phase B — Finish what's already half-built (fast wins)
 5. 🟡 Wire the **global-intensity slider** + **hot cues** back into `vj-mode.js` (dropped in v10.4's reduced copy). — *S each.*
@@ -348,39 +380,39 @@ Doing everything is a program, not a task. Ordered so each phase de-risks the ne
 8. ✅ **Keyboard-shortcut coverage + cheat sheet** (#96) — `?` toggle, `[`/`]` tab cycle, `Alt+1‑8`
    jumps, grouped auto-generated cheat sheet; verified by `.test/shortcuts.mjs`.
 
-### Phase C — The layer compositor & live deck (the big VJ surface)
-9. ✅ **Compositor UI** built + verified (`compositor-ui.js`, `.test/compositor.mjs`): layer strips,
-   16 blend modes, opacity, solo/mute, per-layer hot cues, crossfader, master. ⬜ Remaining:
-   crossfader curve options (#74), per-layer effect chains (#73), N-layer support (#72).
-10. ⬜ **Automation recording** (#76), **pattern banks** (#75), **beat-synced launching** (#78),
-    **panic key** (#77), **MIDI clock in/out** (#69/#71), **second-screen output** (#80).
+### Phase C — The layer compositor & live deck (the big VJ surface) — done
+9. ✅ **Compositor UI** (`compositor-ui.js`, `.test/compositor.mjs`): layer strips, 16 blend modes,
+   opacity, solo/mute, per-layer hot cues, crossfader, master — plus crossfader curves (#74),
+   per-layer effect chains (#73), N-layer support (#72).
+10. ✅ **Automation recording** (#76), **pattern banks** (#75), **beat-synced launching** (#78),
+    **panic key** (#77), **MIDI clock in/out** (#69/#71). ⬜ Remaining: **second-screen output** (#80).
 
-### Phase D — The mosh/glitch family (build on the SAD estimator)
-11. ⬜ Directional mosh, masking, amplification curve, bloom (#58–61) — small, share the vector field.
-12. ⬜ **Datamosh between two clips** (#62) + persistent vector recording (#63) — the headline.
+### Phase D — The mosh/glitch family (build on the SAD estimator) — done
+11. ✅ Directional mosh, masking, amplification curve, bloom (#58–61) — share the vector field.
+12. ✅ **Datamosh between two clips** (#62) + persistent vector recording (#63).
 13. ✅ masked pixel sort (#64), databend (#66), feedback transforms (#67), flow displacement (#68).
 
-### Phase E — Audio depth
-14. ⬜ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),
+### Phase E — Audio depth — done
+14. ✅ Sidechain (#27), multiband comp (#28), limiter (#29), mid/side EQ (#30), width+correlation (#31),
     gain-staging warnings (#32), A/B reference (#33), transient shaper (#39), stems (#40).
-15. ⬜ Beat-grid chopping (#36), granular (#37), pitch-snap to key (#35), user IR reverb (#38),
+15. ✅ Beat-grid chopping (#36), granular (#37), pitch-snap to key (#35), user IR reverb (#38),
     stem separation (#26).
 
-### Phase F — Video/colour depth
-16. ⬜ Colour tools: vectorscope/waveform (#51), curves spline (#53), HSL qualifiers (#54),
+### Phase F — Video/colour depth — done
+16. ✅ Colour tools: vectorscope/waveform (#51), curves spline (#53), HSL qualifiers (#54),
     power windows (#55), auto colour-match (#85).
-17. ⬜ Motion tools: optical-flow interp (#41), stabilisation from vectors (#44), auto-reframe (#45),
+17. ✅ Motion tools: optical-flow interp (#41), stabilisation from vectors (#44), auto-reframe (#45),
     motion blur (#43), deflicker (#50), film grain (#47), halation/bloom (#48), lens profiles (#49).
 
-### Phase G — Intelligence
-18. ⬜ Highlight detection (#82), auto beat-sync edit (#83), loop-point detection (#86),
-    workflow suggestion (#88). Then the model-dependent ones (Whisper #81, shot classification #84,
-    content-aware fill #87) as they become feasible.
+### Phase G — Intelligence — mostly done
+18. ✅ Highlight detection (#82), auto beat-sync edit (#83), loop-point detection (#86),
+    workflow suggestion (#88). ⬜ Remaining are model-dependent: Whisper (#81), and the
+    🔒-blocked shot classification (#84) / content-aware fill (#87).
 
 ### Phase H — Performance & architecture (do continuously, verify each step)
-19. ⬜ Shader program cache (#19), texture pooling (#20), half-res estimation (#18),
-    OffscreenCanvas worker (#14), motion estimation in a worker (#15), WASM SIMD (#16),
-    parallel segment encoding (#21), unified memory budget (#24), preload-on-hover (#23).
+19. Partly done: ✅ half-res estimation (#18), parallel segment encoding (#21), unified memory
+    budget (#24). ⬜ Remaining: shader program cache (#19), texture pooling (#20), OffscreenCanvas
+    worker (#14), motion estimation in a worker (#15), preload-on-hover (#23), and 🔒 WASM SIMD (#16).
 20. ⬜ Refactors, gated behind the CI from Phase A: split `app.js` (#97), single state store (#98),
     event bus (#99). **Do these last** — highest blast radius; they only pay off once tests guard them.
 

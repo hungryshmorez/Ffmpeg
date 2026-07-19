@@ -17,14 +17,16 @@ datamosh, master audio, and perform live visuals, all client-side.
 
 | Area | Highlights |
 |---|---|
-| **Convert & compress** | 199 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. |
-| **Colour & video** | false-colour exposure, vectorscope + waveform monitor, speed ramping with a draggable curve, before/after wipe, node graph (27 node types). |
-| **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors), motion-vector overlay, optical-flow warp, feedback tunnel, auto-glitch/chaos engine, masked pixel sort. |
-| **Audio studio** | real-time Web Audio rack (23 knobs, 12 presets, 7 modules), spectrogram, phase-vocoder time-stretch (keeps pitch), key/BPM detection, semantic macros. |
-| **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, 16-step sequencer, tap tempo, adaptive-quality load-shedding. |
-| **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code. |
+| **Convert & compress** | 215 one-click workflows across 16 categories — format conversion, downscale, fps, compression, GIF, trims. Each workflow card shows a **baked thumbnail** of its look and a **live hover-preview** on your own clip. |
+| **Colour & video** | false-colour exposure, vectorscope + waveform monitor, speed ramping with a draggable curve, before/after wipe, **auto colour-match between clips**, node graph (27 node types). |
+| **Datamosh & glitch** | hierarchical SAD block-matching motion estimation (real codec-style vectors, with a half-res coarse-to-fine fast path), motion-vector overlay, optical-flow warp, feedback tunnel, auto-glitch/chaos engine, masked pixel sort. |
+| **Audio studio** | real-time Web Audio rack (31 knobs, 12 presets, 13 modules), spectrogram, phase-vocoder time-stretch (keeps pitch), key/BPM detection, semantic macros. |
+| **Live / VJ** | 11 reactive shaders, 3-band audio reactivity, MIDI learn, **MIDI clock in (slave) + MIDI out**, 16-step sequencer, tap tempo, **per-layer effect chains**, adaptive-quality load-shedding. |
+| **Preview** | a **Live FX** mode runs your source through the shared effect engine in real time and records it straight to the Media Bin for further ffmpeg work. |
+| **UX** | app-wide undo/redo (incl. non-DOM state), a dismissible onboarding tour, a preferences panel, a keyboard cheat sheet, and a unified memory-budget readout. |
+| **Trust** | version stamp, copyable command history, sentry-style error capture, changelog generated from the code, **68 headless-Chromium test suites** run in CI on every push. |
 
-The build metadata is generated, not claimed: **31 JS modules · 199 workflows · 825/825
+The build metadata is generated, not claimed: **47 JS modules · 215 workflows · 851/851
 balanced CSS braces · 27 node-graph types · 11 trip-cam effects.** See
 [`scripts/generate-changelog.js`](./scripts/generate-changelog.js) and
 [`build-info.js`](./build-info.js) (the single source of truth).
@@ -264,10 +266,29 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/mem-budget.mjs`** verifies the **unified memory budget** (#24): the per-source estimators (texture /
   video-frame / audio / MEMFS), report/total/clear, ok→warn→over thresholds, a device-derived budget capped at
   the wasm ceiling, the readout + level class, the live-MEMFS fold-in, and correct multi-GB formatting.
+- **`.test/segment-encode.mjs`** verifies **parallel segment encoding** (#21): the planner/args/concat-list, the
+  bounded-concurrency pool (limit honoured, order kept, fail-fast), and a real end-to-end run — a 2 s clip split
+  into 2 segments and concatenated decodes to exactly the source's 30 frames (via ffmpeg; no h264 `<video>` headless).
+- **`.test/gl-texture-leak.mjs`** (hardening F2) drives 8 forced canvas resizes and asserts the live GL
+  texture/framebuffer count stays bounded (3/2) instead of climbing to 27/18 — the load-shedder no longer leaks.
+- **`.test/gl-context-loss.mjs`** (hardening F3) triggers a real `WEBGL_lose_context` loss + restore and asserts
+  the engine halts on loss (render is a safe no-op) and rebuilds its textures + resumes the loop on restore.
+- **`.test/mem-write-guard.mjs`** (hardening F1) verifies the memory-budget gate refuses a multi-GB file before it
+  can OOM the wasm heap (single-file wasm-ceiling + projected-over-budget), while allowing writes that fit.
+- **`.test/worker-serialization.mjs`** (hardening F4) fires overlapping worker ops and asserts they run strictly
+  one-at-a-time in FIFO order (max 1 in flight, was 4), that `terminate()` bypasses the queue, and that a rejecting
+  op doesn't wedge it — the single ffmpeg.wasm worker's message channel can no longer be corrupted by a race.
+- **`.test/cancel-reinit.mjs`** (hardening F5) asserts Cancel takes the engine offline and clears the processing
+  lock synchronously, and that a render refuses during the re-init window instead of hitting a terminated worker.
+- **`.test/undo-desync.mjs`** (hardening F6) asserts undo/redo are refused mid-render and across a DOM-structure
+  change (stacks intact, no partial apply), preventing the UI and the audio/video graph from desyncing.
+- **`.test/audio-robustness.mjs`** (hardening F7/F8) asserts undecodable audio fails gracefully (`loadFile` throws a
+  clear catchable error, `analyse` returns null and closes its context) and WebAudio hygiene (`stop()` disconnects
+  the source, `dispose()` closes the AudioContext).
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, `test:pitch-snap`, `test:gain-staging`, `test:retime-toggle`, `test:curves`, `test:pattern-banks`, `test:automation`, `test:live-record`, `test:prefs`, `test:color-match`, `test:hover-preview`, `test:wf-thumbs`, `test:onboarding`, `test:undo-custom`, `test:preview-fx`, `test:fx-chain`, `test:midi-out`, `test:midi-in`, `test:half-res-motion`, and `test:mem-budget` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, `test:pitch-snap`, `test:gain-staging`, `test:retime-toggle`, `test:curves`, `test:pattern-banks`, `test:automation`, `test:live-record`, `test:prefs`, `test:color-match`, `test:hover-preview`, `test:wf-thumbs`, `test:onboarding`, `test:undo-custom`, `test:preview-fx`, `test:fx-chain`, `test:midi-out`, `test:midi-in`, `test:half-res-motion`, `test:mem-budget`, `test:segment-encode`, `test:gl-texture-leak`, `test:gl-context-loss`, `test:mem-write-guard`, `test:worker-serialization`, `test:cancel-reinit`, `test:undo-desync`, and `test:audio-robustness` in real headless Chromium on
 every push and pull request.
 
 ---
@@ -337,12 +358,18 @@ All three are fixed and verified by the tests above.
 | `datamosh.js`, `motion-mosh.js` | datamosh + SAD motion estimation |
 | `audio-engine.js`, `audio-studio.js`, `audio-intel.js` | Web Audio rack, studio UI, key/BPM/loudness intelligence |
 | `beat-detection.js`, `waveform.js` | energy-variance beat detection, waveform rendering |
-| `vj-mode.js` | MIDI learn, sequencer, tap tempo, hot cues, triggers/pads |
+| `vj-mode.js` | MIDI learn, sequencer, tap tempo, hot cues, triggers/pads (external-clock slave hooks) |
+| `midi-out.js`, `midi-in.js` | MIDI clock/notes out from the sequencer; MIDI clock-in (slave) that drives it |
+| `preview-fx.js`, `fx-chain.js` | Live FX preview + Record→Bin; ordered per-layer effect chains |
+| `hover-preview.js`, `wf-thumbs.js` | derived-look engine: workflow hover-preview + baked card thumbnails |
+| `onboarding.js`, `prefs.js`, `mem-budget.js` | onboarding tour; preferences panel; unified memory-budget readout |
+| `segment-encode.js` | parallel segment encoding (time-split → pooled encode → concat) |
+| `audio-dsp.js` | the audio DSP library (width, limiter, multiband, mid/side EQ, stems, pitch/loop detection) |
 | `performance.js` | adaptive quality (FPS-driven load-shedding), global intensity, `Compositor` engine + 16 blend modes |
 | `compositor-ui.js` | the Layer Compositor deck (layer strips, blend/opacity/solo/mute, crossfader, hot cues) over `FFPerf.Compositor` |
 | `nodegraph.js` | node-graph editor (27 node types) |
 | `clips.js` | Clip Studio (its own tab): clip library, take numbers, touch/drag reorder, sequence export |
-| `workflows*.js` | the 199 workflow definitions across 16 categories |
+| `workflows*.js` | the 215 workflow definitions across 16 categories |
 | `storage.js`, `opfs.js` | autosave + OPFS persistence |
 | `navigation.js`, `tools.js`, `analysis.js`, `agents.js` | tab nav, misc tools, analysis, agent helpers |
 

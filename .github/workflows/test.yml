@@ -376,3 +376,32 @@ jobs:
       # into one device-derived budget with ok/warn/over status.
       - name: Unified memory budget
         run: npm run test:mem-budget
+
+      # Segment encoding (#21): time-split → per-segment encode (bounded
+      # concurrency pool) → concat copy; the real pipeline decodes to the same
+      # frame count as the source.
+      - name: Parallel segment encoding
+        run: npm run test:segment-encode
+
+      # Hardening (P0 audit fixes):
+      # F2 — GPU texture/FBO leak on adaptive-quality resize is reclaimed.
+      - name: GL texture leak (F2)
+        run: npm run test:gl-texture-leak
+      # F3 — WebGL context loss halts + rebuilds instead of bricking the canvas.
+      - name: GL context-loss recovery (F3)
+        run: npm run test:gl-context-loss
+      # F1 — over-budget MEMFS writes are refused before they OOM the wasm heap.
+      - name: Memory write guard (F1)
+        run: npm run test:mem-write-guard
+      # F4 — the single ffmpeg.wasm worker serializes all ops (no channel races).
+      - name: Worker serialization (F4)
+        run: npm run test:worker-serialization
+      # F5 — cancel takes the engine offline + clears the lock; no re-init race.
+      - name: Cancel/re-init race (F5)
+        run: npm run test:cancel-reinit
+      # F6 — undo/redo refused mid-render and across DOM-structure changes.
+      - name: Undo desync guards (F6)
+        run: npm run test:undo-desync
+      # F7/F8 — hostile-audio decode guards + WebAudio node/context hygiene.
+      - name: Audio robustness (F7/F8)
+        run: npm run test:audio-robustness

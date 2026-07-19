@@ -723,9 +723,38 @@ void main() {
       this.programs = {};
       this.source = null;          // <video> | <canvas> | <img>
 
+      this._contextLost = false;
       this._initGeom();
       this._initTextures();
       this._compileAll();
+      this._wireContextLoss();
+    }
+
+    // F3 — WebGL context loss (OS sleep, GPU reset, driver eviction, or too many
+    // live contexts) invalidates every texture/program/buffer. Without this the
+    // draw loop keeps issuing dead GL calls forever and the canvas is bricked
+    // until a full reload. We halt on loss and fully rebuild on restore.
+    _wireContextLoss() {
+      const cv = this.canvas;
+      if (!cv || !cv.addEventListener || cv._tripCtxWired) return;
+      cv._tripCtxWired = true;
+      cv.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();                       // REQUIRED, or the context won't be restored
+        this._contextLost = true;
+        cancelAnimationFrame(this.raf);
+        this.raf = 0;
+        try { console.warn('[trip] WebGL context lost — halting until restored'); } catch (_) {}
+      }, false);
+      cv.addEventListener('webglcontextrestored', () => {
+        try { console.warn('[trip] WebGL context restored — rebuilding'); } catch (_) {}
+        // every GL object is gone; rebuild geometry, textures and programs.
+        this.programs = {};
+        this._initGeom();
+        this._initTextures();
+        this._compileAll();
+        this._contextLost = false;
+        this.start();                             // resume the render loop
+      }, false);
     }
 
     _initGeom() {
@@ -752,9 +781,24 @@ void main() {
       return t;
     }
 
+    /** Free the ping-pong textures/framebuffers. Called before re-allocating
+     *  (every adaptive-quality resize) and on teardown — without this the GPU
+     *  leaks 3 textures + 2 framebuffers on EVERY qScale tier change, which
+     *  during a live set accumulates until the context is lost. */
+    _freeTextures() {
+      const gl = this.gl;
+      if (!gl) return;
+      if (this.srcTex) { gl.deleteTexture(this.srcTex); this.srcTex = null; }
+      for (const p of [this.ping, this.pong]) {
+        if (p) { if (p.tex) gl.deleteTexture(p.tex); if (p.fb) gl.deleteFramebuffer(p.fb); }
+      }
+      this.ping = this.pong = null;
+    }
+
     /** Ping-pong buffers — this is what makes the temporal feedback real. */
     _initTextures() {
       const gl = this.gl;
+      this._freeTextures();                 // reclaim the previous allocation first
       const w = this.canvas.width || 1280, h = this.canvas.height || 720;
       this.srcTex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
@@ -907,6 +951,8 @@ void main() {
 
     render() {
       const gl = this.gl;
+      // F3 — never touch GL while the context is lost/restoring.
+      if (this._contextLost || (gl.isContextLost && gl.isContextLost())) return;
       const prog = this.programs[this.effect] || this.programs.datamosh;
       if (!prog) return;
 

@@ -369,7 +369,19 @@
 
     eng = eng || new window.FFAudio.AudioEngine();
     window.logToConsole?.('', `[audio] decoding ${name}…`);
-    const info = await eng.loadFile(file);
+    let info;
+    try {
+      info = await eng.loadFile(file);
+    } catch (err) {
+      // F7 — graceful fail: keep the drop panel, surface the reason, don't
+      // leave the studio wedged in a half-loaded state.
+      const msg = (err && err.message) || 'Could not decode this audio file.';
+      window.logToConsole?.('error', `[audio] ${msg}`);
+      try { const drop = document.getElementById('as-drop'); if (drop) drop.hidden = false; } catch (_) {}
+      try { const now = document.getElementById('as-now'); if (now) now.hidden = true; } catch (_) {}
+      try { if (typeof showInfo === 'function') showInfo('Audio decode failed', msg); } catch (_) {}
+      return null;
+    }
 
     media = { file, name, ...info };
     document.getElementById('as-drop').hidden = true;

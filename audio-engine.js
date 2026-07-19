@@ -173,7 +173,14 @@
       const AC = window.AudioContext || window.webkitAudioContext;
       this.ctx = this.ctx || new AC();
       const buf = await fileOrBlob.arrayBuffer();
-      this.buffer = await this.ctx.decodeAudioData(buf);
+      // F7 — decodeAudioData rejects on a zero-byte / truncated / unsupported
+      // file. Surface a clear, catchable error so the caller can reset its UI
+      // instead of leaving the studio stuck mid-load on an unhandled rejection.
+      try {
+        this.buffer = await this.ctx.decodeAudioData(buf);
+      } catch (e) {
+        throw new Error("Couldn't decode this audio — it may be silent, truncated, or an unsupported codec.");
+      }
       this.offset = 0;
       return { duration: this.buffer.duration, sampleRate: this.buffer.sampleRate,
                channels: this.buffer.numberOfChannels };
@@ -442,7 +449,10 @@
 
     stop(silent) {
       if (this.src) {
+        // F8 — disconnect as well as stop, so the finished BufferSource is
+        // released from the graph immediately instead of lingering for GC.
         try { this.src.onended = null; this.src.stop(); } catch (_) {}
+        try { this.src.disconnect(); } catch (_) {}
         this.src = null;
       }
       if (!silent && this.playing) {
@@ -450,6 +460,15 @@
       }
       this.playing = false;
       cancelAnimationFrame(this._raf);
+    }
+
+    // F8 — release the AudioContext. Browsers cap live contexts (~6); without a
+    // teardown, re-initialising the studio would drift toward that limit.
+    dispose() {
+      this.stop(true);
+      const ctx = this.ctx;
+      this.ctx = null; this.nodes = {}; this.buffer = null;
+      if (ctx && ctx.state !== 'closed') { try { return ctx.close(); } catch (_) {} }
     }
 
     currentTime() {

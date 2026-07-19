@@ -364,6 +364,23 @@ function initWebGLPreview() {
   }
   webgl.ctx = gl;
 
+  // F3 — recover from WebGL context loss instead of freezing on a dead context.
+  if (!canvas._previewCtxWired) {
+    canvas._previewCtxWired = true;
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();                         // REQUIRED for the context to be restorable
+      webgl.contextLost = true;
+      if (webgl.raf) { cancelAnimationFrame(webgl.raf); webgl.raf = 0; }
+      try { console.warn('[webgl-preview] context lost — halting'); } catch (_) {}
+    }, false);
+    canvas.addEventListener('webglcontextrestored', () => {
+      try { console.warn('[webgl-preview] context restored — rebuilding'); } catch (_) {}
+      webgl.contextLost = false;
+      webgl.program = null; webgl.vbo = null; webgl.texture = null; webgl.blurFbo = null; webgl.blurTex = null;
+      if (initWebGLPreview() && webgl.enabled) startWebGLLoop();
+    }, false);
+  }
+
   try {
     const vs = compileShader(gl, gl.VERTEX_SHADER, VS);
     const fs = compileShader(gl, gl.FRAGMENT_SHADER, FS);
@@ -469,6 +486,7 @@ function startWebGLLoop() {
 // =============================================================================
 function drawWebGLFrame() {
   if (!webgl.enabled || !webgl.ctx || !webgl.canvas || !webgl.video) return;
+  if (webgl.contextLost || (webgl.ctx.isContextLost && webgl.ctx.isContextLost())) return;  // F3
   const video = webgl.video;
   // We need a frame to draw. readyState >= HAVE_CURRENT_DATA (2) means
   // there is data for the current playback position.
