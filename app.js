@@ -2183,6 +2183,24 @@ window.moveBinItem = moveBinItem;
 // #62 — datamosh between two clips: the first selected clip's MOTION is applied
 // to the second's PIXELS. Drives FFMosh.renderTwoClips, which records straight
 // into the bin.
+// #85 — auto colour-match across clips. Select two clips: the first is the
+// LOOK reference, the second is graded to match it (Reinhard mean/std transfer).
+async function runColorMatch() {
+  const sel = state.mediaBin.filter((m) => binSelected.has(m.id));
+  if (sel.length !== 2) { showInfo('Match Colour A→B', 'Select exactly 2 clips: the first is the look reference, the second is graded to match it.'); return; }
+  if (!window.FFShaderPlus?.renderColorMatch) { showInfo('Match Colour A→B', 'Colour-match engine not loaded.'); return; }
+  const [reference, target] = sel;
+  logToConsole('', `[match] colour: ${target.name} → look of ${reference.name}`);
+  try {
+    setProgressText?.('Matching colour A→B…');
+    await window.FFShaderPlus.renderColorMatch(target, reference, { strength: 1 }, (p) => setProgress?.(p));
+    logToConsole('ok', '[match] colour match complete → Media Bin');
+  } catch (e) {
+    logToConsole('error', `[match] colour match failed: ${e && e.message || e}`);
+    showInfo('Match Colour A→B', `Failed: ${e && e.message || e}`);
+  }
+}
+
 async function runTwoClipDatamosh() {
   const sel = state.mediaBin.filter((m) => binSelected.has(m.id));
   if (sel.length !== 2) { showInfo('Datamosh A→B', 'Select exactly 2 video clips: the first supplies the motion, the second the picture.'); return; }
@@ -2428,6 +2446,7 @@ function bindMediaBin() {
     'bin-op-merge':  () => runBinComposite('merge'),
     'bin-op-batch':  () => runBinBatchApply(),
     'bin-op-datamosh': () => runTwoClipDatamosh(),
+    'bin-op-colormatch': () => runColorMatch(),
     'bin-op-record':   () => runRecordMotion(),
     'bin-op-replay':   () => runApplyMotion(),
   };

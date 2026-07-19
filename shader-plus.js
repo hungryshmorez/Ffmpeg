@@ -862,6 +862,90 @@ vec2 _rotTC(vec2 tc, float a) {
   }
 
   // ===========================================================================
+  // 5m. AUTO COLOUR-MATCH ACROSS CLIPS (#85) — make clip B look like clip A. A
+  //     direct Reinhard statistical transfer: shift each channel to zero-mean,
+  //     rescale by the std ratio, shift to the reference's mean, so the target's
+  //     per-channel mean and spread land on the reference's. Runs frame-by-frame
+  //     off a single reference frame grabbed from the other clip.
+  // ===========================================================================
+
+  function _rgbStats(imgData) {
+    const d = imgData.data, n = d.length / 4;
+    const sum = [0, 0, 0], sum2 = [0, 0, 0];
+    for (let i = 0; i < d.length; i += 4) for (let c = 0; c < 3; c++) { sum[c] += d[i + c]; sum2[c] += d[i + c] * d[i + c]; }
+    const mean = sum.map((s) => s / n);
+    const std = sum2.map((s2, i) => Math.sqrt(Math.max(1e-6, s2 / n - mean[i] * mean[i])));
+    return { mean, std };
+  }
+
+  /** Match `target`'s per-channel mean/std to `reference` (in place). Pass a
+   *  precomputed refStats to reuse across frames. `strength` blends 0..1. */
+  function matchColorStats(target, reference, opts = {}) {
+    const rs = reference.mean ? reference : _rgbStats(reference);
+    const ts = _rgbStats(target);
+    const strength = opts.strength ?? 1;
+    const gain = [0, 1, 2].map((c) => rs.std[c] / Math.max(1e-4, ts.std[c]));
+    const d = target.data;
+    for (let i = 0; i < d.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const matched = (d[i + c] - ts.mean[c]) * gain[c] + rs.mean[c];
+        d[i + c] = d[i + c] + (matched - d[i + c]) * strength;
+      }
+    }
+    return target;
+  }
+
+  /** Offline: match `media`'s colour to a reference frame from `refMedia` → Bin. */
+  async function renderColorMatch(media, refMedia, opts = {}, onProgress) {
+    // grab one reference frame
+    const rv = document.createElement('video'); rv.src = (refMedia || media).blobUrl; rv.muted = true; rv.playsInline = true;
+    await new Promise((r) => { rv.onloadedmetadata = r; setTimeout(r, 5000); });
+    try { rv.currentTime = Math.min(0.5, (rv.duration || 1) / 3); } catch (_) {}
+    await new Promise((r) => { rv.onseeked = r; setTimeout(r, 1500); });
+    const rw = Math.min(320, rv.videoWidth || 320), rh = Math.round(rw * ((rv.videoHeight || 180) / (rv.videoWidth || 320)));
+    const rc = document.createElement('canvas'); rc.width = rw; rc.height = rh;
+    const rctx = rc.getContext('2d', { willReadFrequently: true });
+    rctx.drawImage(rv, 0, 0, rw, rh);
+    const refStats = _rgbStats(rctx.getImageData(0, 0, rw, rh));
+
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(960, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        ctx.drawImage(v, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        matchColorStats(img, refStats, { strength: opts.strength ?? 1 });
+        ctx.putImageData(img, 0, 0);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [COLOUR MATCH].${ext}`, type);
+    window.logToConsole?.('ok', `[match] colour matched → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  // ===========================================================================
   // 5l. CURVES (#53) — the colourist's tone curve. The speed panel already has a
   //     draggable-spline widget; this is the colour half: build a 256-entry LUT
   //     from control points (piecewise-linear through them) and map each channel
@@ -1389,6 +1473,7 @@ vec2 _rotTC(vec2 tc, float a) {
     lensDistort, renderLens, LENS_PROFILES,
     rollingShutter, renderRollingShutter,
     Deflicker, renderDeflicker, powerWindow, renderPowerWindow,
-    hslQualify, renderHslQualify, buildCurveLUT, applyCurve, renderCurve, Sparkles,
+    hslQualify, renderHslQualify, buildCurveLUT, applyCurve, renderCurve,
+    matchColorStats, renderColorMatch, Sparkles,
   };
 })();

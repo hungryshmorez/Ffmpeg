@@ -61,6 +61,7 @@
     "test:automation": "node .test/automation.mjs",
     "test:live-record": "node .test/live-record.mjs",
     "test:prefs": "node .test/prefs.mjs",
+    "test:color-match": "node .test/color-match.mjs",
     "changelog": "node scripts/generate-changelog.js",
     "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
   },

@@ -315,3 +315,8 @@ jobs:
       # accent), survives a reload, "," opens the modal, reset restores defaults.
       - name: Preferences panel
         run: npm run test:prefs
+
+      # Colour match (#85): Reinhard transfer lands the target's per-channel
+      # mean/std on the reference's; strength blends; self-match is identity.
+      - name: Auto colour-match
+        run: npm run test:color-match
