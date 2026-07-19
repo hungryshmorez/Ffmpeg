@@ -332,3 +332,9 @@ jobs:
       # spread, decorate() injects one non-blank thumb per card.
       - name: Workflow thumbnails
         run: npm run test:wf-thumbs
+
+      # Onboarding tour (#90): four-step, dismissible, localStorage-gated;
+      # auto-appears on first run, Next advances + switches tabs, finishing
+      # gates it, and the cheat-sheet button replays it.
+      - name: Onboarding tour
+        run: npm run test:onboarding
