@@ -52,12 +52,18 @@
     bloomIterations: 1,   // #61 bloom: apply the displacement N times (further smear).
     motionMask: false,    // #59 masking: low-motion blocks show the CLEAN frame instead
     maskMotion: 2,        //     of the smear. maskMotion = magnitude cutoff (px).
+    hierarchical: false,  // #18 coarse-to-fine estimation (half-res estimate,
+                          //     full-res refine) — fewer SAD ops on big frames.
   };
 
   class MotionMosher {
     constructor(canvas) {
       this.cv = canvas;
-      this.ctx = canvas.getContext('2d', { willReadFrequently: true });
+      // #18 — estimation (SAD / pyramid) needs no canvas, so allow a null one
+      // for headless flow computation via FFMosh.estimateFlow.
+      this.ctx = canvas ? canvas.getContext('2d', { willReadFrequently: true }) : null;
+      this._sadCalls = 0;   // #18 instrumentation (cost accounting)
+      this._sadPixels = 0;
       this.p = { ...DEFAULTS };
 
       this.prevY = null;      // previous luma plane (for matching)
@@ -116,7 +122,92 @@
           n++;
         }
       }
+      this._sadCalls++; this._sadPixels += n;   // #18 cost accounting
       return n ? cost / n : Infinity;
+    }
+
+    // #18 — box-downscale a luma plane 2× (2×2 average). Cheap and enough for a
+    // coarse motion guess.
+    _downscaleLuma(Y, w, h) {
+      const hw = Math.max(1, w >> 1), hh = Math.max(1, h >> 1);
+      const out = new Float32Array(hw * hh);
+      for (let y = 0; y < hh; y++) {
+        const sy = y * 2, sy1 = Math.min(h - 1, sy + 1);
+        for (let x = 0; x < hw; x++) {
+          const sx = x * 2, sx1 = Math.min(w - 1, sx + 1);
+          out[y * hw + x] = (Y[sy * w + sx] + Y[sy * w + sx1] + Y[sy1 * w + sx] + Y[sy1 * w + sx1]) * 0.25;
+        }
+      }
+      return { Y: out, w: hw, h: hh };
+    }
+
+    // #18 — HALF-RES ESTIMATE, FULL-RES APPLY. Run the wide block search on a
+    // half-size frame (¼ the pixels), then refine each full-res block in a tiny
+    // window around 2× the coarse vector. Same motion field, far fewer SAD ops
+    // than a full-radius search at native resolution.
+    _estimateHierarchical(curY, prevY, w, h) {
+      const bs = this.p.blockSize;
+      const cols = Math.ceil(w / bs), rows = Math.ceil(h / bs);
+      const vec = new Float32Array(cols * rows * 2);
+
+      // 1) coarse RAW search at half resolution
+      const cH = this._downscaleLuma(curY, w, h), pH = this._downscaleLuma(prevY, w, h);
+      const hw = cH.w, hh = cH.h;
+      const ccols = Math.ceil(hw / bs), crows = Math.ceil(hh / bs);
+      const coarse = new Float32Array(ccols * crows * 2);
+      const R = Math.max(2, this.p.motionRadius | 0);
+      const cstep = bs >= 16 ? 2 : 1;
+      for (let by = 0; by < crows; by++) {
+        for (let bx = 0; bx < ccols; bx++) {
+          const x0 = bx * bs, y0 = by * bs;
+          const bw = Math.min(bs, hw - x0), bh = Math.min(bs, hh - y0);
+          let gx = 0, gy = 0;
+          if (bx > 0) { const i = (by * ccols + (bx - 1)) * 2; gx = coarse[i]; gy = coarse[i + 1]; }
+          let bestDx = 0, bestDy = 0, best = Infinity;
+          for (let dy = -R; dy <= R; dy++) {
+            for (let dx = -R; dx <= R; dx++) {
+              const c = this._sad(cH.Y, pH.Y, hw, hh, x0, y0, bw, bh, (gx + dx) | 0, (gy + dy) | 0, cstep);
+              if (c < best) { best = c; bestDx = (gx + dx) | 0; bestDy = (gy + dy) | 0; }
+            }
+          }
+          const i = (by * ccols + bx) * 2; coarse[i] = bestDx; coarse[i + 1] = bestDy;
+        }
+      }
+
+      // 2) full-res refine around the 2× coarse predictor, with the same shaping
+      const refineR = 2, step = bs >= 16 ? 2 : 1;
+      let totalSAD = 0, blocks = 0;
+      for (let by = 0; by < rows; by++) {
+        for (let bx = 0; bx < cols; bx++) {
+          const x0 = bx * bs, y0 = by * bs;
+          const bw = Math.min(bs, w - x0), bh = Math.min(bs, h - y0);
+          const cbx = Math.min(ccols - 1, bx >> 1), cby = Math.min(crows - 1, by >> 1);
+          const ci = (cby * ccols + cbx) * 2;
+          const gx = coarse[ci] * 2, gy = coarse[ci + 1] * 2;
+          let bestDx = gx | 0, bestDy = gy | 0, best = Infinity;
+          for (let dy = -refineR; dy <= refineR; dy++) {
+            for (let dx = -refineR; dx <= refineR; dx++) {
+              const c = this._sad(curY, prevY, w, h, x0, y0, bw, bh, (gx + dx) | 0, (gy + dy) | 0, step);
+              if (c < best) { best = c; bestDx = (gx + dx) | 0; bestDy = (gy + dy) | 0; }
+            }
+          }
+          const i = (by * cols + bx) * 2;
+          if (best < this.p.threshold) { vec[i] = 0; vec[i + 1] = 0; }
+          else {
+            let vx = bestDx, vy = bestDy;
+            const amp = this.p.amplify;
+            if (amp !== 1) {
+              const mag = Math.hypot(vx, vy);
+              if (mag > 0) { const rr = Math.max(2, this.p.motionRadius); const shaped = Math.pow(Math.min(1, mag / rr), amp) * rr; const k = shaped / mag; vx *= k; vy *= k; }
+            }
+            vx *= this.p.directionX; vy *= this.p.directionY;
+            vec[i] = vx; vec[i + 1] = vy;
+          }
+          totalSAD += best; blocks++;
+        }
+      }
+      this.lastSAD = blocks ? totalSAD / blocks : 0;
+      return { vec, cols, rows };
     }
 
     // -------------------------------------------------------------------------
@@ -125,6 +216,9 @@
     // the full-size search. Without this the search is far too slow for video.
     // -------------------------------------------------------------------------
     _estimate(curY, prevY, w, h) {
+      // #18 — coarse-to-fine when enabled (default off keeps the exact legacy
+      // full-search behaviour for everything already relying on it).
+      if (this.p.hierarchical) return this._estimateHierarchical(curY, prevY, w, h);
       const bs = this.p.blockSize;
       const cols = Math.ceil(w / bs), rows = Math.ceil(h / bs);
       const vec = new Float32Array(cols * rows * 2);
@@ -445,6 +539,48 @@
     }
 
     // -------------------------------------------------------------------------
+    // OPTICAL-FLOW FRAME INTERPOLATION (#41) — synthesise the frame at time t in
+    // between A and B by warping A FORWARD along the flow by t and B BACKWARD by
+    // (1−t), then cross-dissolving. A moving object lands at its IN-BETWEEN
+    // position — real slow-mo, not a duplicated (frozen) frame.
+    // -------------------------------------------------------------------------
+    interpolate(a, b, vec, cols, rows, w, h, t) {
+      if (t <= 0) return Uint8ClampedArray.from(a);
+      if (t >= 1) return Uint8ClampedArray.from(b);
+      const wa = this.displaceByFlow(a, vec, cols, rows, w, h, { scale: t });         // A pushed +t·flow
+      const wb = this.displaceByFlow(b, vec, cols, rows, w, h, { scale: -(1 - t) });  // B pulled −(1−t)·flow
+      const out = new Uint8ClampedArray(a.length);
+      for (let i = 0; i < out.length; i += 4) {
+        out[i] = wa[i] * (1 - t) + wb[i] * t;
+        out[i + 1] = wa[i + 1] * (1 - t) + wb[i + 1] * t;
+        out[i + 2] = wa[i + 2] * (1 - t) + wb[i + 2] * t;
+        out[i + 3] = 255;
+      }
+      return out;
+    }
+
+    // -------------------------------------------------------------------------
+    // RETIME METHOD TOGGLE (#56) — the same in-between frame two ways. FLOW warps
+    // along the motion so a moving object lands at ONE in-between position (sharp
+    // slow-mo). BLEND cross-dissolves, so a moving object shows as TWO ghosts (the
+    // cheap frame-mix look). Same call, one `method` switch — the choice a retime
+    // panel offers.
+    // -------------------------------------------------------------------------
+    retime(a, b, vec, cols, rows, w, h, t, method = 'flow') {
+      if (method === 'blend') {
+        const out = new Uint8ClampedArray(a.length);
+        for (let i = 0; i < out.length; i += 4) {
+          out[i] = a[i] * (1 - t) + b[i] * t;
+          out[i + 1] = a[i + 1] * (1 - t) + b[i + 1] * t;
+          out[i + 2] = a[i + 2] * (1 - t) + b[i + 2] * t;
+          out[i + 3] = 255;
+        }
+        return out;
+      }
+      return this.interpolate(a, b, vec, cols, rows, w, h, t);
+    }
+
+    // -------------------------------------------------------------------------
     // VECTOR OVERLAY (#57) — draw the current motion field as arrows. On by
     // default in the overlay render; genuinely useful for dialling a mosh in and
     // a good look in its own right. Draws onto ANY 2-D context (the mosher's own
@@ -485,6 +621,157 @@
       this.prevY = null; this.accum = null; this.vec = null;
       this.frameNo = 0; this.moshing = false;
     }
+  }
+
+  // ===========================================================================
+  // STABILISATION (#44) — we already estimate a motion field per frame, so the
+  // dominant translation of that field IS the camera's frame-to-frame motion.
+  // Take the MEDIAN of the field (robust to a few moving objects), integrate it
+  // into the camera PATH, smooth the path, and shift each frame by the gap
+  // between the smooth path and the real one — the shake cancels, the intended
+  // pan survives.
+  // ===========================================================================
+
+  /** Dominant translation of a block field: the median vector (outlier-robust). */
+  function globalMotion(vec, cols, rows) {
+    const n = cols * rows; if (!n) return [0, 0];
+    const xs = new Array(n), ys = new Array(n);
+    for (let i = 0; i < n; i++) { xs[i] = vec[i * 2]; ys[i] = vec[i * 2 + 1]; }
+    xs.sort((a, b) => a - b); ys.sort((a, b) => a - b);
+    const med = (a) => a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2;
+    return [med(xs), med(ys)];
+  }
+
+  /** Per-frame global motions → correction offsets. Integrate to the camera
+   *  path, smooth it (centred moving average, radius r), correct = smooth−path. */
+  function stabilizePath(motions, radius = 15) {
+    const n = motions.length;
+    const cx = new Float64Array(n), cy = new Float64Array(n);
+    let ax = 0, ay = 0;
+    for (let i = 0; i < n; i++) { ax += motions[i][0]; ay += motions[i][1]; cx[i] = ax; cy[i] = ay; }
+    const corr = new Array(n);
+    for (let i = 0; i < n; i++) {
+      let sx = 0, sy = 0, c = 0;
+      for (let j = Math.max(0, i - radius); j <= Math.min(n - 1, i + radius); j++) { sx += cx[j]; sy += cy[j]; c++; }
+      corr[i] = [sx / c - cx[i], sy / c - cy[i]];
+    }
+    return corr;
+  }
+
+  // ===========================================================================
+  // AUTO-REFRAME (#45) — crop a vertical (9:16) window that TRACKS THE SUBJECT.
+  // The subject is where the action is: the centre of mass of the motion field,
+  // weighted by vector magnitude. Follow that (smoothed) with the crop window
+  // and a horizontal 16:9 clip becomes a vertical one that keeps the moving
+  // subject in frame instead of a dumb centre crop.
+  // ===========================================================================
+
+  /** Centre of motion mass of a block field (px), or [null,null] if it's still. */
+  function motionCentroid(vec, cols, rows, blockSize) {
+    let sx = 0, sy = 0, sw = 0;
+    for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+      const i = (by * cols + bx) * 2, mag = Math.hypot(vec[i], vec[i + 1]);
+      sx += (bx + 0.5) * blockSize * mag; sy += (by + 0.5) * blockSize * mag; sw += mag;
+    }
+    return sw > 1e-6 ? [sx / sw, sy / sw] : [null, null];
+  }
+
+  /** Offline auto-reframe: track the motion centroid, crop a vertical window
+   *  around it (causal-smoothed), output a 9:16 clip → Media Bin. */
+  async function renderReframe(media, params, onProgress) {
+    const p = Object.assign({ blockSize: 16, motionRadius: 12, threshold: 0, aspect: 9 / 16, smoothRadius: 20, strength: 1 }, params || {});
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const sw = v.videoWidth || 640, sh = v.videoHeight || 360;
+    const outH = Math.round(Math.min(sh, 1280) / 2) * 2, outW = Math.round(outH * p.aspect / 2) * 2;
+    const cropW = Math.min(sw, Math.round(sh * p.aspect));
+    const cv = document.createElement('canvas'); cv.width = outW; cv.height = outH;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const est = document.createElement('canvas'); est.width = Math.min(320, sw); est.height = Math.round(est.width * sh / sw);
+    const m = new MotionMosher(est); m.setParams(p);
+    const alpha = 1 / Math.max(1, p.smoothRadius);
+    let camX = sw / 2, first = true;
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        const field = m.captureField(v);
+        if (field) {
+          const [mx] = motionCentroid(field.vec, field.cols, field.rows, p.blockSize);
+          if (mx != null) { const targetX = mx / est.width * sw; if (first) { camX = targetX; first = false; } else camX += (targetX - camX) * alpha * p.strength; }
+        }
+        const cropX = Math.max(0, Math.min(sw - cropW, camX - cropW / 2));
+        ctx.drawImage(v, cropX, 0, cropW, sh, 0, 0, outW, outH);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [VERTICAL].${ext}`, type);
+    window.logToConsole?.('ok', `[reframe] auto-reframed → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
+
+  /** Offline stabiliser render. Uses a CAUSAL low-pass of the camera path (a
+   *  real-time-style smoother — no second pass / frame buffering), shifting each
+   *  frame toward the smoothed path. The tested cores (globalMotion +
+   *  stabilizePath) are the centred, higher-quality offline version. */
+  async function renderStabilize(media, params, onProgress) {
+    const p = Object.assign({ blockSize: 16, motionRadius: 14, threshold: 0, smoothRadius: 24, strength: 1 }, params || {});
+    const v = document.createElement('video'); v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const m = new MotionMosher(cv); m.setParams(p);
+    const alpha = 1 / Math.max(1, p.smoothRadius);
+    let cumX = 0, cumY = 0, smX = 0, smY = 0;
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        const field = m.captureField(v);
+        const g = field ? globalMotion(field.vec, field.cols, field.rows) : [0, 0];
+        cumX += g[0]; cumY += g[1];
+        smX += (cumX - smX) * alpha; smY += (cumY - smY) * alpha;
+        const sx = (smX - cumX) * p.strength, sy = (smY - cumY) * p.strength;
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(v, sx, sy, w, h);
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [STABILISED].${ext}`, type);
+    window.logToConsole?.('ok', `[stab] stabilised → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
   }
 
   // ===========================================================================
@@ -571,6 +858,64 @@
   // per-pixel displacement map on THAT SAME frame. The scene warps like liquid
   // where it moves and stays sharp where it's still. Offline → Media Bin.
   // ===========================================================================
+
+  // ===========================================================================
+  // OPTICAL-FLOW SLOW-MO (#41) — insert `factor−1` interpolated frames between
+  // each pair, so a clip plays back smoothly slowed rather than juddering on
+  // duplicated frames. Offline → Media Bin.
+  // ===========================================================================
+  async function renderInterpolate(media, params, onProgress) {
+    const p = Object.assign({ blockSize: 16, motionRadius: 16, threshold: 0, factor: 2 }, params || {});
+    const factor = Math.max(2, Math.round(p.factor));
+    const v = document.createElement('video');
+    v.src = media.blobUrl; v.muted = true; v.playsInline = true;
+    await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 5000); });
+    const w = Math.min(1280, v.videoWidth || 640);
+    const h = Math.round(w * ((v.videoHeight || 360) / (v.videoWidth || 640) / 2)) * 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const grab = document.createElement('canvas'); grab.width = w; grab.height = h;
+    const gctx = grab.getContext('2d', { willReadFrequently: true });
+    const m = new MotionMosher(cv); m.setParams(p);
+    const stream = cv.captureStream(30);
+    const mime = (window.pickRecorderMime || (() => 'video/webm'))('video/webm;codecs=vp9', 'video/webm', 'video/mp4;codecs=h264', 'video/mp4');
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : { videoBitsPerSecond: 10_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => { rec.onstop = res; });
+    rec.start(200); await v.play().catch(() => {});
+    let prev = null;
+    await new Promise((res) => {
+      let fin = false; const finish = () => { if (fin) return; fin = true; clearInterval(wd); res(); };
+      let last = -1, stalls = 0;
+      const wd = setInterval(() => { if (v.ended || v.paused) return finish(); if (v.currentTime === last) { if (++stalls >= 8) finish(); } else { last = v.currentTime; stalls = 0; } }, 100);
+      const step = () => {
+        if (fin) return; if (v.ended || v.paused) return finish();
+        gctx.drawImage(v, 0, 0, w, h);
+        const cur = gctx.getImageData(0, 0, w, h);
+        const field = m.captureField(v);          // flow prev→cur
+        if (prev && field) {
+          for (let k = 1; k < factor; k++) {       // the in-between frames
+            const t = k / factor;
+            const mid = m.interpolate(prev.data, cur.data, field.vec, field.cols, field.rows, w, h, t);
+            ctx.putImageData(new ImageData(mid, w, h), 0, 0);
+          }
+        }
+        ctx.putImageData(cur, 0, 0);               // the real frame
+        prev = cur;
+        onProgress?.(v.currentTime / (v.duration || v.currentTime || 1), 0);
+        v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+      };
+      v.requestVideoFrameCallback ? v.requestVideoFrameCallback(step) : requestAnimationFrame(step);
+    });
+    rec.stop(); await done;
+    const type = (rec.mimeType || 'video/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type });
+    await window.addBlobToBin?.(blob, `${media.name} [${factor}x SLOMO].${ext}`, type);
+    window.logToConsole?.('ok', `[slomo] ${factor}× optical-flow → Media Bin (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    return blob;
+  }
 
   async function renderFlowDisplace(media, params, onProgress) {
     const p = Object.assign({ blockSize: 16, motionRadius: 12, threshold: 1, scale: 3 }, params || {});
@@ -869,6 +1214,19 @@
     return { w: o.w, h: o.h, blockSize: o.blockSize, cols: o.cols, rows: o.rows, frames, name: o.name };
   }
 
-  window.FFMosh = { MotionMosher, DEFAULTS, renderFile, renderTwoClips, renderFlowDisplace,
-    renderVectorOverlay, recordVectors, replayVectors, serializeVectors, deserializeVectors };
+  // #18 — headless flow estimation for a luma pair. mode 'full' | 'half'
+  // (coarse-to-fine). Returns the field plus SAD-cost accounting so callers /
+  // tests can compare the two paths.
+  function estimateFlow(curY, prevY, w, h, opts) {
+    const m = new MotionMosher(null);
+    m.setParams(Object.assign({}, opts, { hierarchical: (opts && opts.mode === 'half') }));
+    m._sadCalls = 0; m._sadPixels = 0;
+    const res = m._estimate(curY, prevY, w, h);
+    return { vec: res.vec, cols: res.cols, rows: res.rows, sadCalls: m._sadCalls, sadPixels: m._sadPixels, lastSAD: m.lastSAD };
+  }
+
+  window.FFMosh = { MotionMosher, DEFAULTS, estimateFlow, renderFile, renderTwoClips, renderFlowDisplace,
+    renderVectorOverlay, globalMotion, stabilizePath, renderStabilize,
+    motionCentroid, renderReframe, renderInterpolate,
+    recordVectors, replayVectors, serializeVectors, deserializeVectors };
 })();

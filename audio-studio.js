@@ -76,6 +76,50 @@
         ['distortionTone',   'Tone',  0, 1,   0.01, (v) => `${Math.round(v * 100)}%`],
       ],
     },
+    {
+      id: 'stereo', name: 'Stereo', icon: '🎧',
+      desc: '100% is neutral, 0% is mono, above widens. Watch the correlation meter.',
+      params: [
+        ['width', 'Width', 0, 2, 0.01, (v) => `${Math.round(v * 100)}%`],
+      ],
+    },
+    {
+      id: 'multiband', name: 'Multiband', icon: '📊',
+      desc: 'Three-band glue on bounce — low / mid / high compressed independently. Watch the GR meters after a bounce.',
+      params: [
+        ['multibandAmount', 'Amount', 0, 1, 0.01, (v) => v === 0 ? 'off' : `${Math.round(v * 100)}%`],
+      ],
+    },
+    {
+      id: 'mseq', name: 'M/S EQ', icon: '↔️',
+      desc: 'Mono the bass and widen the highs on bounce. Tightens the low end, opens the top.',
+      params: [
+        ['msMonoBelow', 'Mono Bass', 0, 300, 5, (v) => v === 0 ? 'off' : `<${v.toFixed(0)} Hz`],
+        ['msWidenDb',   'Widen',     0, 12,  0.5, (v) => v === 0 ? 'off' : `+${v.toFixed(1)} dB`],
+      ],
+    },
+    {
+      id: 'sidechain', name: 'Sidechain', icon: '🫀',
+      desc: 'The pump. Detects the kick in the low end and ducks the whole mix under it on bounce. 0% is off.',
+      params: [
+        ['sidechainAmount', 'Duck', 0, 1, 0.01, (v) => v === 0 ? 'off' : `${Math.round(v * 100)}%`],
+      ],
+    },
+    {
+      id: 'transient', name: 'Transient', icon: '🥁',
+      desc: 'Reshape the punch on bounce. Attack adds or tames the onset; Sustain lifts or dries the tail.',
+      params: [
+        ['transientAttack',  'Attack',  -1, 1, 0.01, (v) => v === 0 ? 'off' : `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`],
+        ['transientSustain', 'Sustain', -1, 1, 0.01, (v) => v === 0 ? 'off' : `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`],
+      ],
+    },
+    {
+      id: 'master', name: 'Master Limiter', icon: '🧱',
+      desc: 'Lookahead brickwall on the bounce. Ceiling at 0 dB is off; pull it down to catch peaks without clipping.',
+      params: [
+        ['limiterCeiling', 'Ceiling', -12, 0, 0.1, (v) => v >= -0.05 ? 'off' : `${v.toFixed(1)} dB`],
+      ],
+    },
   ];
 
   let eng = null, media = null, vizRaf = 0;
@@ -161,7 +205,31 @@
             <span>Time-stretch, keep pitch <small>(#34 — atempo)</small></span>
           </label>
 
+          <label class="as-stem-label" for="as-stem">Stem</label>
+          <select id="as-stem" class="ctrl">
+            <option value="">Full mix</option>
+            <option value="instrumental">Instrumental (remove vocal)</option>
+            <option value="acapella">Acapella (isolate vocal)</option>
+          </select>
+
           <button type="button" class="primary-btn wide" id="as-bounce">⬇ Bounce to file</button>
+          <button type="button" class="mini-btn wide" id="as-stems">⎇ Export stems (dry / reverb / delay)</button>
+          <button type="button" class="mini-btn wide" id="as-loop">🔁 Find loop point</button>
+          <button type="button" class="mini-btn wide" id="as-abref">⚖ A/B a reference (loudness-matched)</button>
+          <div id="as-stage-warn" class="as-status" hidden></div>
+          <label class="as-stem-label" for="as-key">Snap to key</label>
+          <span style="display:flex;gap:6px">
+            <select id="as-key" class="ctrl">
+              <option value="0">C</option><option value="1">C#</option><option value="2">D</option><option value="3">D#</option>
+              <option value="4">E</option><option value="5">F</option><option value="6">F#</option><option value="7">G</option>
+              <option value="8">G#</option><option value="9">A</option><option value="10">A#</option><option value="11">B</option>
+            </select>
+            <select id="as-scale" class="ctrl">
+              <option value="major">major</option><option value="minor">minor</option>
+              <option value="pentatonic">pentatonic</option><option value="chromatic">chromatic</option>
+            </select>
+            <button type="button" class="mini-btn" id="as-snap">🎯 Snap</button>
+          </span>
           <div id="as-bounce-status" class="as-status"></div>
 
           <div id="lufs-meter-audio" class="lufs-meter"></div>
@@ -204,6 +272,53 @@
         </div>
       </div>`).join('');
 
+    // Gain-reduction meters (#28) live inside the Multiband module.
+    const mbMod = document.querySelector('.as-module[data-m="multiband"]');
+    if (mbMod) {
+      const gr = document.createElement('div');
+      gr.className = 'as-gr';
+      gr.innerHTML = ['Low', 'Mid', 'High'].map((b, i) =>
+        `<div class="as-gr-row"><label>${b}</label><div class="as-gr-track"><div class="as-gr-fill" id="as-gr-${i}"></div></div><output id="as-gr-v${i}">—</output></div>`).join('');
+      mbMod.appendChild(gr);
+    }
+
+    // #38 user impulse-response upload lives inside the Reverb module.
+    const revMod = document.querySelector('.as-module[data-m="reverb"]');
+    if (revMod) {
+      const ir = document.createElement('div');
+      ir.className = 'as-ir';
+      ir.innerHTML = `<label class="mini-btn" for="as-ir-file">＋ Load IR</label>
+        <input type="file" id="as-ir-file" accept="audio/*" hidden>
+        <button type="button" class="mini-btn" id="as-ir-clear" hidden>Generated</button>
+        <span id="as-ir-name" class="dim">generated</span>`;
+      revMod.appendChild(ir);
+      ir.querySelector('#as-ir-file').addEventListener('change', async (e) => {
+        const f = e.target.files[0]; if (!f || !eng) return;
+        try {
+          const buf = await eng.ctx.decodeAudioData(await f.arrayBuffer());
+          const info = eng.loadIR(buf);
+          document.getElementById('as-ir-name').textContent = `${f.name} (${info.seconds.toFixed(1)}s)`;
+          document.getElementById('as-ir-clear').hidden = false;
+          window.logToConsole?.('ok', `[reverb] loaded IR: ${f.name}`);
+        } catch (err) { window.logToConsole?.('error', `[reverb] IR load failed: ${err.message}`); }
+      });
+      ir.querySelector('#as-ir-clear').addEventListener('click', () => {
+        eng?.clearIR(); document.getElementById('as-ir-name').textContent = 'generated';
+        document.getElementById('as-ir-clear').hidden = true;
+      });
+    }
+
+    // Correlation meter (#31) lives inside the Stereo module.
+    const stereoMod = document.querySelector('.as-module[data-m="stereo"]');
+    if (stereoMod) {
+      const meter = document.createElement('div');
+      meter.className = 'as-corr';
+      meter.innerHTML = `<label>Correlation</label>
+        <div class="as-corr-track"><div class="as-corr-fill" id="as-corr-fill"></div><div class="as-corr-zero"></div></div>
+        <output id="as-corr-v">—</output>`;
+      stereoMod.appendChild(meter);
+    }
+
     // Mastering chains (from the ffmpeg workflow library)
     const chains = (window.ALL_WORKFLOWS || []).filter((w) => w.category === 'audio-mastering');
     const sel = document.getElementById('as-chain');
@@ -231,6 +346,15 @@
         const mixKey = ['reverbMix', 'delayMix', 'chorusMix'].find((mk) => mod.querySelector(`#as-${mk}`));
         if (mixKey) mod.classList.toggle('off', Number(P[mixKey]) === 0);
         if (mod.dataset.m === 'drive') mod.classList.toggle('off', Number(P.distortionAmount) === 0);
+      }
+    }
+    // #32 gain-staging warning — flag the stage that clips into 0 dBFS.
+    if (window.FFAudioDSP) {
+      const gs = window.FFAudioDSP.gainStaging(P);
+      const warn = document.getElementById('as-stage-warn');
+      if (warn) {
+        warn.hidden = !gs.clips;
+        if (gs.clips) warn.textContent = `⚠ Gain staging: ${gs.firstClip} stage clips (${gs.peakDb > 0 ? '+' : ''}${gs.peakDb} dBFS) — pull it back or drop Volume.`;
       }
     }
   }
@@ -347,6 +471,20 @@
           }
         }
       }
+      // Correlation meter (#31): -1 (out of phase) … 0 … +1 (mono). Fill grows
+      // from the centre; red when negative (phase trouble), green when positive.
+      const corr = eng?.getCorrelation?.();
+      if (corr != null) {
+        const fill = document.getElementById('as-corr-fill');
+        const out = document.getElementById('as-corr-v');
+        if (fill) {
+          const pct = Math.abs(corr) * 50;                 // half-width max
+          fill.style.width = pct + '%';
+          fill.style.left = corr >= 0 ? '50%' : (50 - pct) + '%';
+          fill.style.background = corr < 0 ? '#e0533f' : (corr < 0.4 ? '#e0a53f' : '#4caf70');
+        }
+        if (out) out.textContent = corr.toFixed(2);
+      }
       vizRaf = requestAnimationFrame(loop);
     };
     loop();
@@ -369,6 +507,22 @@
     try {
       status.textContent = 'Rendering (offline, faster than real time)…';
       const rendered = await eng.bounce((p) => { status.textContent = `Rendering… ${Math.round(p * 100)}%`; }, { playbackRate: preservePitch ? 1 : undefined });
+
+      // #26 stem separation: split the rendered stereo buffer in place.
+      const stemMode = document.getElementById('as-stem')?.value;
+      if (stemMode && rendered.numberOfChannels >= 2 && window.FFAudioDSP) {
+        const [sl, sr] = window.FFAudioDSP.stemSeparate(
+          [rendered.getChannelData(0), rendered.getChannelData(1)], rendered.sampleRate, stemMode);
+        rendered.getChannelData(0).set(sl); rendered.getChannelData(1).set(sr);
+        status.textContent = `Rendered · ${stemMode}.`;
+      }
+
+      // #28 gain-reduction meters: paint the last bounce's per-band GR.
+      if (eng.lastGR) eng.lastGR.forEach((db, i) => {
+        const fill = document.getElementById(`as-gr-${i}`); const out = document.getElementById(`as-gr-v${i}`);
+        if (fill) fill.style.width = Math.min(100, db / 18 * 100) + '%';
+        if (out) out.textContent = db > 0.05 ? `-${db.toFixed(1)}` : '0';
+      });
 
       const wav = window.FFAudio.AudioEngine.toWav(rendered);
       status.textContent = `Rendered ${(wav.size / 1024 / 1024).toFixed(1)} MB.`;
@@ -471,6 +625,90 @@
     }
   }
 
+  // #86 Detect the best seamless loop length and report it.
+  function findLoop() {
+    if (!eng?.buffer) return;
+    const status = document.getElementById('as-bounce-status');
+    const ch = eng.buffer.getChannelData(0);
+    const r = window.FFAudioDSP.detectLoop(ch, eng.buffer.sampleRate, { minSec: 0.25, maxSec: Math.min(8, eng.buffer.duration * 0.9) });
+    const pct = Math.round(r.confidence * 100);
+    status.innerHTML = `<span class="ok">🔁 Loop ≈ ${r.lengthSec.toFixed(2)}s (0 → ${(r.end / eng.buffer.sampleRate).toFixed(2)}s) · match ${pct}%</span>`;
+    window.logToConsole?.('ok', `[loop] best loop length ${r.lengthSec.toFixed(3)}s, confidence ${r.confidence.toFixed(3)}`);
+    return r;
+  }
+
+  // #33 Load a reference track, loudness-match it to the current mix, and A/B.
+  //  Plays the reference at matched gain so you compare tone, not volume.
+  let abRef = null, abGain = 1, abPlaying = false;
+  async function abReference() {
+    if (!eng?.buffer) return;
+    const status = document.getElementById('as-bounce-status');
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*';
+    inp.onchange = async () => {
+      if (!inp.files[0]) return;
+      try {
+        abRef = await eng.ctx.decodeAudioData(await inp.files[0].arrayBuffer());
+        const m = window.FFAudioDSP.loudnessMatch(eng.buffer.getChannelData(0), abRef.getChannelData(0));
+        abGain = m.gain;
+        status.innerHTML = `<span class="ok">⚖ Reference loaded — matched ${m.gainDb > 0 ? '+' : ''}${m.gainDb.toFixed(1)} dB. Click again to toggle A/B.</span>`;
+        window.logToConsole?.('ok', `[a/b] reference matched: gain ${m.gainDb.toFixed(1)} dB`);
+      } catch (e) { status.textContent = `A/B load failed: ${e.message}`; }
+    };
+    if (!abRef) { inp.click(); return; }
+    // toggle playback of the loudness-matched reference
+    if (abPlaying) { abStop(); return; }
+    eng.stop(); document.getElementById('as-play').textContent = '▶';
+    const src = eng.ctx.createBufferSource(); const g = eng.ctx.createGain();
+    src.buffer = abRef; g.gain.value = abGain; src.connect(g).connect(eng.ctx.destination);
+    src.onended = () => { abPlaying = false; };
+    src.start(); abPlaying = true; abSrc = src;
+    status.innerHTML = `<span class="ok">⚖ Playing REFERENCE (matched). Click A/B again to stop.</span>`;
+  }
+  let abSrc = null;
+  function abStop() { try { abSrc?.stop(); } catch (_) {} abPlaying = false; }
+
+  // #35 Detect the clip's pitch, snap it to the chosen key, set the pitch knob.
+  function snapToKey() {
+    if (!eng?.buffer) return;
+    const status = document.getElementById('as-bounce-status');
+    const root = +document.getElementById('as-key').value;
+    const scale = document.getElementById('as-scale').value;
+    const ch = eng.buffer.getChannelData(0);
+    const seg = ch.subarray(0, Math.min(ch.length, eng.buffer.sampleRate * 2)); // first ~2 s
+    const p = window.FFAudioDSP.detectPitch(seg, eng.buffer.sampleRate);
+    if (!p.freq || p.confidence < 0.3) { status.textContent = 'Snap: no clear pitch found.'; return; }
+    const snap = window.FFAudioDSP.snapToScale(p.freq, root, scale);
+    const semis = Math.max(-12, Math.min(12, Math.round(snap.semitones)));
+    eng.applyParams({ pitch: semis });
+    const knob = document.getElementById('as-pitch'); if (knob) knob.value = semis;
+    refreshOutputs();
+    status.innerHTML = `<span class="ok">🎯 ${window.FFAudioDSP.nearestNote(p.freq).name} → ${snap.name} (${semis > 0 ? '+' : ''}${semis} st)</span>`;
+    window.logToConsole?.('ok', `[pitch] detected ${p.freq.toFixed(1)}Hz → snap ${snap.name}, ${semis} st`);
+  }
+
+  // #40 Export the dry / reverb / delay buses as three separate WAV files.
+  async function exportStems() {
+    if (!eng?.buffer) return;
+    const status = document.getElementById('as-bounce-status');
+    eng.stop(); document.getElementById('as-play').textContent = '▶';
+    try {
+      status.textContent = 'Rendering stems…';
+      const stems = await eng.bounceStems((p) => { status.textContent = `Rendering stems… ${Math.round(p * 100)}%`; });
+      const baseName = (media?.name || 'audio').replace(/\.[^.]+$/, '');
+      let added = 0;
+      for (const [label, buf] of [['dry', stems.dry], ['reverb', stems.reverb], ['delay', stems.delay]]) {
+        const wav = window.FFAudio.AudioEngine.toWav(buf);
+        await window.addBlobToBin?.(wav, `${baseName} [${label}].wav`, wav.type);
+        added++;
+      }
+      status.innerHTML = `<span class="ok">✔ ${added} stems → Media Bin (dry / reverb / delay)</span>`;
+      window.logToConsole?.('ok', `[audio] exported ${added} stems`);
+    } catch (e) {
+      status.textContent = `Stem export failed: ${e.message}`;
+      window.logToConsole?.('error', `[audio] stem export failed: ${e.message}`);
+    }
+  }
+
   async function finish(blob, ext, status) {
     const name = `${(media?.name || 'audio').replace(/\.[^.]+$/, '')} [processed].${ext}`;
     await window.addBlobToBin?.(blob, name, blob.type);
@@ -541,6 +779,10 @@
     });
 
     document.getElementById('as-bounce').addEventListener('click', bounce);
+    document.getElementById('as-stems')?.addEventListener('click', exportStems);
+    document.getElementById('as-loop')?.addEventListener('click', findLoop);
+    document.getElementById('as-snap')?.addEventListener('click', snapToKey);
+    document.getElementById('as-abref')?.addEventListener('click', abReference);
 
     // An ffmpeg mastering chain is an OFFLINE filter chain. It CANNOT run in the
     // live Web Audio rack — different engine entirely. So we don't pretend:

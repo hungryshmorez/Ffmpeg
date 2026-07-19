@@ -60,10 +60,29 @@
     lastFrame: performance.now(),
     strobeOn: false,
     beatSync: false,
+    launchQ: 'off',             // #78 beat-synced launch quantise: off|beat|bar|2bar
+    playStart: 0,               // transport start (performance.now) for launch quantise
+    banks: new Array(8).fill(null),  // #75 pattern banks (deep-cloned patterns)
+    pendingBank: -1,            // a bank queued to switch on the next bar
   };
 
   let engine = null;            // the TripCam engine driving the visuals
   let chaos = null, sparkles = null;
+  const auto = window.FFAutomation ? new window.FFAutomation.Automation() : { recording: false, record() {}, start() {}, stop() {}, length: 0, duration: () => 0, events: [] };  // #76
+
+  // #76 Play the recorded automation back — schedule each master-fader move.
+  function playAutomation() {
+    if (!auto.events || !auto.events.length) { log('No automation recorded yet.', 'warn'); return; }
+    log(`Playing automation — ${auto.events.length} moves.`);
+    const mst = document.getElementById('vj-master');
+    for (const ev of auto.events) {
+      if (ev.param !== 'master') continue;
+      setTimeout(() => {
+        if (mst) mst.value = ev.value;
+        if (engine && window.FFPerf?.Master) { window.FFPerf.Master.capture(engine); window.FFPerf.Master.set(ev.value, engine); window.FFPerf.Master.release(); }
+      }, ev.t * 1000);
+    }
+  }
   let mosher = null;            // the MotionMosher, when Datamosh is triggered
   let srcVideoEl = null;        // the <video> feeding the engine — hot cues seek it
   const cues = [];              // hot-cue jump points, per slot (seconds)
@@ -74,7 +93,9 @@
 
   function fire(id, momentary) {
     const t = TRIGGERS[id];
-    if (!t || !engine) return;
+    if (!t) return;
+    window.FFMidiOut?.noteOnFor?.(id);          // #71 MIDI out (no-op if disabled)
+    if (!engine) return;
 
     if (t.effect) engine.setEffect(t.effect);
     if (t.params) engine.setParams(t.params);
@@ -107,7 +128,9 @@
 
   function release(id) {
     const t = TRIGGERS[id];
-    if (!t || !engine) return;
+    if (!t) return;
+    window.FFMidiOut?.noteOffFor?.(id);         // #71 MIDI out (no-op if disabled)
+    if (!engine) return;
     S.held.delete(id);
     S.active.delete(id);
 
@@ -240,8 +263,23 @@
     if (S.playing) return stop();
     S.playing = true;
     S.step = 0;
+    S.playStart = performance.now();
     document.getElementById('vj-play').textContent = '⏸';
     tick();
+  }
+
+  // #78 Beat-synced launch — quantise a trigger to the next beat/bar. When the
+  // sequencer is stopped, or quantise is off, it fires immediately. Otherwise it
+  // waits (via FFBeatSync.nextGridTime) so pads land on the grid, and lights the
+  // pad "queued" while it waits.
+  function launch(id) {
+    if (S.launchQ === 'off' || !S.playing || !window.FFBeatSync) return fire(id, false);
+    const elapsed = performance.now() - S.playStart;
+    const { delay } = window.FFBeatSync.nextGridTime(elapsed, S.bpm, S.launchQ);
+    const pad = document.querySelector(`.vj-pad[data-t="${id}"]`);
+    if (delay < 12) return fire(id, false);
+    pad?.classList.add('queued');
+    setTimeout(() => { pad?.classList.remove('queued'); if (S.playing) fire(id, false); }, delay);
   }
 
   function stop() {
@@ -252,6 +290,14 @@
     for (const id of [...S.active]) release(id);
   }
 
+  // ---- #69 external clock (MIDI clock slave) --------------------------------
+  // When slaved, the internal setTimeout scheduler is off and an outside clock
+  // calls stepTick() once per 16th note.
+  function setExternalClock(on) { S.extClock = !!on; if (S.extClock) clearTimeout(S.timer); }
+  function extStart() { S.extClock = true; S.playing = true; S.step = 0; S.playStart = performance.now(); const b = document.getElementById('vj-play'); if (b) b.textContent = '⏸'; }
+  function extStop() { stop(); }
+  function stepTick() { if (S.playing) stepBody(); }
+
   // ===========================================================================
   // PANIC — kill everything, instantly. The one control a live tool can't ship
   // without: latched/held triggers, the sequencer, chaos, strobe and mosh all
@@ -261,6 +307,7 @@
   function panic() {
     for (const id of [...S.active, ...S.held]) release(id);   // release every trigger
     S.active.clear(); S.held.clear();
+    try { window.FFMidiOut?.allNotesOff?.(); window.FFMidiOut?.stopClock?.(); } catch (_) {}  // #71 silence MIDI too
     if (S.playing) stop();                                    // stop the sequencer
     try { chaos?.stop(); } catch (_) {}                        // kill the chaos engine
     S.strobeOn = false;
@@ -280,8 +327,39 @@
     log('PANIC — all effects reset.', 'ok');
   }
 
-  function tick() {
+  // #75 PATTERN BANKS — 8 slots. Save the current 16-step pattern to a slot,
+  // recall a slot. Recalls made while playing are QUANTISED to the next bar
+  // (they apply when the sequencer wraps to step 0) so the switch lands on the
+  // downbeat; stopped, they apply immediately.
+  function clonePattern(p) { const o = {}; for (const k of Object.keys(p)) o[k] = p[k].slice(); return o; }
+  function saveBank(i) { if (i < 0 || i >= S.banks.length) return; S.banks[i] = clonePattern(S.pattern); syncBankButtons(); log(`Saved pattern to bank ${i + 1}.`, 'ok'); }
+  function applyBank(i) { if (!S.banks[i]) return; S.pattern = clonePattern(S.banks[i]); syncGrid(); syncBankButtons(); }
+  function recallBank(i) {
+    if (i < 0 || i >= S.banks.length || !S.banks[i]) return;
+    if (S.playing) { S.pendingBank = i; syncBankButtons(); log(`Bank ${i + 1} queued — switches on the next bar.`); }
+    else { applyBank(i); log(`Recalled bank ${i + 1}.`, 'ok'); }
+  }
+  function syncGrid() {
+    document.querySelectorAll('.vj-cell').forEach((c) => {
+      const on = !!(S.pattern[c.dataset.t] && S.pattern[c.dataset.t][+c.dataset.s]);
+      c.classList.toggle('on', on);
+    });
+  }
+  function syncBankButtons() {
+    document.querySelectorAll('.vj-bank').forEach((b) => {
+      const i = +b.dataset.b;
+      b.classList.toggle('filled', !!S.banks[i]);
+      b.classList.toggle('queued', S.pendingBank === i);
+    });
+  }
+
+  // One step of the sequencer: bank switch on the bar, light the playhead, fire
+  // the hits on this step, then advance. Split out from tick() so an EXTERNAL
+  // clock (#69 MIDI clock slave) can drive it one step at a time.
+  function stepBody() {
     if (!S.playing) return;
+
+    if (S.step === 0 && S.pendingBank >= 0) { applyBank(S.pendingBank); S.pendingBank = -1; }  // #75 bar-quantised switch
 
     document.querySelectorAll('.vj-step').forEach((el) =>
       el.classList.toggle('now', +el.dataset.s === S.step));
@@ -291,7 +369,12 @@
     }
 
     S.step = (S.step + 1) % S.steps;
-    S.timer = setTimeout(tick, stepMs());
+  }
+
+  function tick() {
+    if (!S.playing) return;
+    stepBody();
+    if (!S.extClock) S.timer = setTimeout(tick, stepMs());   // internal clock only
   }
 
   /** Tap tempo — the only way anyone actually sets a BPM in a dark room. */
@@ -370,6 +453,7 @@
         <div class="vj-hud">
           <span id="vj-fps" class="vj-fps">— fps</span>
           <span id="vj-midi-status" class="vj-midi">MIDI: —</span>
+          <button type="button" id="vj-rec-video" class="vj-rec-video" title="Record the live VJ output → Media Bin (then add more with ffmpeg)">🔴 REC → Bin</button>
         </div>
       </div>
 
@@ -383,6 +467,12 @@
             <span id="vj-bpm-v">120</span> BPM
           </label>
           <button type="button" id="vj-sync" class="mini-btn">🎵 Sync to audio</button>
+          <select id="vj-launchq" class="ctrl" title="Beat-synced launch — pads fire on the grid (#78)">
+            <option value="off">⚡ Launch: now</option>
+            <option value="beat">On beat</option>
+            <option value="bar">On bar</option>
+            <option value="2bar">Every 2 bars</option>
+          </select>
           <button type="button" id="vj-midi-learn" class="mini-btn vj-learn">🎹 MIDI Learn</button>
           <select id="vj-source" class="ctrl">
             <option value="webcam">📹 Webcam</option>
@@ -398,6 +488,8 @@
             <option value="full-chaos">Full Chaos</option>
           </select>
           <button type="button" id="vj-chaos" class="mini-btn">🎲 Auto-Glitch</button>
+          <button type="button" id="vj-auto-rec" class="mini-btn" title="Record master-fader automation (#76)">⏺ REC</button>
+          <button type="button" id="vj-auto-play" class="mini-btn" title="Play back recorded automation">▶ AUTO</button>
           <label class="vj-bpm-wrap" title="Global intensity — one knob toward neutral over every effect">
             <input type="range" id="vj-master" min="0" max="1" step="0.01" value="1">
             <span>MASTER</span>
@@ -429,6 +521,10 @@
             <small>Click a cell to fire that effect on that 16th. Effects lock to the beat.</small>
           </div>
           <div id="vj-grid" class="vj-grid"></div>
+          <div class="vj-banks" id="vj-banks" title="Pattern banks (#75) — click to recall on the bar · Shift+click to save">
+            <span class="vj-banks-l">BANKS</span>
+            ${Array.from({ length: 8 }, (_, i) => `<button type="button" class="vj-bank" data-b="${i}">${i + 1}</button>`).join('')}
+          </div>
         </div>
 
         <p class="vj-hint">
@@ -471,11 +567,13 @@
     const pads = document.getElementById('vj-pads');
     pads.addEventListener('pointerdown', (e) => {
       const b = e.target.closest('.vj-pad');
-      if (b) fire(b.dataset.t, true);
+      if (!b) return;
+      if (S.launchQ !== 'off') launch(b.dataset.t);   // #78 quantised latch launch
+      else fire(b.dataset.t, true);                   // momentary
     });
     pads.addEventListener('pointerup', (e) => {
       const b = e.target.closest('.vj-pad');
-      if (b) release(b.dataset.t);
+      if (b && S.launchQ === 'off') release(b.dataset.t);
     });
 
     document.getElementById('vj-grid').addEventListener('click', (e) => {
@@ -484,6 +582,27 @@
       const { t, s } = c.dataset;
       S.pattern[t][+s] = !S.pattern[t][+s];
       c.classList.toggle('on', S.pattern[t][+s]);
+      // #89 — the sequencer pattern is non-DOM state; flag it for the shared
+      // app undo stack so Ctrl+Z reverts step edits like any other change.
+      window.scheduleUndoSnapshot?.();
+    });
+
+    // #89 — register the sequencer pattern as a custom-undo provider. capture()
+    // deep-clones the pattern; restore() puts it back and re-syncs the grid.
+    if (typeof window.registerUndoProvider === 'function') {
+      window.registerUndoProvider('vj-pattern', {
+        capture: () => clonePattern(S.pattern),
+        restore: (p) => { S.pattern = clonePattern(p); syncGrid(); },
+      });
+    }
+
+    // #75 pattern banks — click to recall (bar-quantised while playing),
+    // Shift+click to save the current pattern.
+    document.getElementById('vj-banks')?.addEventListener('click', (e) => {
+      const b = e.target.closest('.vj-bank');
+      if (!b) return;
+      const i = +b.dataset.b;
+      if (e.shiftKey) saveBank(i); else recallBank(i);
     });
 
     document.getElementById('vj-play').addEventListener('click', play);
@@ -491,6 +610,7 @@
     document.getElementById('vj-tap').addEventListener('click', tap);
     document.getElementById('vj-sync').addEventListener('click', syncToAudio);
 
+    document.getElementById('vj-launchq')?.addEventListener('change', (e) => { S.launchQ = e.target.value; });
     document.getElementById('vj-bpm').addEventListener('input', (e) => {
       S.bpm = +e.target.value;
       document.getElementById('vj-bpm-v').textContent = S.bpm;
@@ -507,6 +627,14 @@
       log(`Learning… move a knob or hit a pad to bind it to "${target}".`);
     });
 
+    // Record the live VJ visual output to the Media Bin (reuses TripCam's
+    // MediaRecorder → addBlobToBin path). What lands is an ordinary bin clip you
+    // can then run more ffmpeg over.
+    document.getElementById('vj-rec-video')?.addEventListener('click', (e) => {
+      const cv = document.getElementById('vj-canvas');
+      if (e.target.classList.contains('recording')) { window.TripCam?.stopRec(); e.target.classList.remove('recording'); e.target.textContent = '🔴 REC → Bin'; log('Stopped — VJ recording saved to the Media Bin.', 'ok'); }
+      else if (window.TripCam?.startRec) { window.TripCam.startRec(cv, 30); e.target.classList.add('recording'); e.target.textContent = '⏹ STOP'; log('Recording VJ output → Media Bin…'); }
+    });
     document.getElementById('vj-source').addEventListener('change', (e) => setSource(e.target.value));
 
     // HOT CUES — stored jump points in the source video. Click to jump,
@@ -537,9 +665,16 @@
     const mst = document.getElementById('vj-master');
     if (mst && window.FFPerf?.Master) {
       mst.addEventListener('pointerdown', () => { if (engine) window.FFPerf.Master.capture(engine); });
-      mst.addEventListener('input', (e) => { if (engine) window.FFPerf.Master.set(+e.target.value, engine); });
+      mst.addEventListener('input', (e) => { if (engine) window.FFPerf.Master.set(+e.target.value, engine); auto.record('master', +e.target.value, performance.now() / 1000); });
       mst.addEventListener('pointerup', () => window.FFPerf.Master.release());
     }
+
+    // #76 Automation — record master-fader moves, play them back.
+    document.getElementById('vj-auto-rec')?.addEventListener('click', (e) => {
+      if (auto.recording) { auto.stop(); e.target.classList.remove('on'); log(`Automation recorded — ${auto.length} moves, ${auto.duration().toFixed(1)}s.`, 'ok'); }
+      else { auto.start(performance.now() / 1000); e.target.classList.add('on'); log('Recording automation — move the MASTER fader…'); }
+    });
+    document.getElementById('vj-auto-play')?.addEventListener('click', () => playAutomation());
 
     // QUALITY — Auto lets the adaptive monitor shed load when FPS drops; the
     // named tiers lock a fixed quality. Backed by FFPerf.Perf (performance.js).
@@ -623,7 +758,8 @@
   }
   function renderMappings() { /* mappings render into the learn button title */ }
 
-  window.FFVJ = { build, TRIGGERS, fire, release, panic, S };
+  window.FFVJ = { build, TRIGGERS, fire, release, panic, saveBank, recallBank, applyBank, automation: () => auto, S,
+    setExternalClock, extStart, extStop, stepTick };
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('[data-tab="vj"]')?.addEventListener('click', build);

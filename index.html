@@ -182,6 +182,7 @@
         <button id="bin-op-merge"    class="mini-btn" type="button" title="Take video from first, audio from second">🎬+🔊 Merge A/V</button>
         <button id="bin-op-batch"    class="mini-btn" type="button" title="Apply a workflow to every selected file">⚡ Batch Apply</button>
         <button id="bin-op-datamosh" class="mini-btn" type="button" title="Datamosh: apply the FIRST clip's motion to the SECOND clip's picture (select 2)">🌀 Datamosh A→B</button>
+        <button id="bin-op-colormatch" class="mini-btn" type="button" title="Match colour: grade the SECOND clip to the look of the FIRST (select 2)">🎨 Match Colour A→B</button>
         <button id="bin-op-record"   class="mini-btn" type="button" title="Record this clip's motion field to reuse (select 1)">🔴 Record Motion</button>
         <button id="bin-op-replay"   class="mini-btn" type="button" title="Replay the recorded motion over this clip (select 1)">▶ Apply Motion</button>
       </div>
@@ -2260,6 +2261,7 @@
         <button class="mode-btn"        data-mode="falsecolor" type="button">False Color</button>
         <button class="mode-btn"        data-mode="scopes" type="button">Scopes</button>
         <button class="mode-btn"        data-mode="wipe" type="button">Wipe</button>
+        <button class="mode-btn"        data-mode="fx" type="button">✨ Live FX</button>
       </div>
 
       <div class="preview-stage" id="preview-stage">
@@ -2303,6 +2305,18 @@
             <div class="wipe-handle" id="wipe-handle">◀</div>
           </div>
           <div class="wipe-help">Drag the divider to compare source (left) with output (right).</div>
+        </div>
+        <!-- Live FX mode: the source through the shared effect engine -->
+        <div class="preview-mode preview-fx" id="pmode-fx">
+          <canvas id="pv-fx" class="fx-canvas" width="480" height="270"></canvas>
+          <div class="fx-controls" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px">
+            <label>Effect <select id="pv-fx-effect" class="ctrl"></select></label>
+            <label>Amount <input type="range" id="pv-fx-amt" min="0" max="2" step="0.05" value="1"></label>
+            <button type="button" id="pv-fx-add" class="secondary-btn" title="Stack this effect onto the chain">＋ Add to chain</button>
+            <button type="button" id="pv-fx-rec" class="primary-btn">🔴 Record → Bin</button>
+          </div>
+          <div class="fx-chain" id="pv-fx-chain" style="margin-top:8px" title="Effect chain — applied top to bottom"></div>
+          <p class="muted small" style="margin-top:8px">Live preview of your source through the shared effect engine — the same look engine the glitch workflows and Trip Cam use. <strong>Record</strong> bakes it to the Media Bin so you can stack more with ffmpeg on top.</p>
         </div>
         <div class="preview-mode preview-compare" id="pmode-compare">
           <div class="compare-grid">
@@ -2471,10 +2485,24 @@
     <script src="opfs.js"></script>
     <script src="datamosh.js"></script>
     <script src="nodegraph.js"></script>
+    <script src="audio-dsp.js"></script>
     <script src="audio-engine.js"></script>
     <script src="audio-studio.js"></script>
     <script src="motion-mosh.js"></script>
     <script src="scopes.js"></script>
+    <script src="suggest.js"></script>
+    <script src="beatsync.js"></script>
+    <script src="highlights.js"></script>
+    <script src="automation.js"></script>
+    <script src="prefs.js"></script>
+    <script src="hover-preview.js"></script>
+    <script src="wf-thumbs.js"></script>
+    <script src="onboarding.js"></script>
+    <script src="preview-fx.js"></script>
+    <script src="fx-chain.js"></script>
+    <script src="midi-out.js"></script>
+    <script src="midi-in.js"></script>
+    <script src="mem-budget.js"></script>
     <script src="audio-intel.js"></script>
     <script src="clips.js"></script>
     <script src="vj-mode.js"></script>

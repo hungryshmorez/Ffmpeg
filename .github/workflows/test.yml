@@ -126,3 +126,253 @@ jobs:
       # red/blue push apart, and the luma trace rises on a dark→bright gradient.
       - name: Colour scopes
         run: npm run test:scopes
+
+      # Halation & bloom (#48): a bright spot blooms into its black surroundings
+      # with a reddish tint; a dim frame and a black frame barely change.
+      - name: Halation & bloom
+        run: npm run test:halation
+
+      # Stereo width + correlation (#31): the DSP core on synthesised PCM, then
+      # an end-to-end offline bounce through the real graph — width=0 → mono
+      # (corr +1), width=2 wider than width=1.
+      - name: Stereo width + correlation
+        run: npm run test:stereo-width
+
+      # Lookahead limiter (#29): spikes at 2.0 come back with no sample over the
+      # ceiling (transient caught, not overshot); an under-ceiling signal is
+      # untouched; an end-to-end bounce caps at the set dB ceiling.
+      - name: Master limiter
+        run: npm run test:limiter
+
+      # Transient shaper (#39): on a drum hit, attack=+1 raises the crest factor,
+      # attack=-1 lowers it, sustain=+1 lifts the tail RMS; neutral is untouched.
+      - name: Transient shaper
+        run: npm run test:transient
+
+      # Sidechain duck (#27): kick detected from the sub band pumps the pad — the
+      # level dips after each kick and recovers before the next; amount=0 is off.
+      - name: Sidechain duck
+        run: npm run test:sidechain
+
+      # Mid/side EQ (#30): mono-the-bass collapses the low side, widen-the-highs
+      # lifts the high side, neutral is untouched.
+      - name: Mid/side EQ
+        run: npm run test:ms-eq
+
+      # Multiband compression (#28): complementary crossovers sum to unity; the
+      # low band compresses down with a real GR read while the high band is left
+      # alone.
+      - name: Multiband compression
+        run: npm run test:multiband
+
+      # Film grain (#47): plate-based grain adds texture, preserves the mean, and
+      # is CLUMPY (lag-1 autocorrelation ≫ white noise) — proving it's a plate.
+      - name: Film grain
+        run: npm run test:film-grain
+
+      # Speed-up motion blur (#43): frameBlend smears a moving dot along its path
+      # (mid-path lit, peak lowered, span widened); a still is left untouched.
+      - name: Speed-up motion blur
+        run: npm run test:speed-blur
+
+      # Stem separation (#26): instrumental cancels the centre vocal, spectral
+      # acapella lifts the vocal/instrument ratio; mono degrades gracefully.
+      - name: Stem separation
+        run: npm run test:stems
+
+      # Convolution reverb from a user IR (#38): a click through a 2-tap IR
+      # echoes at the tap — and only with the IR loaded (dry is silent there).
+      - name: Convolution reverb (user IR)
+        run: npm run test:conv-reverb
+
+      # Export stems (#40): dry/reverb/delay buses rendered separately — the dry
+      # stem has the click, the reverb stem isolates the tail (dry click removed),
+      # the delay stem echoes at the delay time.
+      - name: Export stems
+        run: npm run test:stems-export
+
+      # Lens distortion + CA (#49): barrel bows a straight line, chromatic
+      # aberration fringes the edges (not the centre), no-op is a near-identity.
+      - name: Lens distortion + CA
+        run: npm run test:lens
+
+      # Rolling shutter / jello (#46): shear slants a line, opposite shear
+      # corrects it, wobble bends it; the no-op is a byte-identity.
+      - name: Rolling shutter (jello)
+        run: npm run test:rolling-shutter
+
+      # Stabilisation (#44): globalMotion is outlier-robust (median), and
+      # stabilizePath drops a jittery pan's acceleration while keeping the pan.
+      - name: Stabilisation
+        run: npm run test:stabilize
+
+      # Auto-reframe (#45): the magnitude-weighted motion centroid tracks the
+      # subject to each corner and returns null on a still field.
+      - name: Auto-reframe
+        run: npm run test:reframe
+
+      # Crossfader curves (#74): linear sums to 1, constant-power sums-of-squares
+      # to 1 (no mid dip), sharp is an S-curve; crossfade drives layer opacity.
+      - name: Crossfader curves
+        run: npm run test:crossfade-curves
+
+      # N-layer compositor (#72): grow the deck to 6 layers and composite on the
+      # 6th (beyond the old max) — screen-blend → yellow; count clamps to [2,8].
+      - name: N-layer compositor
+        run: npm run test:n-layers
+
+      # Optical-flow interpolation (#41): interpolate(A,B,flow,t) lands a moving
+      # object at its in-between position (midpoint at t=0.5), endpoints exact.
+      - name: Optical-flow interpolation
+        run: npm run test:interpolate
+
+      # Deflicker (#50): a flickering sequence's brightness variance collapses
+      # while a slow day→night ramp survives; a steady sequence is unchanged.
+      - name: Deflicker
+        run: npm run test:deflicker
+
+      # Power windows (#55): a shape mask grades only its region — inside
+      # brightens, outside is untouched, the feathered edge is partial, invert flips.
+      - name: Power windows
+        run: npm run test:power-window
+
+      # HSL secondaries (#54): key a hue range — qualifying red and hue-shifting
+      # turns the red half green while blue is untouched; unmatched hue selects nothing.
+      - name: HSL secondaries
+        run: npm run test:hsl-qualify
+
+      # Loop-point detection (#86): autocorrelation finds a tiled motif's period
+      # (0.5 s / 0.3 s, conf ~1.0) and scores unrepeating noise low.
+      - name: Loop-point detection
+        run: npm run test:loop-detect
+
+      # Workflow suggestions (#88): heuristics over probe metadata — talking-head
+      # → loudnorm/trim/reframe, vertical no-audio → music/social, 4K → downscale.
+      - name: Workflow suggestions
+        run: npm run test:suggest
+
+      # Beat-sync assembler (#83): snap cuts to the nearest beat, segment every N
+      # beats, lay clips onto the grid (short whole, long trimmed to the segment).
+      - name: Beat-sync assembler
+        run: npm run test:beatsync
+
+      # Highlight reel (#82): score windows by energy+motion+scene-cut and pick
+      # the top spaced-apart moments in time order.
+      - name: Highlight reel
+        run: npm run test:highlights
+
+      # Beat-synced launch (#78): the launch quantiser lands a trigger on the next
+      # beat/bar at a given tempo (500/2000 ms at 120 BPM), immediate on-grid.
+      - name: Beat-synced launch
+        run: npm run test:launch-quantize
+
+      # Beat-grid chopping (#36): slice on beats, then shuffle / stutter the slices
+      # onto a fresh timeline; out-of-range indices are skipped.
+      - name: Beat-grid chopping
+        run: npm run test:beat-chop
+
+      # Granular / beat stutter (#37): render a rearrangement to PCM — a stutter
+      # fills with one slice's tone, a shuffle reverses the tones, length sums.
+      - name: Granular beat stutter
+        run: npm run test:granular
+
+      # Pitch snap (#35): detectPitch recovers a 440 Hz fundamental (no octave
+      # error), and snapToScale nudges an off-key note into the chosen scale.
+      - name: Pitch snap to key
+        run: npm run test:pitch-snap
+
+      # Gain staging + A/B (#32/#33): the staging check flags the stage that
+      # clips; loudnessMatch brings a mix onto a reference's RMS.
+      - name: Gain staging + A/B
+        run: npm run test:gain-staging
+
+      # Retime toggle (#56): the same in-between frame two ways — 'flow' warps to
+      # one sharp block at the midpoint, 'blend' cross-dissolves to two ghosts.
+      - name: Retime method toggle
+        run: npm run test:retime-toggle
+
+      # Tone curves (#53): a curve LUT passes through its control points — identity
+      # is a no-op, a lift hits (128→190), invert gives 255−i, per-channel is isolated.
+      - name: Tone curves
+        run: npm run test:curves
+
+      # Pattern banks (#75): save/recall a sequencer pattern (deep-copied), an
+      # empty bank is safe, and a recall while playing queues for the next bar.
+      - name: Pattern banks
+        run: npm run test:pattern-banks
+
+      # Automation recording (#76): moves are time-stamped from the take start,
+      # valueAt is sample-and-hold, stateAt gives the whole patch, and it round-trips.
+      - name: Automation recording
+        run: npm run test:automation
+
+      # Live record → Media Bin: the TripCam/VJ record path hands back a
+      # non-empty video that DECODES to real frames and lands in the bin.
+      - name: Live effect record → bin
+        run: npm run test:live-record
+
+      # Preferences (#95): defaults, set() persists + applies (reduce-motion,
+      # accent), survives a reload, "," opens the modal, reset restores defaults.
+      - name: Preferences panel
+        run: npm run test:prefs
+
+      # Colour match (#85): Reinhard transfer lands the target's per-channel
+      # mean/std on the reference's; strength blends; self-match is identity.
+      - name: Auto colour-match
+        run: npm run test:color-match
+
+      # Hover-preview (#94): each workflow's look is derived from its real
+      # ffmpeg command + keyword heuristics and applied as per-pixel ops;
+      # showFor paints the overlay canvas and hovering a card reveals it.
+      - name: Workflow hover-preview
+        run: npm run test:hover-preview
+
+      # Workflow thumbnails (#93): each card's baked thumbnail is the look
+      # applied to a canonical frame; grayscale→gray tile, saturate widens
+      # spread, decorate() injects one non-blank thumb per card.
+      - name: Workflow thumbnails
+        run: npm run test:wf-thumbs
+
+      # Onboarding tour (#90): four-step, dismissible, localStorage-gated;
+      # auto-appears on first run, Next advances + switches tabs, finishing
+      # gates it, and the cheat-sheet button replays it.
+      - name: Onboarding tour
+        run: npm run test:onboarding
+
+      # App-wide undo (#89): non-DOM module state (the VJ sequencer pattern)
+      # rides the shared undo stack via registered providers; app Undo reverts
+      # a step edit and re-syncs the grid, staying in lockstep with controls.
+      - name: App-wide undo (custom state)
+        run: npm run test:undo-custom
+
+      # Live FX preview: the Preview tab runs the source through the shared
+      # effect engine (look ops + real FFShaderPlus shader passes) and records
+      # the canvas into the Media Bin as a decodable clip.
+      - name: Live FX preview + Record to Bin
+        run: npm run test:preview-fx
+
+      # Effect chains (#73): stack effects in order on the Live FX surface;
+      # order matters, disabled stages skip, add/move/toggle/remove, serialize,
+      # and the chain drives the preview loop over the single picker.
+      - name: Effect chains
+        run: npm run test:fx-chain
+
+      # MIDI out (#71): 24-PPQN clock + note on/off from the sequencer, verified
+      # against an injected output (physical Web-MIDI delivery is device-gated).
+      - name: MIDI output
+        run: npm run test:midi-out
+
+      # MIDI clock slave (#69): decode an incoming 24-PPQN clock (6 pulses/step),
+      # derive BPM, and slave the VJ sequencer's transport + playhead to it.
+      - name: MIDI clock sync (slave)
+        run: npm run test:midi-in
+
+      # Half-res motion estimation (#18): coarse-to-fine block matching recovers
+      # the same flow field as the full search for far fewer SAD ops.
+      - name: Half-res motion estimation
+        run: npm run test:half-res-motion
+
+      # Memory budget (#24): MEMFS + GPU + VideoFrames + AudioBuffers unified
+      # into one device-derived budget with ok/warn/over status.
+      - name: Unified memory budget
+        run: npm run test:mem-budget

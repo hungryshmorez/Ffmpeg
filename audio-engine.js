@@ -59,6 +59,26 @@
     reverbRoom: 1.5,     // 0.5 – 5   (IR decay curve)
     reverbDecay: 2.5,    // 0.2 – 10 s (IR length)
     reverbMix: 0.0,      // 0 – 1
+
+    // stereo (#31)
+    width: 1.0,          // 0 – 2   (mid/side width; 1 = neutral, 0 = mono)
+
+    // multiband compression (#28) — applied at bounce (3 bands + GR meters)
+    multibandAmount: 0,  // 0 – 1   (0 = off; drives all three bands' thresholds)
+
+    // mid/side EQ (#30) — applied at bounce (needs the full stereo buffer)
+    msMonoBelow: 0,      // 0 – 300 Hz  (0 = off; high-pass the side → mono bass)
+    msWidenDb: 0,        // 0 – 12 dB   (high-shelf boost on the side → wider highs)
+
+    // sidechain duck (#27) — applied at bounce (kick detected from the sub band)
+    sidechainAmount: 0,  // 0 – 1   (0 = off; depth of the pump under each kick)
+
+    // transient shaper (#39) — applied at bounce (envelope over the full buffer)
+    transientAttack: 0,  // -1 – +1  (punch: boost/cut the onset)
+    transientSustain: 0, // -1 – +1  (body: boost/cut the tail)
+
+    // master limiter (#29) — applied at bounce (lookahead needs a full buffer)
+    limiterCeiling: 0,   // -12 – 0 dBFS  (0 = off; below 0 engages the limiter)
   };
 
   const PRESETS = [
@@ -270,11 +290,72 @@
       n.reverb.connect(n.reverbWet);
       n.reverbWet.connect(n.gain);
 
-      n.gain.connect(n.analyser);
+      // ---- STEREO WIDTH (#31) — mid/side matrix on the final mix ----
+      // outL = 0.5(1+w)·L + 0.5(1-w)·R ; outR = 0.5(1-w)·L + 0.5(1+w)·R.
+      // w=1 → identity (bypass), w=0 → mono sum, w>1 → widened. Four gains feed
+      // a 2-in merger; connections to the same merger input sum.
+      n.widthSplit = ctx.createChannelSplitter(2);
+      n.widthMerge = ctx.createChannelMerger(2);
+      n.wLL = ctx.createGain(); n.wRL = ctx.createGain();
+      n.wLR = ctx.createGain(); n.wRR = ctx.createGain();
+      n.gain.connect(n.widthSplit);
+      n.widthSplit.connect(n.wLL, 0); n.widthSplit.connect(n.wLR, 0);   // L → both outs
+      n.widthSplit.connect(n.wRL, 1); n.widthSplit.connect(n.wRR, 1);   // R → both outs
+      n.wLL.connect(n.widthMerge, 0, 0); n.wRL.connect(n.widthMerge, 0, 0);   // → out L
+      n.wLR.connect(n.widthMerge, 0, 1); n.wRR.connect(n.widthMerge, 0, 1);   // → out R
+
+      // ---- CORRELATION METER (#31) — split analysers on the widened output ----
+      n.corrSplit = ctx.createChannelSplitter(2);
+      n.corrL = ctx.createAnalyser(); n.corrL.fftSize = 2048;
+      n.corrR = ctx.createAnalyser(); n.corrR.fftSize = 2048;
+      n.widthMerge.connect(n.corrSplit);
+      n.corrSplit.connect(n.corrL, 0);
+      n.corrSplit.connect(n.corrR, 1);
+
+      n.widthMerge.connect(n.analyser);
       n.analyser.connect(ctx.destination);
 
       this.nodes = n;
       this.applyParams(this.params);
+    }
+
+    /** #38 Load a user impulse response (an AudioBuffer) for convolution reverb. */
+    loadIR(audioBuffer) {
+      const nch = audioBuffer.numberOfChannels;
+      this._irChannels = [];
+      for (let c = 0; c < nch; c++) this._irChannels.push(Float32Array.from(audioBuffer.getChannelData(c)));
+      this._irSR = audioBuffer.sampleRate;
+      this._irId = (this._irId || 0) + 1;
+      if (this.nodes && this.nodes.reverb) this.nodes._userIRid = -1;   // force rebuild
+      if (this.nodes && this.nodes.gain) this.applyParams({});
+      return { channels: nch, seconds: audioBuffer.length / audioBuffer.sampleRate };
+    }
+
+    /** Revert to the generated reverb IR. */
+    clearIR() { this._irChannels = null; this._irId = (this._irId || 0) + 1; if (this.nodes) { this.nodes._irRoom = null; this.nodes._userIRid = -1; } if (this.nodes && this.nodes.gain) this.applyParams({}); }
+
+    /** Build an AudioBuffer of the stored IR in `ctx` (linear-resampled to its sr). */
+    _irBuffer(ctx) {
+      const src = this._irChannels, sr = ctx.sampleRate, ratio = sr / this._irSR;
+      const outLen = Math.max(1, Math.round(src[0].length * ratio));
+      const buf = ctx.createBuffer(src.length, outLen, sr);
+      for (let c = 0; c < src.length; c++) {
+        const s = src[c], d = buf.getChannelData(c);
+        for (let i = 0; i < outLen; i++) {
+          const pos = i / ratio, i0 = Math.floor(pos), frac = pos - i0;
+          d[i] = (s[i0] || 0) * (1 - frac) + (s[i0 + 1] || 0) * frac;
+        }
+      }
+      return buf;
+    }
+
+    /** Live phase-correlation read [-1,1] off the split analysers, for the meter. */
+    getCorrelation() {
+      const n = this.nodes;
+      if (!n.corrL || !n.corrR || !window.FFAudioDSP) return 0;
+      const L = new Float32Array(n.corrL.fftSize), R = new Float32Array(n.corrR.fftSize);
+      n.corrL.getFloatTimeDomainData(L); n.corrR.getFloatTimeDomainData(R);
+      return window.FFAudioDSP.correlation(L, R);
     }
 
     /** Live parameter update. This is what makes it feel like an instrument. */
@@ -312,11 +393,23 @@
       set(n.delayFB.gain, P.delayFeedback);
       set(n.delayWet.gain, P.delayMix);
 
-      if (P.reverbMix > 0 && (!n._irRoom || n._irRoom !== P.reverbRoom || n._irDecay !== P.reverbDecay)) {
-        n.reverb.buffer = makeIR(this.ctx, P.reverbDecay, P.reverbRoom);
-        n._irRoom = P.reverbRoom; n._irDecay = P.reverbDecay;
+      if (P.reverbMix > 0) {
+        if (this._irChannels) {
+          // #38 user impulse response — rebuild per context (live/offline) once.
+          if (n._userIRid !== this._irId) { n.reverb.buffer = this._irBuffer(this.ctx); n._userIRid = this._irId; n._irRoom = null; }
+        } else if (!n._irRoom || n._irRoom !== P.reverbRoom || n._irDecay !== P.reverbDecay) {
+          n.reverb.buffer = makeIR(this.ctx, P.reverbDecay, P.reverbRoom);
+          n._irRoom = P.reverbRoom; n._irDecay = P.reverbDecay; n._userIRid = -1;
+        }
       }
       set(n.reverbWet.gain, P.reverbMix);
+
+      // Stereo width mid/side matrix (#31).
+      if (n.wLL) {
+        const w = P.width == null ? 1 : P.width;
+        set(n.wLL.gain, 0.5 * (1 + w)); set(n.wRR.gain, 0.5 * (1 + w));
+        set(n.wLR.gain, 0.5 * (1 - w)); set(n.wRL.gain, 0.5 * (1 - w));
+      }
 
       // Speed + pitch both ride on playbackRate + detune of the live source.
       if (this.src) {
@@ -419,8 +512,9 @@
       src.playbackRate.value = renderRate;
       if (src.detune) src.detune.value = P.pitch * 100;
       src.connect(this.nodes.bass);
-      this.nodes.analyser.disconnect();
-      this.nodes.gain.connect(off.destination);
+      // Render through the FULL graph (incl. the stereo-width matrix, #31) — it
+      // already routes n.gain → width → analyser → off.destination. Bypassing to
+      // gain here would drop the width stage from the bounce.
       src.start(0);
 
       onProgress?.(0.1);
@@ -431,7 +525,82 @@
       this.ctx = live;
       this.nodes = {};
 
+      // Post-render PCM stages (in place — getChannelData is the backing
+      // Float32Array, so toWav reads the processed samples). Shape transients
+      // FIRST, then catch peaks with the limiter.
+      if (window.FFAudioDSP) {
+        const chans = [];
+        for (let c = 0; c < rendered.numberOfChannels; c++) chans.push(rendered.getChannelData(c));
+        // Multiband compression (#28) — glue first, in the frequency domain.
+        if (P.multibandAmount > 0) {
+          const amt = P.multibandAmount;
+          const th = -12 - amt * 24;                 // 0→-12 dB … 1→-36 dB
+          const ratio = 1.5 + amt * 4;               // gentler → harder
+          const band = { threshold: th, ratio, attackMs: 12, releaseMs: 140, makeupDb: amt * 4 };
+          const res = window.FFAudioDSP.multibandCompress(chans, rendered.sampleRate, {
+            crossLow: 200, crossHigh: 2500, bands: [band, band, band],
+          });
+          this.lastGR = res.gr;                       // for the GR meters
+        }
+        // Mid/side EQ (#30) — shape the stereo field before dynamics.
+        if (P.msMonoBelow > 0 || P.msWidenDb !== 0) {
+          window.FFAudioDSP.midSideEQ(chans, rendered.sampleRate, {
+            monoBelowHz: P.msMonoBelow, widenAboveHz: 3000, widenDb: P.msWidenDb,
+          });
+        }
+        // Sidechain duck (#27) — pump first, so the transient shaper and limiter
+        // act on the already-ducked mix.
+        if (P.sidechainAmount > 0) {
+          window.FFAudioDSP.sidechainDuck(chans, rendered.sampleRate, { amount: P.sidechainAmount });
+        }
+        // Transient shaper (#39).
+        if (P.transientAttack || P.transientSustain) {
+          window.FFAudioDSP.transientShaper(chans, rendered.sampleRate, {
+            attack: P.transientAttack, sustain: P.transientSustain,
+          });
+        }
+        // Master lookahead limiter (#29).
+        if (P.limiterCeiling < -0.01) {
+          window.FFAudioDSP.limiter(chans, rendered.sampleRate, {
+            ceiling: Math.pow(10, P.limiterCeiling / 20), lookaheadMs: 5, releaseMs: 60,
+          });
+        }
+      }
+      onProgress?.(0.8);
+
       return rendered;   // AudioBuffer
+    }
+
+    // =========================================================================
+    // #40 EXPORT STEMS — render the dry, reverb and delay buses as SEPARATE
+    // buffers. The wet returns are isolated by rendering the mix with just that
+    // effect and subtracting the dry render (the buses sum linearly, and the
+    // master processors are bypassed for stems), so no graph surgery is needed.
+    // =========================================================================
+    async bounceStems(onProgress) {
+      const base = this.params;
+      // stems are PRE-master: bypass every post-render/master stage and the
+      // phaser feedback (so the dry stem's tail is clean and the wet stems
+      // subtract exactly).
+      const stemBase = {
+        ...base, multibandAmount: 0, msMonoBelow: 0, msWidenDb: 0, sidechainAmount: 0,
+        transientAttack: 0, transientSustain: 0, limiterCeiling: 0, phaserFeedback: 0, phaserDepth: 0,
+      };
+      const render = async (patch) => { const saved = this.params; this.params = { ...stemBase, ...patch }; const b = await this.bounce(); this.params = saved; return b; };
+      onProgress?.(0.05);
+      const dry = await render({ reverbMix: 0, delayMix: 0, chorusMix: 0 });
+      onProgress?.(0.35);
+      const revFull = await render({ delayMix: 0, chorusMix: 0 });
+      onProgress?.(0.65);
+      const delFull = await render({ reverbMix: 0, chorusMix: 0 });
+      onProgress?.(0.95);
+      const sub = (a, b) => {
+        const n = Math.min(a.length, b.length), nch = a.numberOfChannels;
+        const out = new OfflineAudioContext(nch, n, a.sampleRate).createBuffer(nch, n, a.sampleRate);
+        for (let c = 0; c < nch; c++) { const oa = a.getChannelData(c), ob = b.getChannelData(c), od = out.getChannelData(c); for (let i = 0; i < n; i++) od[i] = oa[i] - ob[i]; }
+        return out;
+      };
+      return { dry, reverb: sub(revFull, dry), delay: sub(delFull, dry) };
     }
 
     /** AudioBuffer → 16-bit WAV Blob. No ffmpeg needed for WAV. */

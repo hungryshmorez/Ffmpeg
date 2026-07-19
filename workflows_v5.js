@@ -137,4 +137,76 @@ window.WORKFLOWS_V5 = [
       });
     },
   },
+
+  // --- stabilisation (#44), from the same motion field ---
+  {
+    id: 'stabilise',
+    name: 'Stabilise',
+    category: 'motion-speed',
+    description: 'Steadies shaky footage using the same motion estimation as the mosh — the median of each frame’s field IS the camera’s motion, so it integrates the camera path, smooths it, and counter-shifts each frame. The intended pan survives; the shake goes.',
+    tags: ['stabilise', 'stabilize', 'steady', 'smooth', 'motion', 'shake'],
+    icon: '🎯', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFMosh.renderStabilize(m, { blockSize: 16, motionRadius: 14, threshold: 0, smoothRadius: 24, strength: 1 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Stabilising — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // --- optical-flow slow-mo (#41) ---
+  {
+    id: 'flow-slomo',
+    name: 'Slow-Mo (optical flow)',
+    category: 'motion-speed',
+    description: 'Real slow motion — synthesises the in-between frames by warping along the motion field, so movement lands at its true intermediate position instead of juddering on duplicated frames. 2× smoother slow-mo from any clip.',
+    tags: ['slowmo', 'slow-motion', 'interpolation', 'optical-flow', 'retime', 'smooth'],
+    icon: '🐢', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFMosh.renderInterpolate(m, { blockSize: 16, motionRadius: 16, threshold: 0, factor: 2 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Slow-mo — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // --- retime method toggle (#56): the blend alternative to flow slow-mo ---
+  {
+    id: 'blend-slomo',
+    name: 'Slow-Mo (frame blend)',
+    category: 'motion-speed',
+    description: 'The other retime method — cross-dissolves neighbouring frames instead of warping along the motion. Cheaper and softer than optical-flow slow-mo (moving objects ghost rather than land sharp); the classic frame-mix look. Pair with “Slow-Mo (optical flow)” and pick per shot.',
+    tags: ['slowmo', 'frame-blend', 'retime', 'dissolve', 'toggle'],
+    icon: '🐌', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderSpeedBlur(m, { factor: 2 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Frame-blend slow-mo — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // --- auto-reframe to vertical (#45), tracks the subject ---
+  {
+    id: 'auto-reframe',
+    name: 'Auto-Reframe → Vertical',
+    category: 'motion-speed',
+    description: 'Turns a horizontal clip into a 9:16 vertical one that FOLLOWS the action — it tracks the centre of motion (the subject) and pans the crop to keep it in frame, instead of a dumb centre crop that loses whatever’s moving.',
+    tags: ['reframe', 'vertical', '9:16', 'track', 'subject', 'social'],
+    icon: '📱', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFMosh.renderReframe(m, { blockSize: 16, motionRadius: 12, threshold: 0, aspect: 9 / 16, smoothRadius: 20, strength: 1 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Reframing — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
 ].flat();

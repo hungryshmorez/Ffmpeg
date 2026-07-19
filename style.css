@@ -2372,6 +2372,20 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 /* rack */
 .as-rack{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
 .as-module{background:#141414;border:1px solid #242424;border-radius:8px;padding:12px;transition:.2s}
+/* #31 correlation meter */
+.as-corr{margin-top:10px;display:flex;align-items:center;gap:8px;font-size:10px}
+.as-corr label{opacity:.7;min-width:64px}
+.as-corr-track{position:relative;flex:1;height:8px;background:#0d0d0d;border-radius:4px;overflow:hidden}
+.as-corr-fill{position:absolute;top:0;height:100%;width:0;left:50%;background:#4caf70;transition:width .08s,left .08s,background .2s}
+.as-corr-zero{position:absolute;top:0;left:50%;width:1px;height:100%;background:#3a3a3a}
+.as-corr output{min-width:30px;text-align:right;font-variant-numeric:tabular-nums;opacity:.85}
+/* #28 gain-reduction meters */
+.as-gr{margin-top:10px;display:flex;flex-direction:column;gap:5px;font-size:10px}
+.as-gr-row{display:flex;align-items:center;gap:8px}
+.as-gr-row label{opacity:.7;min-width:30px}
+.as-gr-track{position:relative;flex:1;height:7px;background:#0d0d0d;border-radius:4px;overflow:hidden}
+.as-gr-fill{position:absolute;top:0;right:0;width:0;height:100%;background:linear-gradient(90deg,#e0a53f,#e0533f);transition:width .1s}
+.as-gr output{min-width:34px;text-align:right;font-variant-numeric:tabular-nums;opacity:.85}
 .as-module.off{opacity:.45}
 .as-module.off:hover{opacity:.8}
 .as-mod-head{display:flex;gap:9px;align-items:flex-start;margin-bottom:10px;
@@ -2566,6 +2580,16 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 .falsecolor-canvas { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; image-rendering: pixelated; }
 .falsecolor-legend { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; font-size: 10px; }
 .falsecolor-legend span { padding: 2px 6px; border-radius: 2px; color: #fff; }
+
+/* ---- v10.4: preferences panel (#95) ---- */
+.ff-prefs-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
+.ff-prefs-modal[hidden]{display:none}
+.ff-prefs-box{background:#16161c;border:1px solid #2a2a33;border-radius:10px;padding:16px 18px;min-width:300px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.ff-prefs-box header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.ff-prefs-box header button{background:none;border:none;color:#aaa;font-size:16px;cursor:pointer}
+.ff-prefs-row{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px solid #22222a}
+.ff-prefs-box footer{margin-top:12px;text-align:right}
+.reduce-motion *{animation-duration:.001s!important;transition-duration:.001s!important}
 
 /* ---- v10.4: scopes view (#51) — vectorscope + waveform ---- */
 .scopes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

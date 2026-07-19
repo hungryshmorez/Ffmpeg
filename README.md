@@ -139,10 +139,135 @@ npm run test:compositor # layer compositor: two decoded clips stacked, composite
 - **`.test/scopes.mjs`** verifies the **vectorscope + waveform** deterministically: a grey frame
   plots at the vectorscope centre while saturated red and blue push apart, and a dark→bright gradient
   makes the waveform's luma trace rise from bottom to top.
+- **`.test/halation.mjs`** verifies **halation & bloom** deterministically: a bright spot bleeds a
+  reddish glow into its black surroundings, while a below-threshold frame and a fully black frame
+  barely change.
+- **`.test/stereo-width.mjs`** verifies **stereo width + correlation**: the DSP core on synthesised
+  PCM (mono → +1, anti-phase → −1), then an end-to-end offline bounce through the real engine graph
+  where width=0 renders mono and width=2 is measurably wider than width=1.
+- **`.test/limiter.mjs`** verifies the **lookahead limiter**: spikes at 2.0 come back with no sample
+  over the ceiling (transient caught, not overshot), an under-ceiling signal is untouched, and an
+  end-to-end bounce caps the rendered output at the set dB ceiling.
+- **`.test/transient.mjs`** verifies the **transient shaper** on a synthetic drum hit: attack=+1
+  raises the crest factor, attack=−1 lowers it, and sustain=+1 lifts the tail RMS.
+- **`.test/sidechain.mjs`** verifies the **sidechain duck** on a pad+kick mix: the level dips right
+  after each detected kick and recovers before the next; amount=0 is untouched.
+- **`.test/ms-eq.mjs`** verifies **mid/side EQ**: mono-the-bass collapses the low side while keeping
+  the high side, widen-the-highs lifts the high side, and neutral is untouched.
+- **`.test/multiband.mjs`** verifies **multiband compression**: complementary crossovers reconstruct
+  to unity (Δ=0), the low band compresses down with a real gain-reduction read, and the high band is
+  left alone.
+- **`.test/film-grain.mjs`** verifies **plate-based film grain**: it adds texture, preserves the
+  mean, scales with intensity, and is clumpy — the grain layer's lag-1 autocorrelation (0.94) sits
+  far above a white-noise reference (~0), which is what makes it a plate and not digital hiss.
+- **`.test/speed-blur.mjs`** verifies **motion blur on speed-up**: `frameBlend` smears a stepping
+  dot along its path (a mid-path point lights though it was black in frame 0, the peak drops, the
+  lit span widens into a trail) while a still is left untouched.
+- **`.test/stems.mjs`** verifies **stem separation**: instrumental cancels the centre vocal (0.249→
+  0.016) while keeping the panned instrument, and the spectral acapella lifts the vocal/instrument
+  ratio 1.79→7.23; mono input degrades gracefully.
+- **`.test/conv-reverb.mjs`** verifies **convolution reverb from a user IR**: a click bounced through
+  a hand-built 2-tap impulse response echoes at the tap position, and only when the IR is loaded (the
+  dry render is silent there).
+- **`.test/stems-export.mjs`** verifies **stem export**: a click through reverb+delay splits into a
+  dry stem carrying the click, a reverb stem that isolates the reverb (dry click removed 0.119→0.003),
+  and a delay stem that echoes at the delay time.
+- **`.test/lens.mjs`** verifies **lens distortion + CA**: barrel distortion bows a straight line
+  (top x=3 vs mid x=22), chromatic aberration fringes the edges (|R−B|=255) but not the centre, and
+  the no-op profile is a byte-identity.
+- **`.test/rolling-shutter.mjs`** verifies **rolling shutter / jello**: shear slants a vertical line,
+  the opposite shear corrects it back to straight, wobble bends it (jello), and the no-op is a
+  byte-identity.
+- **`.test/stabilize.mjs`** verifies **stabilisation**: `globalMotion` is outlier-robust (median),
+  and `stabilizePath` drops a jittery pan's acceleration (2.02→0.06) while preserving the pan travel.
+- **`.test/reframe.mjs`** verifies **auto-reframe**: the magnitude-weighted motion centroid tracks
+  the subject to each corner and returns null on a still field.
+- **`.test/crossfade-curves.mjs`** verifies the **crossfader curves**: linear sums to 1, constant-
+  power's sum-of-squares is 1 (no mid dip → 0.707/0.707), sharp is an S-curve, and the compositor's
+  layer opacities follow the selected law.
+- **`.test/n-layers.mjs`** verifies the **N-layer compositor**: the deck grows to 6 layers in the
+  real app and a clip on layer 5 (beyond the old max) screen-blends over red to a yellow centre
+  pixel; the layer count clamps to [2,8].
+- **`.test/interpolate.mjs`** verifies **optical-flow interpolation**: a block that moves 20 px lands
+  at the midpoint (x=31.5) when interpolated at t=0.5, a quarter/three-quarters along at t=0.25/0.75,
+  and t=0/1 return the source frames exactly.
+- **`.test/deflicker.mjs`** verifies **deflicker**: a 128±40 flicker's frame-brightness variance
+  collapses (796→3) while a slow 80→180 ramp is preserved (Δ75) and a steady sequence is unchanged.
+- **`.test/power-window.mjs`** verifies **power windows**: a feathered elliptical mask brightens the
+  inside (120→222), leaves the outside untouched, grades the feathered edge partially, and inverts.
+- **`.test/hsl-qualify.mjs`** verifies **HSL secondaries**: qualifying red and hue-shifting turns a
+  red half green (30,220,30) while the blue half is untouched, qualifying blue darkens only it, and a
+  hue with no content in the frame selects nothing.
+- **`.test/loop-detect.mjs`** verifies **loop-point detection**: a 0.5 s / 0.3 s motif tiled several
+  times is detected at its true period with ~1.0 confidence, and unrepeating noise scores low.
+- **`.test/suggest.mjs`** verifies **workflow suggestions**: a talking-head clip ranks Loudnorm/Trim/
+  Reframe, a vertical no-audio short gets Music/social/Loop (no audio-only steps), 4K gets Downscale.
+- **`.test/beatsync.mjs`** verifies the **beat-sync assembler**: cuts snap to the nearest beat,
+  segments fall every N beats, and clips lay onto the grid (short used whole, long trimmed to fit).
+- **`.test/highlights.mjs`** verifies the **highlight reel**: scoring energy+motion+scene-cut picks
+  the two peaks (t=5, t=14), keeps them ≥3 s apart, and returns them chronologically.
+- **`.test/launch-quantize.mjs`** verifies **beat-synced launching**: at 120 BPM a launch 300 ms in
+  fires at 500 ms (beat) or 2000 ms (bar), an on-grid launch fires immediately, and tempo scales it.
+- **`.test/beat-chop.mjs`** verifies **beat-grid chopping**: slicing on the grid, a reverse shuffle,
+  a 4× stutter of one slice onto a fresh timeline, and out-of-range index safety.
+- **`.test/granular.mjs`** verifies **granular beat stutter**: rendering a rearrangement to PCM — a
+  `[0,0,0]` stutter fills with slice-0's 200 Hz tone, a `[2,1,0]` shuffle plays 800/400/200, length sums.
+- **`.test/pitch-snap.mjs`** verifies **pitch snap**: `detectPitch` recovers a 440 Hz fundamental
+  without an octave error, and `snapToScale` nudges an off-key pitch into the chosen scale (→ D4).
+- **`.test/gain-staging.mjs`** verifies **gain staging + A/B**: the staging check flags the first
+  stage that clips (a +12 dB bass boost), and `loudnessMatch` brings a mix onto a reference's RMS.
+- **`.test/retime-toggle.mjs`** verifies the **retime toggle**: at t=0.5 the `'flow'` method warps to
+  one sharp block at the midpoint while `'blend'` cross-dissolves to two ghosts.
+- **`.test/curves.mjs`** verifies the **tone curves**: the identity curve is a no-op, a curve passes
+  through its control point (128→190), invert gives 255−i, and a per-channel curve is isolated.
+- **`.test/pattern-banks.mjs`** verifies the **pattern banks**: save→change→recall restores the
+  sequencer pattern (deep-copied), an empty bank is safe, and a recall while playing queues for the bar.
+- **`.test/automation.mjs`** verifies **automation recording**: moves are time-stamped from the take
+  start, `valueAt` is sample-and-hold, `stateAt` gives the whole patch, and the take round-trips.
+- **`.test/live-record.mjs`** verifies the **live record → Media Bin** path (TripCam and the VJ deck):
+  recording an animated canvas hands back a non-empty video that decodes to real frames and lands in
+  the bin as an ordinary clip (so any ffmpeg workflow can then run on it).
+- **`.test/prefs.mjs`** verifies the **preferences panel**: defaults, `set()` persists and applies
+  (reduce-motion class + accent), survives a reload, "," opens the modal, and `reset()` restores.
+- **`.test/color-match.mjs`** verifies **auto colour-match**: the Reinhard transfer lands the target's
+  per-channel mean and std on the reference's, strength blends (0 = no-op, 0.5 = halfway), self = identity.
+- **`.test/hover-preview.mjs`** verifies **workflow hover-preview**: the per-pixel look ops (grayscale → R=G=B,
+  invert → 255−x, saturate widens the channel spread, warm gain lifts red over blue), that `deriveLook` grounds
+  the look in the real ffmpeg command and in name/tag keywords, that every video workflow resolves to a visible
+  look, and end-to-end that `showFor` paints the overlay canvas and hovering a real card reveals it.
+- **`.test/wf-thumbs.mjs`** verifies **workflow thumbnails**: `renderThumb` bakes each workflow's look onto a
+  canonical frame (grayscale workflow → grayscale tile, saturate widens the spread, invert ≠ grayscale, audio →
+  waveform tile), and `decorate` injects exactly one non-blank thumbnail per card across all cards, idempotently.
+- **`.test/onboarding.mjs`** verifies the **onboarding tour**: it auto-appears on first run at step 1 with the
+  spotlight on the Add-media button, Next advances the steps and switches to a step's target tab, finishing gates
+  it in `localStorage` and hides it, `start(false)` is a no-op once gated while the cheat-sheet button replays it.
+- **`.test/undo-custom.mjs`** verifies **app-wide undo of custom state**: a registered provider's non-DOM state
+  rides the shared undo stack in lockstep with a form control across a run of undo/redo (round-tripping to the
+  start), a null capture opts out cleanly, and app-level Undo reverts a real VJ sequencer step edit while keeping
+  the grid DOM and pattern state consistent.
+- **`.test/preview-fx.mjs`** verifies **Live FX in the Preview tab**: the effect list includes real FFShaderPlus
+  shader passes, the pixel ops behave (grayscale→R=G=B, invert→255−x, vibrant widens the spread), the shader
+  passes actually alter pixels, `renderFrameFrom` paints the effect onto `#pv-fx`, entering/leaving the mode
+  starts/stops the loop, and Record → Bin lands a decodable 480×270 clip in the Media Bin.
+- **`.test/fx-chain.mjs`** verifies **effect chains**: stages apply in order ([grayscale,warm] stays coloured vs
+  [warm,grayscale] goes grey), disabled stages skip, add/move/toggle/remove and serialize↔restore behave, and a
+  stacked chain drives the preview loop over the single picker while the ＋ Add / remove UI stacks and clears it.
+- **`.test/midi-out.mjs`** verifies **MIDI output** from the sequencer: the encoders + realtime constants, 24-PPQN
+  clock timing, note-on/off to an injected output with a deterministic trigger→note map, a START→CLOCK…→STOP
+  stream, graceful silence when disabled / no device, and that firing a real VJ trigger emits note-on/off.
+- **`.test/midi-in.mjs`** verifies **MIDI clock sync (slave)**: 6 pulses per step (24 clocks → 4 steps),
+  transport (STOP halts, CONTINUE resumes), BPM derived from the pulse interval (20.83 ms → 120), a raw event
+  shape, and end-to-end that slaving the real VJ sequencer steps its playhead 0→4 over 24 clocks and STOP halts.
+- **`.test/half-res-motion.mjs`** verifies **half-res motion estimation** (#18): on a known +4px shift the full
+  search and the coarse-to-fine path both recover `globalMotion` [4.0, 0.0] with per-block fields agreeing to
+  Δ=0.00, while the half-res path spends 40% of the SAD pixel-ops; the legacy full path stays deterministic.
+- **`.test/mem-budget.mjs`** verifies the **unified memory budget** (#24): the per-source estimators (texture /
+  video-frame / audio / MEMFS), report/total/clear, ok→warn→over thresholds, a device-derived budget capped at
+  the wasm ceiling, the readout + level class, the live-MEMFS fold-in, and correct multi-GB formatting.
 
 **CI:** [`.github/workflows/test.yml`](./.github/workflows/test.yml) runs `verify`, `test`,
 `test:workflows`, `test:compositor`, `test:shortcuts`, `test:workflows-v4v5`, `test:bin-features`,
-`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, and `test:scopes` in real headless Chromium on
+`test:audio-studio`, `test:clips`, `test:mobile`, `test:panic`, `test:mosh-family`, `test:datamosh2`, `test:databend`, `test:pixelsort`, `test:feedback`, `test:flow-displace`, `test:vector-overlay`, `test:scopes`, `test:halation`, `test:stereo-width`, `test:limiter`, `test:transient`, `test:sidechain`, `test:ms-eq`, `test:multiband`, `test:film-grain`, `test:speed-blur`, `test:stems`, `test:conv-reverb`, `test:stems-export`, `test:lens`, `test:rolling-shutter`, `test:stabilize`, `test:reframe`, `test:crossfade-curves`, `test:n-layers`, `test:interpolate`, `test:deflicker`, `test:power-window`, `test:hsl-qualify`, `test:loop-detect`, `test:suggest`, `test:beatsync`, `test:highlights`, `test:launch-quantize`, `test:beat-chop`, `test:granular`, `test:pitch-snap`, `test:gain-staging`, `test:retime-toggle`, `test:curves`, `test:pattern-banks`, `test:automation`, `test:live-record`, `test:prefs`, `test:color-match`, `test:hover-preview`, `test:wf-thumbs`, `test:onboarding`, `test:undo-custom`, `test:preview-fx`, `test:fx-chain`, `test:midi-out`, `test:midi-in`, `test:half-res-motion`, and `test:mem-budget` in real headless Chromium on
 every push and pull request.
 
 ---

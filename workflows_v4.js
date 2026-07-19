@@ -76,6 +76,223 @@ window.WORKFLOWS_V4 = [
     },
   },
 
+  // ---- LENS DISTORTION + CA ----
+  ...['vintage-wide', 'cctv', 'anamorphic', 'tele-pincushion'].map((prof) => ({
+    id: `lens-${prof}`,
+    name: `Lens — ${prof.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,
+    category: 'retro-analog',
+    description: `A named-lens profile: radial barrel/pincushion distortion plus real chromatic aberration that grows toward the edges — the physical fingerprint of a ${prof.replace(/-/g, ' ')} lens. Not a filter preset; an actual per-pixel radial remap.`,
+    tags: ['lens', 'distortion', 'chromatic', 'aberration', 'barrel', prof],
+    icon: '🔎', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderLens(m, { profile: prof }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Lens (${prof}) — ${Math.round(p * 100)}%`);
+      });
+    },
+  })),
+
+  // ---- TONE CURVES ----
+  {
+    id: 'curve-film-contrast',
+    name: 'Curve — Film Contrast',
+    category: 'color-grading',
+    description: 'A gentle S-curve on the master tone curve — lifts the shadows a touch and rolls off the highlights for a filmic contrast, the classic first move in a grade. Piecewise curve through real control points, applied per frame.',
+    tags: ['curves', 'contrast', 's-curve', 'film', 'tone', 'grade'],
+    icon: '📈', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderCurve(m, [[0, 12], [64, 54], [128, 128], [192, 205], [255, 246]], (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Curve — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'curve-faded-matte',
+    name: 'Curve — Faded Matte',
+    category: 'color-grading',
+    description: 'Raises the black point and pulls the whites down — the “lifted blacks” matte look, done on the tone curve rather than a wash overlay.',
+    tags: ['curves', 'matte', 'faded', 'lifted-blacks', 'tone', 'grade'],
+    icon: '🎞️', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderCurve(m, [[0, 34], [128, 130], [255, 226]], (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Curve — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // ---- HSL SECONDARY QUALIFIERS ----
+  {
+    id: 'secondary-sky',
+    name: 'Secondary — Punch the Sky',
+    category: 'color-grading',
+    description: 'A colour-selective grade that keys just the blue of the sky and deepens it — more saturation, a touch darker — without touching skin or foliage. A real HSL secondary, not a global push.',
+    tags: ['secondary', 'hsl', 'qualifier', 'sky', 'blue', 'grade'],
+    icon: '🌤️', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderHslQualify(m, { hueCenter: 210, hueWidth: 40, softness: 0.5, satMin: 0.15, lumMin: 0.2, satMul: 1.4, lumAdd: -0.05 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Secondary — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'secondary-skin',
+    name: 'Secondary — Warm the Skin',
+    category: 'color-grading',
+    description: 'Keys the orange skin-tone band and warms it slightly while leaving the rest of the frame alone — the classic skin secondary.',
+    tags: ['secondary', 'hsl', 'qualifier', 'skin', 'orange', 'grade'],
+    icon: '🧑', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderHslQualify(m, { hueCenter: 25, hueWidth: 22, softness: 0.6, satMin: 0.15, satMax: 0.85, lumMin: 0.2, lumMax: 0.9, hueShift: -4, satMul: 1.1, lumAdd: 0.03 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Secondary — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // ---- POWER WINDOW ----
+  {
+    id: 'power-window-spotlight',
+    name: 'Power Window — Spotlight',
+    category: 'color-grading',
+    description: 'Grade just part of the frame — a feathered elliptical window in the centre with a brightness/contrast lift, so the subject pops and the surround sits back. The colourist’s spotlight, per-region and edge-blended.',
+    tags: ['power-window', 'mask', 'vignette', 'spotlight', 'secondary', 'grade'],
+    icon: '🔦', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderPowerWindow(m, { shape: 'ellipse', cx: 0.5, cy: 0.45, rx: 0.35, ry: 0.4, feather: 0.25, brightness: 0.08, contrast: 1.12, saturation: 1.1 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Power window — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'power-window-darken-edges',
+    name: 'Power Window — Darken Surround',
+    category: 'color-grading',
+    description: 'The inverse window — leaves the centre alone and pulls the edges down, a soft graded vignette that isn’t just a black overlay.',
+    tags: ['power-window', 'vignette', 'mask', 'invert', 'darken', 'grade'],
+    icon: '🌑', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderPowerWindow(m, { shape: 'ellipse', cx: 0.5, cy: 0.5, rx: 0.45, ry: 0.5, feather: 0.35, brightness: -0.18, contrast: 0.95, invert: true }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Vignette — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // ---- DEFLICKER ----
+  {
+    id: 'deflicker',
+    name: 'Deflicker (timelapse)',
+    category: 'motion-speed',
+    description: 'Evens out the exposure flicker that plagues aperture-priority timelapses — tracks a smoothed running brightness and scales each frame onto it, killing the fast jitter while keeping the slow day→night change.',
+    tags: ['deflicker', 'timelapse', 'flicker', 'exposure', 'stabilise'],
+    icon: '💡', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderDeflicker(m, { smooth: 0.1, strength: 1 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Deflicker — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // ---- ROLLING SHUTTER / JELLO ----
+  {
+    id: 'jello-sim',
+    name: 'Rolling Shutter (jello)',
+    category: 'retro-analog',
+    description: 'Simulates the CMOS rolling-shutter wobble — each row is captured a hair later, so the frame skews and wobbles like handheld phone video during fast motion. A per-row time-skew model, not a filter.',
+    tags: ['rolling-shutter', 'jello', 'wobble', 'cmos', 'skew', 'phone'],
+    icon: '🍮', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderRollingShutter(m, { shear: 0.15, wobble: 0.6, wobbleFreq: 2 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`Jello — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+  {
+    id: 'jello-correct',
+    name: 'De-jello (correct skew)',
+    category: 'motion-speed',
+    description: 'The inverse — counter-shears each row to straighten a rolling-shutter skew, taking the lean out of fast-pan footage.',
+    tags: ['rolling-shutter', 'correct', 'de-skew', 'stabilise', 'straighten'],
+    icon: '📐', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderRollingShutter(m, { shear: -0.15, wobble: 0 }, (p) => {
+        window.setProgress?.(p); window.setProgressText?.(`De-jello — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // ---- SPEED-UP WITH MOTION BLUR ----
+  {
+    id: 'speed-blur-4x',
+    name: 'Timelapse 4× (motion blur)',
+    category: 'motion-speed',
+    description: 'Speeds the clip up 4× the right way — instead of dropping frames (which strobes), it BLENDS the frames it skips, so motion smears smoothly like a long exposure. The timelapse look without the stutter.',
+    tags: ['timelapse', 'speed', 'motion-blur', 'blend', 'long-exposure'],
+    icon: '💨', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderSpeedBlur(m, { factor: 4 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Timelapse 4× — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // ---- REAL FILM GRAIN ----
+  {
+    id: 'film-grain',
+    name: 'Film Grain',
+    category: 'retro-analog',
+    description: 'Real plate-based film grain — silver-halide clumps with actual spatial structure, luma-weighted so it lives in the mids and fades in the blacks and highlights. The plate shifts each frame like a physical negative. Not per-pixel digital noise.',
+    tags: ['grain', 'film', 'analog', 'plate', 'texture', '35mm'],
+    icon: '🎞️', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderFilmGrain(m, { intensity: 0.14, size: 2, seed: 1337 }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Film grain — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
+  // ---- HALATION & BLOOM ----
+  {
+    id: 'halation-bloom',
+    name: 'Halation & Bloom',
+    category: 'artistic-stylize',
+    description: 'A physical light-bleed pass — the brightest highlights are thresholded, blurred, tinted red, and screened back so they bloom and bleed into their surroundings the way real film halates around blown-out light. Not procedural noise.',
+    tags: ['halation', 'bloom', 'glow', 'film', 'highlight', 'light'],
+    icon: '🌟', slow: true,
+    run: () => {
+      const m = window.state?.inputFile;
+      if (!m) return window.logToConsole?.('warn', 'No file selected.');
+      return window.FFShaderPlus.renderHalation(m, { threshold: 0.72, radius: 8, intensity: 0.9, passes: 3, tint: [1.0, 0.55, 0.35] }, (p) => {
+        window.setProgress?.(p);
+        window.setProgressText?.(`Halation — ${Math.round(p * 100)}%`);
+      });
+    },
+  },
+
   // ---- FEEDBACK TUNNEL ----
   {
     id: 'feedback-tunnel',
