@@ -425,3 +425,8 @@ jobs:
       # cards (accessible role=menu, arrow nav, Escape / click-outside close).
       - name: Card context menus
         run: npm run test:context-menu
+
+      # UX redesign — DAW-style range ergonomics: double-click-to-reset and
+      # (focused) wheel-to-nudge across every slider, via delegation.
+      - name: Slider ergonomics
+        run: npm run test:slider-ergonomics
