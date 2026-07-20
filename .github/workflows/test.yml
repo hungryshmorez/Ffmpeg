@@ -497,3 +497,15 @@ jobs:
       # renders non-black pixels; the go-live splash clears by computed display.
       - name: Shader link + render
         run: npm run test:shader-render
+
+      # #19 — per-context shader-program cache: a 2nd engine sharing a context
+      # makes zero new compiles, reuses the same program objects, and still
+      # renders; a new canvas recompiles (cache is per-context).
+      - name: Shader program cache
+        run: npm run test:shader-cache
+
+      # #13 — codec-adaptive WebCodecs path: the picker chooses a supported
+      # encoder (skips H.264 when absent) and a VideoEncoder→VideoDecoder round
+      # trip preserves frame count AND pixels (a moving marker survives).
+      - name: WebCodecs encode/decode
+        run: npm run test:hw-webcodecs

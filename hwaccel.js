@@ -32,7 +32,11 @@
   const MP4BOX_URL = 'https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js';
   const MUXER_URL  = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.5/build/mp4-muxer.min.js';
 
-  const CAPS = { probed: false, gpu: null, decode: {}, encode: {}, webcodecs: false };
+  // `encode`/`decode` = HARDWARE-backed support (drives routing — only offload
+  // to WebCodecs when there's real silicon). `encodeAny`/`decodeAny` = usable at
+  // all, incl. software fallback (drives the self-test + adaptive codec pick, so
+  // the path is exercisable on software-only encoders too).
+  const CAPS = { probed: false, gpu: null, decode: {}, encode: {}, decodeAny: {}, encodeAny: {}, webcodecs: false };
 
   // ===========================================================================
   // 1. GPU DETECTION
@@ -103,25 +107,125 @@
     if (!CAPS.webcodecs) { CAPS.probed = true; return CAPS; }
 
     for (const { name, codec } of PROBES) {
+      // HARDWARE-backed support (prefer-hardware → false on a software-only host).
       try {
-        const d = await VideoDecoder.isConfigSupported({
-          codec, codedWidth: 1920, codedHeight: 1080,
-          hardwareAcceleration: 'prefer-hardware',
-        });
+        const d = await VideoDecoder.isConfigSupported({ codec, codedWidth: 1920, codedHeight: 1080, hardwareAcceleration: 'prefer-hardware' });
         CAPS.decode[name] = !!d.supported;
       } catch (_) { CAPS.decode[name] = false; }
-
       try {
-        const e = await VideoEncoder.isConfigSupported({
-          codec, width: 1920, height: 1080,
-          bitrate: 5_000_000, framerate: 30,
-          hardwareAcceleration: 'prefer-hardware',
-        });
+        const e = await VideoEncoder.isConfigSupported({ codec, width: 1920, height: 1080, bitrate: 5_000_000, framerate: 30, hardwareAcceleration: 'prefer-hardware' });
         CAPS.encode[name] = !!e.supported;
       } catch (_) { CAPS.encode[name] = false; }
+
+      // Usable-at-all support (no-preference → true wherever a software codec
+      // exists). Probed at a modest size so software encoders aren't rejected.
+      try {
+        const d = await VideoDecoder.isConfigSupported({ codec, codedWidth: 640, codedHeight: 480, hardwareAcceleration: 'no-preference' });
+        CAPS.decodeAny[name] = !!d.supported;
+      } catch (_) { CAPS.decodeAny[name] = false; }
+      try {
+        const e = await VideoEncoder.isConfigSupported({ codec, width: 640, height: 480, bitrate: 2_000_000, framerate: 30, hardwareAcceleration: 'no-preference' });
+        CAPS.encodeAny[name] = !!e.supported;
+      } catch (_) { CAPS.encodeAny[name] = false; }
     }
     CAPS.probed = true;
     return CAPS;
+  }
+
+  // Codec-adaptive encode selection. H.264 is universal where present, but a lot
+  // of machines/browsers ship WITHOUT an H.264 *encoder* (licensing) while still
+  // having VP9/AV1 — the old code hardcoded H.264 and simply failed there. Pick
+  // the best AVAILABLE encoder, with the matching mp4-muxer tag. (VP8 is omitted:
+  // mp4-muxer can't mux it — it belongs in a WebM container.)
+  const ENCODE_PREF = [
+    { name: 'H.264', codec: 'avc1.42E01F',    muxerCodec: 'avc'  },
+    { name: 'VP9',   codec: 'vp09.00.10.08',  muxerCodec: 'vp9'  },
+    { name: 'AV1',   codec: 'av01.0.04M.08',  muxerCodec: 'av1'  },
+    { name: 'HEVC',  codec: 'hev1.1.6.L93.B0', muxerCodec: 'hevc' },
+  ];
+  // Default picks a HARDWARE-backed encoder (for routing real work). Pass
+  // { allowSoftware:true } to accept any usable encoder (for the self-test, and
+  // as a last-resort fallback on machines with only a software codec).
+  function pickEncodeCodec(opts = {}) {
+    const table = opts.allowSoftware ? CAPS.encodeAny : CAPS.encode;
+    for (const c of ENCODE_PREF) if (table[c.name]) return c;
+    return null;
+  }
+
+  // Hardware self-test (the WebCodecs analogue of the wasm 🩺 self-test): encode
+  // N synthetic frames through the REAL VideoEncoder and decode them back through
+  // VideoDecoder, then confirm the frame count AND that the moving marker
+  // survived (real pixels, not bytes). Proves the silicon encode/decode path on
+  // THIS machine, on whichever codec it actually supports.
+  async function hwSelfTest(opts = {}) {
+    if (!CAPS.probed) await probeCodecs();
+    if (!CAPS.webcodecs) return { ok: false, reason: 'WebCodecs unavailable' };
+    const pick = pickEncodeCodec({ allowSoftware: true });   // verify the path even on a software-only encoder
+    if (!pick) return { ok: false, reason: 'no supported hardware/software video encoder' };
+
+    const W = opts.width || 320, H = opts.height || 240, N = opts.frames || 24, fps = 30, bitrate = 3_000_000;
+    const markerX = (i) => Math.round((i / (N - 1)) * (W - 48)) + 4;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    const draw = (i) => { g.fillStyle = '#0a1420'; g.fillRect(0, 0, W, H); g.fillStyle = '#ff3aa0'; g.fillRect(markerX(i), (H / 2 - 24) | 0, 40, 48); };
+
+    // --- encode --- (no-preference: prefer hardware where present, but fall
+    // back to a software codec so the PATH is verifiable everywhere)
+    const chunks = []; let decoderConfig = null, encErr = null;
+    const encoder = new VideoEncoder({
+      output: (chunk, meta) => {
+        if (meta && meta.decoderConfig && !decoderConfig) decoderConfig = meta.decoderConfig;
+        const buf = new Uint8Array(chunk.byteLength); chunk.copyTo(buf);
+        chunks.push({ type: chunk.type, timestamp: chunk.timestamp, duration: chunk.duration, data: buf });
+      },
+      error: (e) => { encErr = e.message || String(e); },
+    });
+    try {
+      encoder.configure({ codec: pick.codec, width: W, height: H, bitrate, framerate: fps, hardwareAcceleration: 'no-preference', latencyMode: 'quality' });
+      for (let i = 0; i < N; i++) {
+        draw(i);
+        const vf = new VideoFrame(cv, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
+        encoder.encode(vf, { keyFrame: i % 12 === 0 });
+        vf.close();
+      }
+      await encoder.flush();
+    } catch (e) { encErr = encErr || (e.message || String(e)); }
+    try { encoder.close(); } catch (_) {}
+    if (encErr || !chunks.length) return { ok: false, reason: `encode failed: ${encErr || 'no chunks produced'}`, codec: pick.name, wcCodec: pick.codec };
+
+    // --- decode + pixel check ---
+    let decoded = 0, markerHits = 0, bgDarks = 0, decErr = null;
+    const rcv = document.createElement('canvas'); rcv.width = W; rcv.height = H;
+    const rg = rcv.getContext('2d', { willReadFrequently: true });
+    const decoder = new VideoDecoder({
+      output: (frame) => {
+        decoded++;
+        try {
+          const i = Math.round((frame.timestamp * fps) / 1e6);
+          rg.drawImage(frame, 0, 0, W, H);
+          const mx = Math.min(W - 1, markerX(i) + 20), my = (H / 2) | 0;
+          const m = rg.getImageData(mx, my, 1, 1).data;      // marker pixel
+          const c = rg.getImageData(3, 3, 1, 1).data;         // background corner
+          if (m[0] > 120 && m[2] > 50 && m[0] > m[1]) markerHits++;   // pink survived
+          if ((c[0] + c[1] + c[2]) < 200) bgDarks++;                  // dark bg survived
+        } catch (_) {}
+        frame.close();
+      },
+      error: (e) => { decErr = decErr || (e.message || String(e)); },
+    });
+    try {
+      decoder.configure(decoderConfig || { codec: pick.codec, codedWidth: W, codedHeight: H, hardwareAcceleration: 'no-preference' });
+      for (const c of chunks) decoder.decode(new EncodedVideoChunk({ type: c.type, timestamp: c.timestamp, duration: c.duration, data: c.data }));
+      await decoder.flush();
+    } catch (e) { decErr = decErr || (e.message || String(e)); }
+    try { decoder.close(); } catch (_) {}
+
+    return {
+      ok: !decErr && decoded === N && chunks.length > 0 && markerHits >= N * 0.6 && bgDarks >= N * 0.6,
+      codec: pick.name, wcCodec: pick.codec, expected: N,
+      encodedChunks: chunks.length, decodedFrames: decoded, markerHits, bgDarks,
+      reason: decErr ? `decode: ${decErr}` : undefined,
+    };
   }
 
   function renderHwPanel() {
@@ -330,13 +434,22 @@
     const fps = Math.round(opts.fps || src.fps || 30);
     const bitrate = opts.bitrate || 5_000_000;
 
+    // Codec-adaptive: prefer H.264, but fall back to VP9/AV1/HEVC on machines
+    // that ship no H.264 *encoder* (which the old hardcoded 'avc' silently failed
+    // on). A caller can still force one via opts.codec / opts.muxerCodec.
+    const pick = opts.codec
+      ? { codec: opts.codec, muxerCodec: opts.muxerCodec || 'avc' }
+      : pickEncodeCodec();
+    if (!pick) throw new Error('No hardware/software video encoder available on this device.');
+    log(`encoder → ${pick.codec}`);
+
     await loadScript(MUXER_URL);
     const { Muxer, ArrayBufferTarget } = window.Mp4Muxer;
 
     const target = new ArrayBufferTarget();
     const muxer = new Muxer({
       target,
-      video: { codec: 'avc', width: W, height: H, frameRate: fps },
+      video: { codec: pick.muxerCodec, width: W, height: H, frameRate: fps },
       fastStart: 'in-memory',
     });
 
@@ -347,7 +460,7 @@
       error:  (e) => window.logToConsole?.('error', `[hw] encode: ${e.message}`),
     });
     encoder.configure({
-      codec: opts.codec || 'avc1.42E01F',        // H.264 Baseline — universally supported
+      codec: pick.codec,                          // adaptively chosen above
       width: W, height: H,
       bitrate, framerate: fps,
       hardwareAcceleration: 'prefer-hardware',   // ← THE LINE THAT MATTERS
@@ -471,7 +584,7 @@
   }
 
   window.FFHardware = {
-    CAPS, init, probeCodecs, detectGPU, renderHwPanel,
+    CAPS, init, probeCodecs, detectGPU, renderHwPanel, pickEncodeCodec, hwSelfTest,
     demuxMP4, demuxSource, feedDemuxer, hwTranscode, makeShaderPass, canUseHardware, pathBadge,
   };
 
