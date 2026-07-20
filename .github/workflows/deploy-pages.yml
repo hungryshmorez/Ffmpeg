@@ -1,0 +1,59 @@
+# Deploy FFmpeg Studio to GitHub Pages.
+#
+# The app is 100% static (vendored ffmpeg.wasm cores + ES modules), so this just
+# publishes the repo as-is. GitHub Pages can't send COOP/COEP headers, so the
+# app's bundled coi-serviceworker.js retrofits cross-origin isolation on first
+# load (and falls back to single-thread ffmpeg if that fails).
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ["claude/ffmpeg-studio-v10-4-report-7ssjim-ec3s6b"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; don't cancel an in-progress publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Assemble the site: everything the browser needs (app + docs + vendored
+      # cores), minus dev-only dirs that never get served.
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          rsync -a \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.github' \
+            --exclude='.test' \
+            --exclude='_site' \
+            ./ _site/
+
+      # enablement: true turns Pages on via the API if it isn't already.
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
