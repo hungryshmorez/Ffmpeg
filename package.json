@@ -97,7 +97,8 @@
     "test:self-test-panel": "node .test/self-test-panel.mjs",
     "test:gl-texture-pool": "node .test/gl-texture-pool.mjs",
     "test:engine-warmup": "node .test/engine-warmup.mjs",
-    "test:motion-worker": "node .test/motion-worker.mjs"
+    "test:motion-worker": "node .test/motion-worker.mjs",
+    "test:shader-render": "node .test/shader-render.mjs"
   },
   "engines": {
     "node": ">=18"

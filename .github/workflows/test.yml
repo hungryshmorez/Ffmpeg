@@ -491,3 +491,9 @@ jobs:
       # shift, and falls back to the main thread when Workers are unavailable.
       - name: Motion estimation worker
         run: npm run test:motion-worker
+
+      # Shader link + render: the TripCam/VJ engine links all 11 shader programs
+      # (vertex/fragment varying names must match — strict GL / mobile GLES) and
+      # renders non-black pixels; the go-live splash clears by computed display.
+      - name: Shader link + render
+        run: npm run test:shader-render

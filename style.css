@@ -2181,6 +2181,7 @@ body {
 #trip-canvas{width:100%;height:100%;display:block}
 .trip-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   background:radial-gradient(circle at 50% 40%,#161622,#000);text-align:center;padding:24px}
+.trip-empty[hidden]{display:none}   /* the class's display:flex otherwise beats the UA [hidden] rule — the splash never cleared when the camera went live */
 .trip-empty-inner{max-width:420px}
 .trip-logo{font-size:32px;font-weight:800;letter-spacing:2px;
   background:linear-gradient(90deg,#00d4ff,#ff00aa,#ffcc00);-webkit-background-clip:text;

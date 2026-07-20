@@ -853,7 +853,12 @@ void main() {
 
     _compileAll() {
       const gl = this.gl;
-      const vs = this._compile(gl.VERTEX_SHADER, VERT);
+      // The fragments are injectRotation-patched to read `v_texCoord_in`, so the
+      // shared vertex shader must OUTPUT that varying name or strict GL drivers
+      // refuse to link (see FFShaderPlus.patchVertex). Patch both, or neither.
+      const vsrc = window.FFShaderPlus && window.FFShaderPlus.patchVertex
+        ? window.FFShaderPlus.patchVertex(VERT) : VERT;
+      const vs = this._compile(gl.VERTEX_SHADER, vsrc);
       for (const [name, fsrc] of Object.entries(SHADERS)) {
         try {
           // Retrofit u_cameraRotation onto the shaders I ported without it.
