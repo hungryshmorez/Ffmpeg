@@ -81,6 +81,12 @@ jobs:
       - name: Mobile + iPad layout
         run: npm run test:mobile
 
+      # Mobile camera: a single finger-tap (never a keyboard) brings the Trip Cam
+      # and VJ camera live — and VJ recovers via tap-to-start when the auto-attempt
+      # is blocked, as it is on a phone.
+      - name: Mobile camera go-live (touch, no keyboard)
+        run: npm run test:mobile-camera
+
       # VJ panic: latch triggers + sequencer + master, then PANIC (button and
       # the "0" key) must reset everything.
       - name: VJ panic
