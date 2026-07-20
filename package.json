@@ -96,7 +96,8 @@
     "test:palette-a11y": "node .test/palette-a11y.mjs",
     "test:self-test-panel": "node .test/self-test-panel.mjs",
     "test:gl-texture-pool": "node .test/gl-texture-pool.mjs",
-    "test:engine-warmup": "node .test/engine-warmup.mjs"
+    "test:engine-warmup": "node .test/engine-warmup.mjs",
+    "test:motion-worker": "node .test/motion-worker.mjs"
   },
   "engines": {
     "node": ">=18"

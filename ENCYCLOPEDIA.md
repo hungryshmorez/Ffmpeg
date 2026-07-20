@@ -50,19 +50,19 @@ and *Risk* flags how likely the change is to break the working app.
 
 | Status | Count | Items |
 |---|---|---|
-| ✅ **Done** (verified by running) | **84 / 100** | everything not listed below |
+| ✅ **Done** (verified by running) | **85 / 100** | everything not listed below |
 | 🟡 **Partial** | 1 | #7 golden-file tests |
-| ⬜ **To do** | 7 | #14 OffscreenCanvas/Worker shaders · #15 motion est. in a Worker · #80 second-screen · #81 Whisper.wasm · #97 split `app.js` · #98 single state source · #99 event bus |
-| 🔒 **Blocked** (needs real hardware/toolchain) | 7 | #13 WebCodecs ship · #16 WASM SIMD SAD · #19 shader-program cache · #65 true DCT · #79 NDI/virtual-cam · #84 shot-type classify · #87 content-aware fill |
+| ⬜ **To do** | 5 | #80 second-screen · #81 Whisper.wasm · #97 split `app.js` · #98 single state source · #99 event bus |
+| 🔒 **Blocked** (needs real hardware/toolchain) | 8 | #13 WebCodecs ship · #14 OffscreenCanvas/Worker shaders · #16 WASM SIMD SAD · #19 shader-program cache · #65 true DCT · #79 NDI/virtual-cam · #84 shot-type classify · #87 content-aware fill |
 | ❌ **Dropped** | 1 | #70 Ableton Link (browsers can't speak Link without a native bridge) |
 
-What's left is now almost entirely **infrastructure** (Workers, the big `app.js` refactors)
-and **hardware/environment-gated** work — the correctness, audio, video, glitch, live/VJ,
-intelligence and UX feature work is complete. The remaining GPU-thread items (#14/#15) and
+What's left is now almost entirely **hardware/environment-gated** work and the big `app.js`
+refactors — the correctness, audio, video, glitch, live/VJ, intelligence and UX feature work
+is complete. Motion estimation now runs off-thread (#15). The GPU-thread render move (#14) and
 the program cache (#19) are codeable but can't be *verified* honestly in the current headless
-build (swiftshader compiles shaders but won't link the programs; no proprietary codecs), so
-they're held to the same "no unverifiable code on the runnable branch" bar as the WebGPU work.
-The architecture items (#97–99) are pure refactors with no user-facing capability, so they're
+build (swiftshader compiles shaders but won't LINK them; no proprietary codecs), so they're
+held to the same "no unverifiable code on the runnable branch" bar as the WebGPU work. The
+architecture items (#97–99) are pure refactors with no user-facing capability, so they're
 deliberately deferred over destabilising the working app.
 
 Verified this development pass (each shipped as its own commit with a headless-Chromium test):
@@ -233,8 +233,8 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | # | Feature | What it is / the vision | Status | What's left |
 |---|---|---|---|---|
 | 13 | Ship the WebCodecs path | Direct GPU/ASIC encode — 10–50× over wasm. | 🔒 | Path is written + routed; **can't verify here** (headless Chromium has no H.264 enc/dec). Make it codec-adaptive (VP9/AV1 fallback), verify the encode half on real Chrome. — *M* |
-| 14 | OffscreenCanvas + Worker for shaders | Get WebGL off the main thread. | ⬜ | Move `TripEngine` render into a worker with an OffscreenCanvas. — *L, Risk: M* |
-| 15 | Motion estimation in a Worker | Block matching is embarrassingly parallel; it currently blocks the UI. | ⬜ | Worker harness + transferable frames. — *L* |
+| 14 | OffscreenCanvas + Worker for shaders | Get WebGL off the main thread. | 🔒 | The render OUTPUT can't be pixel-verified in this runner: swiftshader compiles the TripCam shaders but won't LINK them (0/11 programs — see #19), so moving `TripEngine` into an OffscreenCanvas worker would ship an engine whose visual result can't be asserted here. Held to the same "no unverifiable code on the runnable branch" bar until a real-GPU runner. (The CPU half of the live pipeline — motion estimation — IS now off-thread; see #15.) — *L, Risk: M* |
+| 15 | Motion estimation in a Worker | Block matching is embarrassingly parallel; it currently blocks the UI. | ✅ | `FFMotion.estimateAsync(cur, prev, w, h, opts)` runs SAD block-matching in a Worker and resolves the motion field, keeping the main thread free. `flowKernel` is a faithful, self-contained port of `MotionMosher._estimate`/`_estimateHierarchical` and is the single source of truth — the Worker body is generated from `flowKernel.toString()`, so the two can't drift, and the existing renderers keep using the class code untouched (opt-in, with a main-thread fallback for no-Worker / forced-`main` mode). `.test/motion-worker.mjs` (5/5): across full + half modes and a spread of block sizes / radii / amplify / direction the Worker field is **Float32-exact** vs the on-thread `estimateFlow`, `lastPath` proves it ran off-thread, a known +x / −x shift is recovered (mean vx +2.75 / −3.00), and forcing `main` returns an identical field. Mosh-family/vector-overlay/flow-displace regressions stay green. — *L* |
 | 16 | WASM SIMD for the SAD loop | The inner loop is pure integer math — the biggest mosher win. | 🔒 | Needs an emcc/wat2wasm build pipeline + benchmarking. — *L* |
 | 17 | `requestVideoFrameCallback` everywhere | Process each video frame exactly once. | ✅ | Extend rVFC to the WebGL editor preview too. — *S* |
 | 18 | Half-res motion est., full-res apply | Vectors don't need pixel precision. | ✅ | Real coarse-to-fine block matching in `MotionMosher` (the comment long claimed a pyramid the code never had). With `hierarchical:true`, `_estimate` runs `_estimateHierarchical`: box-downscale both luma planes 2× (`_downscaleLuma`), do the wide-radius RAW search on the ¼-pixel frame, then refine each full-res block in a tiny ±2 window around 2× the coarse vector (with the same amplify/direction/threshold shaping). Default stays `false` so every existing renderer's behaviour is byte-identical. `FFMosh.estimateFlow(cur, prev, w, h, {mode})` exposes it headless with SAD cost accounting. `.test/half-res-motion.mjs` (4/4): on a known +4px shift both paths recover `globalMotion` [4.0, 0.0] with the per-block fields agreeing to Δ=0.00, the half path spends **40 % of the SAD pixel-ops** (692k→275k) and 4304 vs 10816 SAD calls, and the legacy full path stays deterministic/unchanged. Mosh-family/interpolate/flow-displace/stabilize/reframe regressions all still green. |

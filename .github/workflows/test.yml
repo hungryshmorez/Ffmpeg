@@ -485,3 +485,9 @@ jobs:
       # falls back to the 2 s timer otherwise.
       - name: Engine warm-on-intent
         run: npm run test:engine-warmup
+
+      # #15 — motion estimation (SAD block-matching) in a Worker: the off-thread
+      # field is Float32-exact vs the on-thread estimator, recovers a known
+      # shift, and falls back to the main thread when Workers are unavailable.
+      - name: Motion estimation worker
+        run: npm run test:motion-worker

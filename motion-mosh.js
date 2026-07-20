@@ -1225,7 +1225,214 @@
     return { vec: res.vec, cols: res.cols, rows: res.rows, sadCalls: m._sadCalls, sadPixels: m._sadPixels, lastSAD: m.lastSAD };
   }
 
-  window.FFMosh = { MotionMosher, DEFAULTS, estimateFlow, renderFile, renderTwoClips, renderFlowDisplace,
+  // ===========================================================================
+  // #15 — MOTION ESTIMATION IN A WORKER
+  // ---------------------------------------------------------------------------
+  // Block-matching (SAD) is embarrassingly parallel and pure CPU — but on the
+  // main thread it janks the UI while it runs. This moves it off-thread.
+  //
+  // `flowKernel` is a SELF-CONTAINED, faithful port of MotionMosher._estimate /
+  // _estimateHierarchical / _sad / _downscaleLuma (verified byte-identical to
+  // the on-thread estimateFlow by .test/motion-worker.mjs). It is the single
+  // source of truth: the Worker body is generated from flowKernel.toString(), so
+  // the two can never drift. The existing renderers keep using the class code
+  // untouched — this is a NEW, opt-in async primitive with a main-thread
+  // fallback (no Worker, or forced 'main' mode), so nothing battle-tested moves.
+  // ===========================================================================
+  function flowKernel(curY, prevY, w, h, p) {
+    const acc = { calls: 0, pixels: 0 };
+    const sad = (cur, prev, W, H, x0, y0, bw, bh, dx, dy, step) => {
+      let cost = 0, n = 0;
+      for (let y = 0; y < bh; y += step) {
+        const cy = y0 + y;
+        const py = Math.min(H - 1, Math.max(0, cy - dy));
+        const bc = cy * W + x0;
+        const bp = py * W + (x0 - dx);
+        for (let x = 0; x < bw; x += step) {
+          const px = bp + Math.min(W - 1, Math.max(0, x));
+          cost += Math.abs(cur[bc + x] - prev[px]);
+          n++;
+        }
+      }
+      acc.calls++; acc.pixels += n;
+      return n ? cost / n : Infinity;
+    };
+    const downscale = (Y, W, H) => {
+      const hw = Math.max(1, W >> 1), hh = Math.max(1, H >> 1);
+      const out = new Float32Array(hw * hh);
+      for (let y = 0; y < hh; y++) {
+        const sy = y * 2, sy1 = Math.min(H - 1, sy + 1);
+        for (let x = 0; x < hw; x++) {
+          const sx = x * 2, sx1 = Math.min(W - 1, sx + 1);
+          out[y * hw + x] = (Y[sy * W + sx] + Y[sy * W + sx1] + Y[sy1 * W + sx] + Y[sy1 * W + sx1]) * 0.25;
+        }
+      }
+      return { Y: out, w: hw, h: hh };
+    };
+    const bs = p.blockSize;
+    const cols = Math.ceil(w / bs), rows = Math.ceil(h / bs);
+    const vec = new Float32Array(cols * rows * 2);
+    let lastSAD = 0;
+
+    if (p.hierarchical) {
+      const cH = downscale(curY, w, h), pH = downscale(prevY, w, h);
+      const hw = cH.w, hh = cH.h;
+      const ccols = Math.ceil(hw / bs), crows = Math.ceil(hh / bs);
+      const coarse = new Float32Array(ccols * crows * 2);
+      const R = Math.max(2, p.motionRadius | 0);
+      const cstep = bs >= 16 ? 2 : 1;
+      for (let by = 0; by < crows; by++) {
+        for (let bx = 0; bx < ccols; bx++) {
+          const x0 = bx * bs, y0 = by * bs;
+          const bw = Math.min(bs, hw - x0), bh = Math.min(bs, hh - y0);
+          let gx = 0, gy = 0;
+          if (bx > 0) { const i = (by * ccols + (bx - 1)) * 2; gx = coarse[i]; gy = coarse[i + 1]; }
+          let bestDx = 0, bestDy = 0, best = Infinity;
+          for (let dy = -R; dy <= R; dy++) {
+            for (let dx = -R; dx <= R; dx++) {
+              const c = sad(cH.Y, pH.Y, hw, hh, x0, y0, bw, bh, (gx + dx) | 0, (gy + dy) | 0, cstep);
+              if (c < best) { best = c; bestDx = (gx + dx) | 0; bestDy = (gy + dy) | 0; }
+            }
+          }
+          const i = (by * ccols + bx) * 2; coarse[i] = bestDx; coarse[i + 1] = bestDy;
+        }
+      }
+      const refineR = 2, step = bs >= 16 ? 2 : 1;
+      let totalSAD = 0, blocks = 0;
+      for (let by = 0; by < rows; by++) {
+        for (let bx = 0; bx < cols; bx++) {
+          const x0 = bx * bs, y0 = by * bs;
+          const bw = Math.min(bs, w - x0), bh = Math.min(bs, h - y0);
+          const cbx = Math.min(ccols - 1, bx >> 1), cby = Math.min(crows - 1, by >> 1);
+          const ci = (cby * ccols + cbx) * 2;
+          const gx = coarse[ci] * 2, gy = coarse[ci + 1] * 2;
+          let bestDx = gx | 0, bestDy = gy | 0, best = Infinity;
+          for (let dy = -refineR; dy <= refineR; dy++) {
+            for (let dx = -refineR; dx <= refineR; dx++) {
+              const c = sad(curY, prevY, w, h, x0, y0, bw, bh, (gx + dx) | 0, (gy + dy) | 0, step);
+              if (c < best) { best = c; bestDx = (gx + dx) | 0; bestDy = (gy + dy) | 0; }
+            }
+          }
+          const i = (by * cols + bx) * 2;
+          if (best < p.threshold) { vec[i] = 0; vec[i + 1] = 0; }
+          else {
+            let vx = bestDx, vy = bestDy;
+            const amp = p.amplify;
+            if (amp !== 1) {
+              const mag = Math.hypot(vx, vy);
+              if (mag > 0) { const rr = Math.max(2, p.motionRadius); const shaped = Math.pow(Math.min(1, mag / rr), amp) * rr; const k = shaped / mag; vx *= k; vy *= k; }
+            }
+            vx *= p.directionX; vy *= p.directionY;
+            vec[i] = vx; vec[i + 1] = vy;
+          }
+          totalSAD += best; blocks++;
+        }
+      }
+      lastSAD = blocks ? totalSAD / blocks : 0;
+      return { vec, cols, rows, lastSAD, sadCalls: acc.calls, sadPixels: acc.pixels };
+    }
+
+    const r = Math.max(2, p.motionRadius | 0);
+    const step = bs >= 16 ? 2 : 1;
+    let totalSAD = 0, blocks = 0;
+    for (let by = 0; by < rows; by++) {
+      for (let bx = 0; bx < cols; bx++) {
+        const x0 = bx * bs, y0 = by * bs;
+        const bw = Math.min(bs, w - x0), bh = Math.min(bs, h - y0);
+        let gx = 0, gy = 0;
+        if (bx > 0) { const i = (by * cols + (bx - 1)) * 2; gx = vec[i]; gy = vec[i + 1]; }
+        let bestDx = 0, bestDy = 0, best = Infinity;
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            const c = sad(curY, prevY, w, h, x0, y0, bw, bh, (gx + dx) | 0, (gy + dy) | 0, step);
+            if (c < best) { best = c; bestDx = (gx + dx) | 0; bestDy = (gy + dy) | 0; }
+          }
+        }
+        const i = (by * cols + bx) * 2;
+        if (best < p.threshold) { vec[i] = 0; vec[i + 1] = 0; }
+        else {
+          let vx = bestDx, vy = bestDy;
+          const amp = p.amplify;
+          if (amp !== 1) {
+            const mag = Math.hypot(vx, vy);
+            if (mag > 0) { const rr = Math.max(2, p.motionRadius); const shaped = Math.pow(Math.min(1, mag / rr), amp) * rr; const k = shaped / mag; vx *= k; vy *= k; }
+          }
+          vx *= p.directionX; vy *= p.directionY;
+          vec[i] = vx; vec[i + 1] = vy;
+        }
+        totalSAD += best; blocks++;
+      }
+    }
+    lastSAD = blocks ? totalSAD / blocks : 0;
+    return { vec, cols, rows, lastSAD, sadCalls: acc.calls, sadPixels: acc.pixels };
+  }
+
+  const FFMotion = (() => {
+    let _worker = null, _blobUrl = null, _nextId = 1, _mode = 'auto', _lastPath = '';
+    const _pending = new Map();
+    const mergeParams = (opts) => Object.assign({}, DEFAULTS, opts, { hierarchical: !!(opts && opts.mode === 'half') });
+    const workerAvailable = () => _mode !== 'main' && typeof Worker !== 'undefined' && typeof Blob !== 'undefined' && typeof URL !== 'undefined' && !!URL.createObjectURL;
+
+    function ensureWorker() {
+      if (_worker) return _worker;
+      const src = `
+        const flowKernel = ${flowKernel.toString()};
+        self.onmessage = (e) => {
+          const d = e.data;
+          try {
+            const r = flowKernel(new Uint8ClampedArray(d.curY), new Uint8ClampedArray(d.prevY), d.w, d.h, d.p);
+            self.postMessage({ id: d.id, vec: r.vec.buffer, cols: r.cols, rows: r.rows, lastSAD: r.lastSAD, sadCalls: r.sadCalls, sadPixels: r.sadPixels }, [r.vec.buffer]);
+          } catch (err) { self.postMessage({ id: d.id, error: String(err && err.message || err) }); }
+        };`;
+      _blobUrl = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      _worker = new Worker(_blobUrl);
+      _worker.onmessage = (e) => {
+        const { id, vec, cols, rows, lastSAD, sadCalls, sadPixels, error } = e.data;
+        const job = _pending.get(id);
+        if (!job) return;
+        _pending.delete(id);
+        if (error) { job.reject(new Error(error)); return; }
+        job.resolve({ vec: new Float32Array(vec), cols, rows, lastSAD, sadCalls, sadPixels, path: 'worker' });
+      };
+      _worker.onerror = () => { for (const [, job] of _pending) job.reject(new Error('motion worker crashed')); _pending.clear(); };
+      return _worker;
+    }
+
+    function runInWorker(curY, prevY, w, h, p) {
+      const wk = ensureWorker();
+      const id = _nextId++;
+      // copy → transfer so the caller's arrays stay valid
+      const c = new Uint8ClampedArray(curY).buffer.slice(0);
+      const q = new Uint8ClampedArray(prevY).buffer.slice(0);
+      return new Promise((resolve, reject) => {
+        _pending.set(id, { resolve, reject });
+        wk.postMessage({ id, curY: c, prevY: q, w, h, p }, [c, q]);
+      });
+    }
+
+    async function estimateAsync(curY, prevY, w, h, opts = {}) {
+      const p = mergeParams(opts);
+      if (workerAvailable()) {
+        try { const r = await runInWorker(curY, prevY, w, h, p); _lastPath = 'worker'; return r; }
+        catch (_) { /* fall through to main thread */ }
+      }
+      const r = flowKernel(curY, prevY, w, h, p);
+      _lastPath = 'main';
+      return Object.assign({ path: 'main' }, r);
+    }
+
+    return {
+      estimateAsync, flowKernel,
+      setMode: (m) => { _mode = (m === 'main' || m === 'worker') ? m : 'auto'; },
+      available: () => workerAvailable(),
+      lastPath: () => _lastPath,
+      terminate: () => { try { _worker && _worker.terminate(); } catch (_) {} _worker = null; if (_blobUrl) { try { URL.revokeObjectURL(_blobUrl); } catch (_) {} _blobUrl = null; } _pending.clear(); },
+    };
+  })();
+
+  window.FFMotion = FFMotion;
+
+  window.FFMosh = { MotionMosher, DEFAULTS, estimateFlow, flowKernel, renderFile, renderTwoClips, renderFlowDisplace,
     renderVectorOverlay, globalMotion, stabilizePath, renderStabilize,
     motionCentroid, renderReframe, renderInterpolate,
     recordVectors, replayVectors, serializeVectors, deserializeVectors };
