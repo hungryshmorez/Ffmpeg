@@ -440,3 +440,33 @@ jobs:
       # fileStart offsets — so a hardware transcode never materialises the file.
       - name: Streaming demux input
         run: npm run test:hw-demux-stream
+
+      # UX redesign — keyboard-navigable, accessible card grids (media bin +
+      # workflow library): ARIA listbox, roving tabindex, one tab stop.
+      - name: Accessible card grids
+        run: npm run test:a11y-grid
+
+      # UX redesign — honest progress feedback (monotonic + indeterminate +
+      # ARIA) and an accessible tablist (aria-selected, roving tabindex, arrows).
+      - name: Progress + tablist a11y
+        run: npm run test:progress-tabs-a11y
+
+      # UX redesign — progressive disclosure: the 33-section Editor column gets
+      # a search + "Active only" filter that collapses the wall to what's used.
+      - name: Editor section disclosure
+        run: npm run test:section-filter
+
+      # UX redesign — right-click / Shift+F10 context menus on bin + workflow
+      # cards (accessible role=menu, arrow nav, Escape / click-outside close).
+      - name: Card context menus
+        run: npm run test:context-menu
+
+      # UX redesign — DAW-style range ergonomics: double-click-to-reset and
+      # (focused) wheel-to-nudge across every slider, via delegation.
+      - name: Slider ergonomics
+        run: npm run test:slider-ergonomics
+
+      # UX redesign — ARIA for the existing Ctrl/Cmd+K command palette
+      # (role=dialog/combobox/listbox/option + aria-activedescendant).
+      - name: Command palette a11y
+        run: npm run test:palette-a11y

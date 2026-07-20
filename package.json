@@ -87,7 +87,13 @@
     "test:opfs-stream": "node .test/opfs-stream.mjs",
     "test:opfs-upload": "node .test/opfs-upload.mjs",
     "test:opfs-bin-workflow": "node .test/opfs-bin-workflow.mjs",
-    "test:hw-demux-stream": "node .test/hw-demux-stream.mjs"
+    "test:hw-demux-stream": "node .test/hw-demux-stream.mjs",
+    "test:a11y-grid": "node .test/a11y-grid.mjs",
+    "test:progress-tabs-a11y": "node .test/progress-tabs-a11y.mjs",
+    "test:section-filter": "node .test/section-filter.mjs",
+    "test:context-menu": "node .test/context-menu.mjs",
+    "test:slider-ergonomics": "node .test/slider-ergonomics.mjs",
+    "test:palette-a11y": "node .test/palette-a11y.mjs"
   },
   "engines": {
     "node": ">=18"

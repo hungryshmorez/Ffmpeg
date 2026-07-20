@@ -1491,6 +1491,35 @@ function renderWorkflows() {
       }
     });
   });
+
+  // UX — right-click / Shift+F10 context menu on each workflow card.
+  if (window.FFContextMenu) {
+    window.FFContextMenu.attach(grid, {
+      itemSelector: '.wf-card',
+      items: (card) => [
+        { label: 'Apply & Run', icon: '▶', action: () => card.querySelector('[data-wf-run]')?.click() },
+        { label: 'Apply & Edit', icon: '✎', action: () => card.querySelector('[data-wf-apply]')?.click() },
+        { separator: true },
+        { label: 'Show ffmpeg command', icon: 'ⓘ', action: () => card.querySelector('[data-wf-info]')?.click() },
+      ],
+    });
+  }
+
+  // UX — make the 215-card grid a single-tab-stop keyboard listbox: arrows move
+  // between cards, Enter runs, 'e' applies-and-edits, 'i' toggles the command.
+  // This collapses ~645 tab stops to one and gives the cards real focus.
+  if (window.FFGridNav) {
+    window.FFGridNav.enhance(grid, {
+      itemSelector: '.wf-card',
+      label: 'Workflow library',
+      onActivate: (card) => card.querySelector('[data-wf-run]')?.click(),
+      onKey: (e, card) => {
+        if (e.key === 'e' || e.key === 'E') { card.querySelector('[data-wf-apply]')?.click(); return true; }
+        if (e.key === 'i' || e.key === 'I') { card.querySelector('[data-wf-info]')?.click(); return true; }
+        return false;
+      },
+    });
+  }
 }
 
 // =============================================================================
