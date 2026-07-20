@@ -1643,18 +1643,22 @@ async function handleFilesUpload(fileList) {
     // (writeFile is wrapped with a 30s timeout by instrumentFfmpeg).
     let data = null;
     try {
-      logToConsole('', `[up] 1/4 fetchFile ${file.name} (${file.size}B)…`);
-      try { console.log(`[up] 1/4 fetchFile ${file.name} (${file.size}B)`); } catch (_) {}
-      data = await FFmpegUtil.fetchFile(file);
-      logToConsole('ok', `[up] 1/4 done — ${data.length} bytes`);
-      try { console.log(`[up] 1/4 done — ${data.length} bytes`); } catch (_) {}
-
-      logToConsole('', `[up] 2/4 writeFile ${virtualName}…`);
-      try { console.log(`[up] 2/4 writeFile ${virtualName}`); } catch (_) {}
-      try { await ff.deleteFile(virtualName); } catch (_) { /* not present */ }
-      await ff.writeFile(virtualName, data);
-      logToConsole('ok', `[up] 2/4 done`);
-      try { console.log(`[up] 2/4 done`); } catch (_) {}
+      // Phase 1.3 — route the upload → MEMFS through OPFS block streaming when
+      // available (the File is streamed, not held whole in the JS heap), with a
+      // silent fallback to the direct fetchFile+writeFile path. Output identical.
+      if (window.FFOpfsStream && typeof window.FFOpfsStream.fileToMemfs === 'function') {
+        logToConsole('', `[up] 1/4 stream ${file.name} (${file.size}B) → MEMFS…`);
+        const res = await window.FFOpfsStream.fileToMemfs(ff, file, virtualName);
+        logToConsole('ok', `[up] 2/4 done via ${res && res.via || 'opfs'}`);
+      } else {
+        logToConsole('', `[up] 1/4 fetchFile ${file.name} (${file.size}B)…`);
+        try { console.log(`[up] 1/4 fetchFile ${file.name} (${file.size}B)`); } catch (_) {}
+        data = await FFmpegUtil.fetchFile(file);
+        logToConsole('ok', `[up] 1/4 done — ${data.length} bytes`);
+        try { await ff.deleteFile(virtualName); } catch (_) { /* not present */ }
+        await ff.writeFile(virtualName, data);
+        logToConsole('ok', `[up] 2/4 done`);
+      }
       media._status = 'loading';
     } catch (err) {
       media._status = 'error';
@@ -2016,6 +2020,41 @@ function renderMediaBin() {
   updateBinMultiToolbar();
   if (typeof updateActionBar === 'function') updateActionBar();
   if (typeof syncGlobalBinDrawer === 'function') syncGlobalBinDrawer();
+
+  // UX — right-click / Shift+F10 context menu on each bin clip.
+  if (window.FFContextMenu) {
+    window.FFContextMenu.attach(strip, {
+      itemSelector: '.media-bin-card',
+      items: (card) => [
+        { label: 'Open', icon: '▶', action: () => card.click() },
+        { label: 'Move earlier', icon: '◀', action: () => card.querySelector('[data-reorder="up"]')?.click() },
+        { label: 'Move later', icon: '▶', action: () => card.querySelector('[data-reorder="down"]')?.click() },
+        { separator: true },
+        { label: 'Select for batch', icon: '☑', action: () => { const cb = card.querySelector('.bin-card-checkbox'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } } },
+        { label: 'Remove from bin', icon: '🗑', action: () => card.querySelector('.bin-card-remove')?.click() },
+      ],
+    });
+  }
+
+  // UX — keyboard-navigable, accessible media bin: arrows move between clips,
+  // Enter opens, Delete removes, [ / ] reorder, x toggles batch-select. One tab
+  // stop instead of (clips × 4) buttons.
+  if (window.FFGridNav) {
+    window.FFGridNav.enhance(strip, {
+      itemSelector: '.media-bin-card',
+      label: 'Media bin',
+      selectedSelector: '.media-bin-card.active',
+      onActivate: (card) => card.click(),
+      onKey: (e, card) => {
+        const id = card.dataset.mediaId;
+        if (e.key === 'Delete' || e.key === 'Backspace') { card.querySelector('.bin-card-remove')?.click(); return true; }
+        if (e.key === '[') { card.querySelector('[data-reorder="up"]')?.click(); return true; }
+        if (e.key === ']') { card.querySelector('[data-reorder="down"]')?.click(); return true; }
+        if (e.key === 'x' || e.key === 'X') { const cb = card.querySelector('.bin-card-checkbox'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return true; }
+        return false;
+      },
+    });
+  }
 }
 
 // Tiny extension → codec hint map. We no longer run a deep
@@ -3486,12 +3525,28 @@ function setDownloadEnabled(enabled) {
   const btn = document.getElementById('btn-download');
   if (btn) btn.disabled = !enabled;
 }
+// UX — ffmpeg.wasm's `progress` value is jittery: it can jump backward mid-run
+// and it sits at 0 during the encoder warmup. We clamp AND make it MONOTONIC
+// within a run (pct<=0 resets it, e.g. at the start of a render), and show an
+// indeterminate "working…" pulse while progress is still 0, so the bar never
+// goes backward and never looks frozen. ARIA is kept in sync for AT.
 function setProgress(pct) {
+  let p = Math.max(0, Math.min(100, +pct || 0));
+  if (p <= 0) state._lastProgress = 0;                 // a fresh run resets the ceiling
+  else p = state._lastProgress = Math.max(p, state._lastProgress || 0);
+  const w = `${p}%`;
   const f = document.getElementById('progress-fill');
-  if (f) f.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-  // v4 PART A1: mirror into the action-bar progress fill.
+  if (f) f.style.width = w;
   const ab = document.getElementById('ab-progress-fill');
-  if (ab) ab.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  if (ab) ab.style.width = w;
+  const track = document.getElementById('progress-track');
+  if (track) {
+    track.setAttribute('aria-valuenow', String(Math.round(p)));
+    // pulse while we're processing but ffmpeg hasn't reported real progress yet
+    const indeterminate = state.isProcessing && p <= 0;
+    track.classList.toggle('indeterminate', indeterminate);
+    if (indeterminate) track.removeAttribute('aria-valuenow');   // "busy, amount unknown"
+  }
 }
 function setProgressText(t) {
   const el = document.getElementById('progress-text');
@@ -6113,6 +6168,35 @@ function captureDefaultsFromHTML() {
 //   5. If SAB is missing AND a SW is registering, wait up to 4s for the
 //      SW to reload us. If the reload hasn't happened by then, fall back
 //      to the single-thread ffmpeg-core so the app is never dead-on-arrival.
+// #23 — the ~30 MB core download is deferred 2 s after paint (#22) so the UI
+// paints first and Audio-Studio-only users never pay for it. But if a user
+// shows intent to EDIT before that timer fires — hovering or focusing the
+// Editor tab, or reaching for the add-media control — start the load right then
+// so the engine is warm by the time they actually need it. Idempotent: whoever
+// fires first (intent or the fallback timer) wins, and the other is a no-op.
+let _engineWarmTimer = null;
+let _engineWarmed = false;
+function warmEngine(reason) {
+  if (_engineWarmed || state.engineReady) { _engineWarmed = true; return; }
+  _engineWarmed = true;
+  if (_engineWarmTimer) { clearTimeout(_engineWarmTimer); _engineWarmTimer = null; }
+  try { window.__engineWarm = { reason, at: (typeof performance !== 'undefined' ? performance.now() : Date.now()) }; } catch (_) {}
+  logToConsole('', `[engine] warming core early (${reason})`);
+  initFFmpeg();
+}
+function wireEngineWarmup() {
+  const warm = () => warmEngine('editor intent');
+  const editorTab = document.querySelector('.tab-btn[data-tab="editor"]');
+  if (editorTab) {
+    editorTab.addEventListener('pointerenter', warm, { once: true });
+    editorTab.addEventListener('focus', warm, { once: true });
+    editorTab.addEventListener('click', warm, { once: true });
+  }
+  // Hovering/opening the add-media control is equally strong intent.
+  const addBtn = document.querySelector('label[for="file-input"], #btn-add-media, [data-add-media], .add-media-btn');
+  if (addBtn) addBtn.addEventListener('pointerenter', warm, { once: true });
+}
+
 function bootFFmpegStudio() {
   captureDefaults();           // legacy key set — same logic, kept for v1 compat
   captureDefaultsFromHTML();   // UX 6: write HTML-attribute defaults LAST so they win
@@ -6136,7 +6220,9 @@ function bootFFmpegStudio() {
     // #22: defer the 30 MB wasm download by 2 s so the UI paints first.
     // A user landing on the Audio Studio tab doesn't need the engine at all
     // (Web Audio is native); we kick it off after the initial paint either way.
-    setTimeout(() => initFFmpeg(), 2000);
+    // #23: …but warm it immediately if the user shows intent to edit first.
+    _engineWarmTimer = setTimeout(() => warmEngine('boot timer'), 2000);
+    wireEngineWarmup();
     return;
   }
 
@@ -6225,8 +6311,13 @@ function switchTab(name) {
     target.classList.add('active');
     target.style.display = 'block';
   }
-  // Update buttons
-  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  // Update buttons — visual + ARIA tab state + roving tabindex (WAI tablist).
+  $$('#tab-bar .tab-btn').forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.tabIndex = on ? 0 : -1;
+  });
   stateV2.activeTab = name;
   // Re-render the preview player if needed
   if (name === 'preview') syncPreviewMode();
@@ -6237,6 +6328,26 @@ function bindTabs() {
   $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
+  // UX/a11y — arrow-key navigation across the tab bar (WAI tablist pattern):
+  // ←/→ (and Home/End) move to the previous/next visible tab and activate it.
+  const bar = document.getElementById('tab-bar');
+  if (bar && !bar.__tabnav) {
+    bar.__tabnav = true;
+    bar.addEventListener('keydown', (e) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const tabs = $$('#tab-bar .tab-btn').filter(b => !b.hidden && b.offsetParent !== null);
+      if (!tabs.length) return;
+      const cur = tabs.findIndex(b => b.dataset.tab === stateV2.activeTab);
+      let next = cur;
+      if (e.key === 'ArrowRight') next = (cur + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft') next = (cur - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = tabs.length - 1;
+      e.preventDefault();
+      switchTab(tabs[next].dataset.tab);
+      tabs[next].focus();
+    });
+  }
   // Keyboard: Alt+1..8 to jump to a tab. Covers every tab (the old map stopped
   // at 4 and missed Studio / Trip Cam / VJ / Graph). Skips tabs the current mode
   // has hidden.

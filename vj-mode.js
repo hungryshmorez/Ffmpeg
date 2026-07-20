@@ -450,6 +450,10 @@
     tab.innerHTML = `
       <div class="vj-stage">
         <canvas id="vj-canvas"></canvas>
+        <div class="vj-start" id="vj-start">
+          <button type="button" id="vj-start-btn" class="vj-start-btn">📹 Tap to go live</button>
+          <span class="vj-start-hint">then trigger effects with the pads below</span>
+        </div>
         <div class="vj-hud">
           <span id="vj-fps" class="vj-fps">— fps</span>
           <span id="vj-midi-status" class="vj-midi">MIDI: —</span>
@@ -637,6 +641,12 @@
     });
     document.getElementById('vj-source').addEventListener('change', (e) => setSource(e.target.value));
 
+    // Mobile-first: a fresh tap gesture that turns the camera on. The auto-attempt
+    // in build() is silently blocked on phones (no user gesture), so this is the
+    // reliable way in — no keyboard required.
+    document.getElementById('vj-start-btn')?.addEventListener('click', () =>
+      setSource(document.getElementById('vj-source')?.value || 'webcam'));
+
     // HOT CUES — stored jump points in the source video. Click to jump,
     // Shift+click to set the current position. This is what makes a source
     // playable rather than just previewed. (File sources are seekable; live
@@ -749,7 +759,11 @@
       await v.play();
       engine.setSource(v);
       srcVideoEl = v;           // hot cues seek this element (file sources are seekable)
-    } catch (e) { log(e.message, 'error'); }
+      document.getElementById('vj-start')?.setAttribute('hidden', '');   // live — drop the tap-to-start overlay
+    } catch (e) {
+      document.getElementById('vj-start')?.removeAttribute('hidden');    // failed (e.g. mobile blocked the auto-attempt) — let them tap
+      log(e.message, 'error');
+    }
   }
 
   function renderMidiStatus(names) {

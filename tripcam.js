@@ -704,6 +704,21 @@ void main() {
     vignetteStrength: 0.3, vignetteSoftness: 0.5, displacementStrength: 0.01,
   };
 
+  // #19 — a linked GL program (11 fragment compiles + links) is expensive to
+  // build. Cache the compiled programs per GL context, keyed by the (patched)
+  // shader source, so a second engine that shares a context — or any re-run of
+  // _compileAll on the same live context — reuses the GPU programs instead of
+  // recompiling. Evicted on context loss (the programs die with the context;
+  // see _wireContextLoss). Engines on DIFFERENT canvases get separate GL
+  // contexts and cannot share GL objects at all — that's a WebGL constraint,
+  // so the everyday hit is a shared-canvas rebuild, not cross-canvas sharing.
+  const PROGRAM_CACHE = new WeakMap();   // gl -> { vs, programs: Map<source, {p, loc}> }
+  function _cacheFor(gl) {
+    let c = PROGRAM_CACHE.get(gl);
+    if (!c) { c = { vs: null, programs: new Map() }; PROGRAM_CACHE.set(gl, c); }
+    return c;
+  }
+
   class TripEngine {
     constructor(canvas) {
       this.canvas = canvas;
@@ -743,6 +758,11 @@ void main() {
         this._contextLost = true;
         cancelAnimationFrame(this.raf);
         this.raf = 0;
+        // Every GL object tied to this context is now dead. Evict the shared
+        // program cache (#19) and drop the texture refs (#20 pooling) so the
+        // restore path rebuilds fresh rather than reusing invalidated handles.
+        try { PROGRAM_CACHE.delete(this.gl); } catch (_) {}
+        this.srcTex = this.ping = this.pong = null;
         try { console.warn('[trip] WebGL context lost — halting until restored'); } catch (_) {}
       }, false);
       cv.addEventListener('webglcontextrestored', () => {
@@ -795,20 +815,38 @@ void main() {
       this.ping = this.pong = null;
     }
 
-    /** Ping-pong buffers — this is what makes the temporal feedback real. */
+    /** Re-specify an existing texture's storage at a new size (no new object). */
+    _sizeTex(t, w, h) {
+      const gl = this.gl;
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    }
+
+    /** Ping-pong buffers — this is what makes the temporal feedback real.
+     *  #20 texture pooling — reuse the texture + FBO objects across adaptive-
+     *  quality resizes instead of delete+recreate. The old path freed and
+     *  reallocated 3 textures + 2 framebuffers on EVERY qScale tier change,
+     *  churning GPU objects and leaning on the GC for the whole of a live set.
+     *  Now they're created once and only their storage is re-specified on a
+     *  resize; the framebuffer objects (and their attachments) are reused. */
     _initTextures() {
       const gl = this.gl;
-      this._freeTextures();                 // reclaim the previous allocation first
       const w = this.canvas.width || 1280, h = this.canvas.height || 720;
-      this.srcTex = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-      this.ping = { tex: this._mkTex(w, h), fb: gl.createFramebuffer() };
-      this.pong = { tex: this._mkTex(w, h), fb: gl.createFramebuffer() };
+      if (!this.srcTex) {
+        this.srcTex = gl.createTexture();     // uploaded from the video each frame — no fixed storage here
+        gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      }
+
+      if (!this.ping) this.ping = { tex: this._mkTex(w, h), fb: gl.createFramebuffer() };
+      else this._sizeTex(this.ping.tex, w, h);
+      if (!this.pong) this.pong = { tex: this._mkTex(w, h), fb: gl.createFramebuffer() };
+      else this._sizeTex(this.pong.tex, w, h);
+
       for (const p of [this.ping, this.pong]) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, p.fb);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, p.tex, 0);
@@ -831,12 +869,24 @@ void main() {
 
     _compileAll() {
       const gl = this.gl;
-      const vs = this._compile(gl.VERTEX_SHADER, VERT);
+      const cache = _cacheFor(gl);                        // #19 per-context program cache
+      // The fragments are injectRotation-patched to read `v_texCoord_in`, so the
+      // shared vertex shader must OUTPUT that varying name or strict GL drivers
+      // refuse to link (see FFShaderPlus.patchVertex). Patch both, or neither.
+      if (!cache.vs) {
+        const vsrc = window.FFShaderPlus && window.FFShaderPlus.patchVertex
+          ? window.FFShaderPlus.patchVertex(VERT) : VERT;
+        cache.vs = this._compile(gl.VERTEX_SHADER, vsrc);
+      }
+      const vs = cache.vs;
+      let reused = 0;
       for (const [name, fsrc] of Object.entries(SHADERS)) {
         try {
           // Retrofit u_cameraRotation onto the shaders I ported without it.
           const patched = window.FFShaderPlus
             ? window.FFShaderPlus.injectRotation(fsrc) : fsrc;
+          let entry = cache.programs.get(patched);        // keyed by (patched) source
+          if (entry) { this.programs[name] = entry; reused++; continue; }
           const fs = this._compile(gl.FRAGMENT_SHADER, patched);
           const p = gl.createProgram();
           gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
@@ -850,13 +900,15 @@ void main() {
           loc.u_previousFrameTexture = gl.getUniformLocation(p, 'u_previousFrameTexture');
           loc.a_position = gl.getAttribLocation(p, 'a_position');
           loc.a_texCoord = gl.getAttribLocation(p, 'a_texCoord');
-          this.programs[name] = { p, loc };
+          entry = { p, loc };                             // p + loc are immutable post-link → safe to share
+          cache.programs.set(patched, entry);
+          this.programs[name] = entry;
         } catch (e) {
           console.warn(`[trip] ${name}:`, e.message);
         }
       }
       const ok = Object.keys(this.programs);
-      console.log(`[trip] ${ok.length}/${Object.keys(SHADERS).length} shaders compiled:`, ok.join(', '));
+      console.log(`[trip] ${ok.length}/${Object.keys(SHADERS).length} shaders ready (${reused} reused from cache):`, ok.join(', '));
     }
 
     setSource(el) { this.source = el; }

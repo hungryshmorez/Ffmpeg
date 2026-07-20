@@ -2181,12 +2181,20 @@ body {
 #trip-canvas{width:100%;height:100%;display:block}
 .trip-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   background:radial-gradient(circle at 50% 40%,#161622,#000);text-align:center;padding:24px}
+.trip-empty[hidden]{display:none}   /* the class's display:flex otherwise beats the UA [hidden] rule — the splash never cleared when the camera went live */
 .trip-empty-inner{max-width:420px}
 .trip-logo{font-size:32px;font-weight:800;letter-spacing:2px;
   background:linear-gradient(90deg,#00d4ff,#ff00aa,#ffcc00);-webkit-background-clip:text;
   background-clip:text;color:transparent;margin-bottom:12px}
 .trip-empty p{color:#aaa;font-size:13px;margin:6px 0}
 .trip-empty .dim{color:#666;font-size:12px}
+.trip-golive{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  margin:16px auto 10px;padding:16px 28px;min-height:52px;font-size:17px;font-weight:700;
+  color:#fff;border:none;border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  background:linear-gradient(90deg,#00d4ff,#ff00aa);box-shadow:0 6px 24px rgba(255,0,170,.35);
+  transition:transform .1s ease,box-shadow .1s ease}
+.trip-golive:hover{box-shadow:0 8px 30px rgba(255,0,170,.5)}
+.trip-golive:active{transform:scale(.96)}
 
 .trip-panel{position:absolute;top:12px;right:12px;z-index:10;width:288px;max-height:calc(100% - 24px);
   background:rgba(18,18,18,.94);border:1px solid #333;border-radius:10px;
@@ -2456,6 +2464,18 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 #tab-vj{padding:0!important;overflow:hidden!important}
 .vj-stage{position:relative;height:44%;min-height:220px;background:#000}
 #vj-canvas{width:100%;height:100%;display:block}
+.vj-start{position:absolute;inset:0;z-index:12;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;text-align:center;
+  background:radial-gradient(circle at 50% 40%,#161622,#000)}
+.vj-start[hidden]{display:none}
+.vj-start-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:16px 30px;min-height:52px;font-size:17px;font-weight:700;color:#fff;border:none;
+  border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  background:linear-gradient(90deg,#00d4ff,#ff00aa);box-shadow:0 6px 24px rgba(255,0,170,.35);
+  transition:transform .1s ease,box-shadow .1s ease}
+.vj-start-btn:hover{box-shadow:0 8px 30px rgba(255,0,170,.5)}
+.vj-start-btn:active{transform:scale(.96)}
+.vj-start-hint{color:#888;font-size:12px}
 .vj-hud{position:absolute;top:8px;right:8px;display:flex;gap:8px}
 .vj-fps,.vj-midi{background:rgba(0,0,0,.75);padding:3px 9px;border-radius:10px;
   font-size:10px;font-family:ui-monospace,monospace}
@@ -2720,3 +2740,114 @@ body[data-mode="video"] .tab-btn.active{border-bottom-color:#00d4ff;color:#00d4f
 .comp-xf #comp-xf { width: 120px; }
 .comp-mo #comp-master-op { width: 100px; }
 @media (max-width: 640px) { .comp-layers { grid-template-columns: 1fr; } }
+
+/* =========================================================================
+   UX REDESIGN — accessible focus + touch ergonomics
+   ========================================================================= */
+
+/* Keyboard-only focus ring on the card grids (mouse clicks stay clean). */
+.wf-card:focus-visible,
+.media-bin-card:focus-visible {
+  outline: 3px solid var(--accent, #00d4ff);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+/* The roving-tabindex container itself never shows a ring — its item does. */
+#workflows-grid:focus,
+#global-bin-strip:focus { outline: none; }
+
+/* The selected media-bin card reads as selected for AT and sighted users. */
+.media-bin-card[aria-selected="true"] { box-shadow: inset 0 0 0 2px var(--accent, #00d4ff); }
+
+/* Restore a visible focus ring for every interactive control for keyboard users
+   (many were `outline:none`). Uses :focus-visible so mouse users don't see it. */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent, #00d4ff);
+  outline-offset: 1px;
+}
+
+/* Touch ergonomics: on coarse (finger) pointers, guarantee every tap target is
+   at least 44x44px — the WCAG / platform minimum. Applied only to touch so the
+   dense desktop mouse UI is unchanged. */
+@media (pointer: coarse) {
+  .bin-card-remove,
+  .bin-reorder,
+  .bin-card-checkbox,
+  .wf-info-btn,
+  .wf-actions button,
+  .mini-btn,
+  .tab-btn,
+  .mode-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .bin-card-checkbox { transform: scale(1.4); }
+}
+
+/* Indeterminate progress: a sweeping pulse while the encoder is warming up and
+   ffmpeg hasn't reported real progress yet — so the bar never looks frozen. */
+.progress-track.indeterminate { position: relative; overflow: hidden; }
+.progress-track.indeterminate .progress-fill { width: 40% !important; }
+.progress-track.indeterminate .progress-fill {
+  animation: ff-indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes ff-indeterminate {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-track.indeterminate .progress-fill { animation: none; width: 100% !important; opacity: .35; }
+}
+
+/* =========================================================================
+   UX REDESIGN — progressive disclosure: Editor section filter toolbar
+   ========================================================================= */
+.section-filter {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  padding: 8px; margin-bottom: 8px;
+  background: var(--panel, #12151c);
+  border-bottom: 1px solid var(--border, #2a2f3a);
+}
+.section-filter .section-search {
+  flex: 1 1 120px; min-width: 100px;
+  padding: 6px 8px; font-size: 13px;
+  background: #0d0f14; color: #e6e9ef;
+  border: 1px solid var(--border, #2a2f3a); border-radius: 7px;
+}
+.section-filter .section-btn {
+  padding: 6px 10px; font-size: 12px; cursor: pointer;
+  background: #20242e; color: #c3c9d4;
+  border: 1px solid var(--border, #2f3441); border-radius: 7px;
+}
+.section-filter .section-btn:hover { background: #262b36; }
+.section-filter .section-btn.on {
+  background: var(--accent, #00d4ff); color: #04121a; border-color: transparent; font-weight: 600;
+}
+.section-filter .section-count { font-size: 11px; color: #8a93a2; margin-left: auto; white-space: nowrap; }
+details.section[hidden] { display: none; }
+@media (pointer: coarse) {
+  .section-filter .section-btn, .section-filter .section-search { min-height: 44px; }
+}
+
+/* =========================================================================
+   UX REDESIGN — context menu (right-click / Shift+F10)
+   ========================================================================= */
+.ff-context-menu {
+  position: fixed; z-index: 9600; min-width: 190px;
+  background: #12151c; border: 1px solid #2a2f3a; border-radius: 10px;
+  padding: 5px; box-shadow: 0 12px 40px rgba(0,0,0,.55);
+  font: 13px/1.3 system-ui, sans-serif;
+}
+.ff-context-menu .ctx-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 10px; border: 0; border-radius: 7px;
+  background: none; color: #e6e9ef; text-align: left; cursor: pointer;
+}
+.ff-context-menu .ctx-item:hover,
+.ff-context-menu .ctx-item:focus-visible { background: #20242e; outline: none; }
+.ff-context-menu .ctx-item[aria-disabled="true"] { opacity: .4; cursor: default; }
+.ff-context-menu .ctx-icon { width: 1.1em; text-align: center; opacity: .85; }
+.ff-context-menu .ctx-sep { height: 1px; margin: 5px 4px; background: #2a2f3a; }
+@media (pointer: coarse) { .ff-context-menu .ctx-item { min-height: 44px; } }

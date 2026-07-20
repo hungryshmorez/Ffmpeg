@@ -80,8 +80,27 @@
     "test:cancel-reinit": "node .test/cancel-reinit.mjs",
     "test:undo-desync": "node .test/undo-desync.mjs",
     "test:audio-robustness": "node .test/audio-robustness.mjs",
+    "test:mobile-camera": "node .test/mobile-camera.mjs",
     "changelog": "node scripts/generate-changelog.js",
-    "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
+    "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js",
+    "test:accel-router": "node .test/accel-router.mjs",
+    "test:opfs-stream": "node .test/opfs-stream.mjs",
+    "test:opfs-upload": "node .test/opfs-upload.mjs",
+    "test:opfs-bin-workflow": "node .test/opfs-bin-workflow.mjs",
+    "test:hw-demux-stream": "node .test/hw-demux-stream.mjs",
+    "test:a11y-grid": "node .test/a11y-grid.mjs",
+    "test:progress-tabs-a11y": "node .test/progress-tabs-a11y.mjs",
+    "test:section-filter": "node .test/section-filter.mjs",
+    "test:context-menu": "node .test/context-menu.mjs",
+    "test:slider-ergonomics": "node .test/slider-ergonomics.mjs",
+    "test:palette-a11y": "node .test/palette-a11y.mjs",
+    "test:self-test-panel": "node .test/self-test-panel.mjs",
+    "test:gl-texture-pool": "node .test/gl-texture-pool.mjs",
+    "test:engine-warmup": "node .test/engine-warmup.mjs",
+    "test:motion-worker": "node .test/motion-worker.mjs",
+    "test:shader-render": "node .test/shader-render.mjs",
+    "test:shader-cache": "node .test/shader-cache.mjs",
+    "test:hw-webcodecs": "node .test/hw-webcodecs.mjs"
   },
   "engines": {
     "node": ">=18"

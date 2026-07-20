@@ -70,6 +70,9 @@ try {
   for (const prof of PROFILES) {
     const ctx = await browser.newContext({ viewport: { width: prof.w, height: prof.h }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
     const page = await ctx.newPage();
+    // This test checks LAYOUT, not onboarding — pre-gate the mode picker and the
+    // getting-started tour so neither overlay intercepts the layout taps.
+    await page.addInitScript(() => { try { localStorage.setItem('ffs.mode', 'both'); localStorage.setItem('ffstudio.tour.v1', 'done'); } catch (_) {} });
     await page.goto(`${BASE}/index.html`, { waitUntil: 'load' });
     await page.waitForFunction(() => typeof state !== 'undefined' && state.engineReady === true, { timeout: 120000 }).catch(() => {});
     await page.evaluate(() => document.querySelector('.firstrun [data-mode="both"]')?.click());

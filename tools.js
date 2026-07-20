@@ -84,9 +84,9 @@
     paletteEl = document.createElement('div');
     paletteEl.className = 'cmdk-overlay';
     paletteEl.innerHTML = `
-      <div class="cmdk">
-        <input id="cmdk-input" type="text" placeholder="Search ${paletteItems.length} workflows, sections, actions…" autocomplete="off" spellcheck="false">
-        <div id="cmdk-list" class="cmdk-list"></div>
+      <div class="cmdk" role="dialog" aria-modal="true" aria-label="Command palette">
+        <input id="cmdk-input" type="text" role="combobox" aria-expanded="true" aria-controls="cmdk-list" aria-autocomplete="list" aria-label="Search workflows, sections and actions" placeholder="Search ${paletteItems.length} workflows, sections, actions…" autocomplete="off" spellcheck="false">
+        <div id="cmdk-list" class="cmdk-list" role="listbox" aria-label="Results"></div>
         <div class="cmdk-foot"><kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>↵</kbd> run · <kbd>esc</kbd> close</div>
       </div>`;
     document.body.appendChild(paletteEl);
@@ -105,15 +105,18 @@
       paletteSel = Math.min(paletteSel, Math.max(0, hits.length - 1));
       list.innerHTML = hits.length
         ? hits.map((x, i) => `
-            <div class="cmdk-item ${i === paletteSel ? 'sel' : ''}" data-i="${i}">
+            <div class="cmdk-item ${i === paletteSel ? 'sel' : ''}" data-i="${i}" id="cmdk-opt-${i}" role="option" aria-selected="${i === paletteSel}">
               <span class="cmdk-icon">${x.it.icon}</span>
               <span class="cmdk-label">${x.it.label}</span>
               <span class="cmdk-sub">${x.it.sub}</span>
               <span class="cmdk-kind">${x.it.kind}</span>
             </div>`).join('')
-        : '<div class="cmdk-empty">No matches.</div>';
+        : '<div class="cmdk-empty" role="option" aria-disabled="true">No matches.</div>';
 
       list._hits = hits;
+      // a11y — point the combobox at the active option so screen readers
+      // announce the highlighted result as the user arrows through it.
+      input.setAttribute('aria-activedescendant', hits.length ? `cmdk-opt-${paletteSel}` : '');
       list.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
     };
 

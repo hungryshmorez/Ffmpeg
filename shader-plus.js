@@ -233,6 +233,20 @@ vec2 _rotTC(vec2 tc, float a) {
     return out;
   }
 
+  /**
+   * The matching HALF of injectRotation. injectRotation renames the FRAGMENT
+   * varying to `v_texCoord_in` (so it can shadow it with a rotated local named
+   * `v_texCoord`). The vertex shader that feeds these fragments must OUTPUT the
+   * varying under the same name — the GLSL spec requires vertex/fragment
+   * varyings to match by name, and strict drivers (SwiftShader, many mobile
+   * GLES) FAIL THE LINK otherwise (lenient desktop drivers silently tolerate the
+   * mismatch, which is why this hid for so long). Apply this to the shared
+   * vertex shader whenever the fragments are injectRotation-patched.
+   */
+  function patchVertex(vsrc) {
+    return vsrc.replace(/v_texCoord\b/g, 'v_texCoord_in');
+  }
+
   // ===========================================================================
   // 3. AUTO-GLITCH / CHAOS MODE
   // ---------------------------------------------------------------------------
@@ -1464,7 +1478,7 @@ vec2 _rotTC(vec2 tc, float a) {
 
   window.FFShaderPlus = {
     BandAnalyser, ROUTES, routeAudio, AUDIO_CFG,
-    Rotation, injectRotation,
+    Rotation, injectRotation, patchVertex,
     ChaosEngine, CHAOS_DEFAULTS, GLITCH,
     EFFECT_DEFAULTS, applyEffectDefaults,
     pixelSort, pixelSortMasked, sortBands, renderPixelSort,

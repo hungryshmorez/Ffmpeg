@@ -81,6 +81,12 @@ jobs:
       - name: Mobile + iPad layout
         run: npm run test:mobile
 
+      # Mobile camera: a single finger-tap (never a keyboard) brings the Trip Cam
+      # and VJ camera live — and VJ recovers via tap-to-start when the auto-attempt
+      # is blocked, as it is on a phone.
+      - name: Mobile camera go-live (touch, no keyboard)
+        run: npm run test:mobile-camera
+
       # VJ panic: latch triggers + sequencer + master, then PANIC (button and
       # the "0" key) must reset everything.
       - name: VJ panic
@@ -405,3 +411,101 @@ jobs:
       # F7/F8 — hostile-audio decode guards + WebAudio node/context hygiene.
       - name: Audio robustness (F7/F8)
         run: npm run test:audio-robustness
+
+      # Accel router (Phase 4.2): the unified graceful-fallback layer — an
+      # accelerated path that is absent OR throws silently falls back to the
+      # wasm/WebGL path so no workflow ever goes down.
+      - name: Accel graceful-fallback router
+        run: npm run test:accel-router
+
+      # OPFS streaming (Phase 1.3): media moves through OPFS block-by-block
+      # (never whole-in-RAM); a real video survives the round trip byte-exact
+      # and decodes to the same frame count. Falls back to memory off-OPFS.
+      - name: OPFS block streaming
+        run: npm run test:opfs-stream
+
+      # OPFS upload loader: fileToMemfs streams a File into MEMFS (frame-exact),
+      # OPFS path and forced-fallback path both decode to the same frames.
+      - name: OPFS upload → MEMFS
+        run: npm run test:opfs-upload
+
+      # OPFS → bin → wasm handoff: a real upload through the UI is binned via the
+      # OPFS load path, a standard downscale-480p workflow runs on it, and the
+      # output decodes to ~60 frames at 480p — plus the OPFS-disabled fallback.
+      - name: OPFS→bin→workflow handoff
+        run: npm run test:opfs-bin-workflow
+
+      # Streaming demux input (Phase 1.1): hwaccel.feedDemuxer feeds the WebCodecs
+      # demuxer block-by-block from an OPFS stream with byte-exact, contiguous
+      # fileStart offsets — so a hardware transcode never materialises the file.
+      - name: Streaming demux input
+        run: npm run test:hw-demux-stream
+
+      # UX redesign — keyboard-navigable, accessible card grids (media bin +
+      # workflow library): ARIA listbox, roving tabindex, one tab stop.
+      - name: Accessible card grids
+        run: npm run test:a11y-grid
+
+      # UX redesign — honest progress feedback (monotonic + indeterminate +
+      # ARIA) and an accessible tablist (aria-selected, roving tabindex, arrows).
+      - name: Progress + tablist a11y
+        run: npm run test:progress-tabs-a11y
+
+      # UX redesign — progressive disclosure: the 33-section Editor column gets
+      # a search + "Active only" filter that collapses the wall to what's used.
+      - name: Editor section disclosure
+        run: npm run test:section-filter
+
+      # UX redesign — right-click / Shift+F10 context menus on bin + workflow
+      # cards (accessible role=menu, arrow nav, Escape / click-outside close).
+      - name: Card context menus
+        run: npm run test:context-menu
+
+      # UX redesign — DAW-style range ergonomics: double-click-to-reset and
+      # (focused) wheel-to-nudge across every slider, via delegation.
+      - name: Slider ergonomics
+        run: npm run test:slider-ergonomics
+
+      # UX redesign — ARIA for the existing Ctrl/Cmd+K command palette
+      # (role=dialog/combobox/listbox/option + aria-activedescendant).
+      - name: Command palette a11y
+        run: npm run test:palette-a11y
+
+      # #8 — the 🩺 self-test button runs the encoder smoke test on two codecs
+      # and reports DECODED frames (not bytes) into the topbar panel.
+      - name: Self-test panel
+        run: npm run test:self-test-panel
+
+      # #20 — texture pooling: adaptive-quality resizes reuse the GL textures/FBOs
+      # instead of delete+recreate (zero create/delete churn across many resizes).
+      - name: GL texture pooling
+        run: npm run test:gl-texture-pool
+
+      # #23 — the deferred core load warms EARLY on Editor intent (hover), and
+      # falls back to the 2 s timer otherwise.
+      - name: Engine warm-on-intent
+        run: npm run test:engine-warmup
+
+      # #15 — motion estimation (SAD block-matching) in a Worker: the off-thread
+      # field is Float32-exact vs the on-thread estimator, recovers a known
+      # shift, and falls back to the main thread when Workers are unavailable.
+      - name: Motion estimation worker
+        run: npm run test:motion-worker
+
+      # Shader link + render: the TripCam/VJ engine links all 11 shader programs
+      # (vertex/fragment varying names must match — strict GL / mobile GLES) and
+      # renders non-black pixels; the go-live splash clears by computed display.
+      - name: Shader link + render
+        run: npm run test:shader-render
+
+      # #19 — per-context shader-program cache: a 2nd engine sharing a context
+      # makes zero new compiles, reuses the same program objects, and still
+      # renders; a new canvas recompiles (cache is per-context).
+      - name: Shader program cache
+        run: npm run test:shader-cache
+
+      # #13 — codec-adaptive WebCodecs path: the picker chooses a supported
+      # encoder (skips H.264 when absent) and a VideoEncoder→VideoDecoder round
+      # trip preserves frame count AND pixels (a moving marker survives).
+      - name: WebCodecs encode/decode
+        run: npm run test:hw-webcodecs

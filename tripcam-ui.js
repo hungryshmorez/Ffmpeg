@@ -49,8 +49,10 @@
           <div class="trip-empty-inner">
             <div class="trip-logo">🌀 TRIP CAM</div>
             <p>Real-time GPU glitch. 11 effects, 60fps, audio-reactive.</p>
-            <p class="dim">Pick a source to begin. Whatever you record lands straight
-               in the Media Bin, where any of the 180 workflows can chew on it.</p>
+            <button type="button" class="trip-golive" id="trip-golive">📹 Tap to go live</button>
+            <p class="dim">One tap and the camera is live. Or pick another source on the right.
+               Whatever you record lands straight in the Media Bin, where any of the 180
+               workflows can chew on it.</p>
           </div>
         </div>
       </div>
@@ -275,6 +277,7 @@
   }
 
   const hideEmpty = () => document.getElementById('trip-empty')?.setAttribute('hidden', '');
+  const showEmpty = () => document.getElementById('trip-empty')?.removeAttribute('hidden');
 
   // ---------------------------------------------------------------------------
   // BIND
@@ -282,6 +285,14 @@
 
   function bind(tab) {
     const $ = (s) => tab.querySelector(s);
+
+    // Mobile-first: one obvious tap turns the camera on — no dropdown, no keyboard.
+    $('#trip-golive')?.addEventListener('click', async () => {
+      const src = $('#trip-source');
+      if (src) src.value = 'webcam';
+      try { await useWebcam(); }
+      catch (err) { showEmpty(); window.logToConsole?.('error', `[trip] camera: ${err.message}`); }
+    });
 
     $('#trip-source').addEventListener('change', async (e) => {
       const v = e.target.value;
