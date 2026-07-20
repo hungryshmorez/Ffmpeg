@@ -6168,6 +6168,35 @@ function captureDefaultsFromHTML() {
 //   5. If SAB is missing AND a SW is registering, wait up to 4s for the
 //      SW to reload us. If the reload hasn't happened by then, fall back
 //      to the single-thread ffmpeg-core so the app is never dead-on-arrival.
+// #23 — the ~30 MB core download is deferred 2 s after paint (#22) so the UI
+// paints first and Audio-Studio-only users never pay for it. But if a user
+// shows intent to EDIT before that timer fires — hovering or focusing the
+// Editor tab, or reaching for the add-media control — start the load right then
+// so the engine is warm by the time they actually need it. Idempotent: whoever
+// fires first (intent or the fallback timer) wins, and the other is a no-op.
+let _engineWarmTimer = null;
+let _engineWarmed = false;
+function warmEngine(reason) {
+  if (_engineWarmed || state.engineReady) { _engineWarmed = true; return; }
+  _engineWarmed = true;
+  if (_engineWarmTimer) { clearTimeout(_engineWarmTimer); _engineWarmTimer = null; }
+  try { window.__engineWarm = { reason, at: (typeof performance !== 'undefined' ? performance.now() : Date.now()) }; } catch (_) {}
+  logToConsole('', `[engine] warming core early (${reason})`);
+  initFFmpeg();
+}
+function wireEngineWarmup() {
+  const warm = () => warmEngine('editor intent');
+  const editorTab = document.querySelector('.tab-btn[data-tab="editor"]');
+  if (editorTab) {
+    editorTab.addEventListener('pointerenter', warm, { once: true });
+    editorTab.addEventListener('focus', warm, { once: true });
+    editorTab.addEventListener('click', warm, { once: true });
+  }
+  // Hovering/opening the add-media control is equally strong intent.
+  const addBtn = document.querySelector('label[for="file-input"], #btn-add-media, [data-add-media], .add-media-btn');
+  if (addBtn) addBtn.addEventListener('pointerenter', warm, { once: true });
+}
+
 function bootFFmpegStudio() {
   captureDefaults();           // legacy key set — same logic, kept for v1 compat
   captureDefaultsFromHTML();   // UX 6: write HTML-attribute defaults LAST so they win
@@ -6191,7 +6220,9 @@ function bootFFmpegStudio() {
     // #22: defer the 30 MB wasm download by 2 s so the UI paints first.
     // A user landing on the Audio Studio tab doesn't need the engine at all
     // (Web Audio is native); we kick it off after the initial paint either way.
-    setTimeout(() => initFFmpeg(), 2000);
+    // #23: …but warm it immediately if the user shows intent to edit first.
+    _engineWarmTimer = setTimeout(() => warmEngine('boot timer'), 2000);
+    wireEngineWarmup();
     return;
   }
 

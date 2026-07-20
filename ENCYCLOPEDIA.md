@@ -50,19 +50,20 @@ and *Risk* flags how likely the change is to break the working app.
 
 | Status | Count | Items |
 |---|---|---|
-| ✅ **Done** (verified by running) | **81 / 100** | everything not listed below |
+| ✅ **Done** (verified by running) | **84 / 100** | everything not listed below |
 | 🟡 **Partial** | 1 | #7 golden-file tests |
-| ⬜ **To do** | 11 | #8 self-test panel · #14 OffscreenCanvas/Worker shaders · #15 motion est. in a Worker · #19 shader-program cache · #20 texture pooling · #23 preload core on hover · #80 second-screen · #81 Whisper.wasm · #97 split `app.js` · #98 single state source · #99 event bus |
-| 🔒 **Blocked** (needs real hardware/toolchain) | 6 | #13 WebCodecs ship · #16 WASM SIMD SAD · #65 true DCT · #79 NDI/virtual-cam · #84 shot-type classify · #87 content-aware fill |
+| ⬜ **To do** | 7 | #14 OffscreenCanvas/Worker shaders · #15 motion est. in a Worker · #80 second-screen · #81 Whisper.wasm · #97 split `app.js` · #98 single state source · #99 event bus |
+| 🔒 **Blocked** (needs real hardware/toolchain) | 7 | #13 WebCodecs ship · #16 WASM SIMD SAD · #19 shader-program cache · #65 true DCT · #79 NDI/virtual-cam · #84 shot-type classify · #87 content-aware fill |
 | ❌ **Dropped** | 1 | #70 Ableton Link (browsers can't speak Link without a native bridge) |
 
-What's left is now almost entirely **infrastructure** (Workers, pooling, the big `app.js`
-refactors) and **hardware/environment-gated** work — the correctness, audio, video, glitch,
-live/VJ, intelligence and UX feature work is complete. The remaining ⬜ items that touch
-GPU state (#14/#15/#19/#20) are codeable but can't be *verified* honestly in the current
-headless build (no proprietary codecs / limited GL), and the architecture items (#97–99) are
-pure refactors with no user-facing capability, so they're deliberately deferred over
-destabilising the working app.
+What's left is now almost entirely **infrastructure** (Workers, the big `app.js` refactors)
+and **hardware/environment-gated** work — the correctness, audio, video, glitch, live/VJ,
+intelligence and UX feature work is complete. The remaining GPU-thread items (#14/#15) and
+the program cache (#19) are codeable but can't be *verified* honestly in the current headless
+build (swiftshader compiles shaders but won't link the programs; no proprietary codecs), so
+they're held to the same "no unverifiable code on the runnable branch" bar as the WebGPU work.
+The architecture items (#97–99) are pure refactors with no user-facing capability, so they're
+deliberately deferred over destabilising the working app.
 
 Verified this development pass (each shipped as its own commit with a headless-Chromium test):
 **#85** auto colour-match · **#94** hover-preview · **#93** workflow thumbnails · **#90**
@@ -221,7 +222,7 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 5 | Zero-setting workflow hard-blocks | A workflow that applies nothing must refuse, loudly. | ✅ | Audit any new silent no-op paths. |
 | 6 | Verify the signature filter ran | If `downscale-480p` produced no scale, fail. | ✅ | `.test/workflows.mjs` asserts signatures; consider an in-app pre-run assert too. |
 | 7 | Golden-file tests | Hash/measure output of known workflows; drift = regression. | 🟡 | Matrix measures frames/res; add stable perceptual hashes for a fixed clip. — *M* |
-| 8 | In-UI self-test panel | A button that runs encoder smoke tests and reports **frames**. | ⬜ | Surface `assertRealVideo` + selftests in a panel. — *S* |
+| 8 | In-UI self-test panel | A button that runs encoder smoke tests and reports **frames**. | ✅ | 🩺 topbar button → `runSelfTest()` encodes 90 frames of testsrc through libx264 + mpeg4 and reports the DECODED frame count per codec into `#selftest-result` (green/red). `.test/self-test-panel.mjs` (3/3) drives the real button and asserts the panel shows a per-codec frame count and a ✓ pass. |
 | 9 | Copyable command history | You can't debug what you can't see. | ✅ | — |
 | 10 | Sentry-style error capture | Attach the last 50 log lines to every thrown error. | ✅ | — |
 | 11 | Version-stamp the build | "Which version is deployed?" should never be a question. | ✅ | — |
@@ -237,11 +238,11 @@ Each entry: **what it is → what it was meant to be → status → what's left 
 | 16 | WASM SIMD for the SAD loop | The inner loop is pure integer math — the biggest mosher win. | 🔒 | Needs an emcc/wat2wasm build pipeline + benchmarking. — *L* |
 | 17 | `requestVideoFrameCallback` everywhere | Process each video frame exactly once. | ✅ | Extend rVFC to the WebGL editor preview too. — *S* |
 | 18 | Half-res motion est., full-res apply | Vectors don't need pixel precision. | ✅ | Real coarse-to-fine block matching in `MotionMosher` (the comment long claimed a pyramid the code never had). With `hierarchical:true`, `_estimate` runs `_estimateHierarchical`: box-downscale both luma planes 2× (`_downscaleLuma`), do the wide-radius RAW search on the ¼-pixel frame, then refine each full-res block in a tiny ±2 window around 2× the coarse vector (with the same amplify/direction/threshold shaping). Default stays `false` so every existing renderer's behaviour is byte-identical. `FFMosh.estimateFlow(cur, prev, w, h, {mode})` exposes it headless with SAD cost accounting. `.test/half-res-motion.mjs` (4/4): on a known +4px shift both paths recover `globalMotion` [4.0, 0.0] with the per-block fields agreeing to Δ=0.00, the half path spends **40 % of the SAD pixel-ops** (692k→275k) and 4304 vs 10816 SAD calls, and the legacy full path stays deterministic/unchanged. Mosh-family/interpolate/flow-displace/stabilize/reframe regressions all still green. |
-| 19 | Cache compiled shader programs | We recompile 11 shaders per canvas. | ⬜ | Program cache keyed by source, shared across engine instances. — *S–M* |
-| 20 | Texture pooling | `_initTextures()` reallocates + GCs. | ⬜ | Pool + reuse GL textures. — *M* |
+| 19 | Cache compiled shader programs | We recompile 11 shaders per canvas. | 🔒 | Implemented and reverted: a per-GL-context program cache keyed by source is correct, but its payoff (reusing *linked programs*) is **unverifiable in the headless runner** — swiftshader compiles the shaders but fails to LINK them (0/11 programs), so no program-reuse assertion is possible. And in this app each canvas gets its own GL context (programs can't cross contexts), so the everyday hit is near-zero. Held out of the runnable branch until a runner where the shaders link (real GPU), same discipline as the WebGPU items. |
+| 20 | Texture pooling | `_initTextures()` reallocates + GCs. | ✅ | The ping-pong textures + FBOs are created once and only *re-specified* (texImage2D) on an adaptive-quality resize instead of delete+recreate — killing the 3-texture/2-FBO churn on every qScale tier change. Context-loss drops the refs so restore rebuilds fresh. `.test/gl-texture-pool.mjs` (4/4) instruments the real GL context and asserts many resizes create ZERO new textures and delete ZERO, and `_freeTextures()` still frees on teardown. |
 | 21 | Parallel segment encoding | Split at keyframes, encode N segments in a worker pool, concat. | ✅ | `FFSegment` — splits a render into time SEGMENTS, encodes them through a bounded-concurrency pool, then concatenates with a stream copy. Wins: each segment is short so the wasm heap stays small (long renders stop OOM-ing), progress is per-segment, and given more than one FFmpeg instance the pool runs segments truly in parallel. `planSegments(duration,{segments|segmentSec})` tiles `[0,duration)` gap-free; `segmentArgs` rewrites a single-shot command into an input-seek segment (`-ss`/`-t`, old times dropped, output redirected); `concatList` builds the demuxer list; `runPool` caps in-flight work, preserves order, fails fast; `encodeSegments(io, baseArgs, out, opts)` orchestrates it over an injected `exec`/`writeFile` (so a caller can hand each worker its own instance via `execFor`). `.test/segment-encode.mjs` (6/6): the planner/args/list, the pool honouring the concurrency limit + ordering + fail-fast, and a REAL end-to-end run — a 2 s testsrc clip split into 2 segments and concatenated decodes (via ffmpeg, since headless Chromium lacks h264 `<video>`) to **exactly the source's 30 frames**, proving the pipeline is correct and full-length. |
 | 22 | Lazy-load the wasm core | 30 MB shouldn't download if you only came for the Audio Studio. | ✅ | — |
-| 23 | Preload core on Editor hover | Warm the core before it's needed. | ⬜ | Prefetch on hover/intent. — *S* |
+| 23 | Preload core on Editor hover | Warm the core before it's needed. | ✅ | The 2 s-deferred (#22) core load warms EARLY the moment the user shows intent to edit — `pointerenter`/`focus`/`click` on the Editor tab (or the add-media control) calls `warmEngine()`, cancelling the fallback timer; whoever fires first wins and the other no-ops. `.test/engine-warmup.mjs` (3/3) asserts hover warms with reason "editor intent" (before the timer) and loads to ready, and that with no interaction the "boot timer" path still warms. |
 | 24 | A real memory budget | MEMFS + GPU + VideoFrames + AudioBuffers compete; show one number. | ✅ | `FFMemBudget` — unifies every source into ONE number vs a device-derived budget. Per-source estimators (`textureBytes` RGBA8, `videoFrameBytes` RGBA/planar-YUV, `audioBufferBytes` Float32, `memfsBytesOf`); a live registry (`report`/`clear`/`breakdown`/`total`); `deviceBudgetBytes()` from `navigator.deviceMemory` (40 %, capped at the 2 GB wasm ceiling); and `status()` returning ok/warn/over at 75 %/90 %. `attach()` folds in the app's live `state.memfsBytes` and paints a `#mem-budget` readout beside the existing per-source MEMFS gauge (which it never rewrites). Fixed a real 32-bit-overflow bug found while building it (`bytes | 0` wrapped multi-GB figures to "0 B"). `.test/mem-budget.mjs` (7/7) verifies the estimators, sum/clear, the ok→warn→over thresholds, that the budget honours deviceMemory + the wasm cap, the readout + level class, the live-MEMFS fold-in, and that multi-GB figures format correctly. |
 
 ### Audio (25–40)

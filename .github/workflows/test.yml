@@ -470,3 +470,18 @@ jobs:
       # (role=dialog/combobox/listbox/option + aria-activedescendant).
       - name: Command palette a11y
         run: npm run test:palette-a11y
+
+      # #8 — the 🩺 self-test button runs the encoder smoke test on two codecs
+      # and reports DECODED frames (not bytes) into the topbar panel.
+      - name: Self-test panel
+        run: npm run test:self-test-panel
+
+      # #20 — texture pooling: adaptive-quality resizes reuse the GL textures/FBOs
+      # instead of delete+recreate (zero create/delete churn across many resizes).
+      - name: GL texture pooling
+        run: npm run test:gl-texture-pool
+
+      # #23 — the deferred core load warms EARLY on Editor intent (hover), and
+      # falls back to the 2 s timer otherwise.
+      - name: Engine warm-on-intent
+        run: npm run test:engine-warmup

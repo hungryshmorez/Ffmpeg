@@ -743,6 +743,10 @@ void main() {
         this._contextLost = true;
         cancelAnimationFrame(this.raf);
         this.raf = 0;
+        // Every GL object tied to this context is now dead. Drop the texture
+        // refs (#20 pooling) so the restore path rebuilds fresh textures rather
+        // than reusing invalidated handles.
+        this.srcTex = this.ping = this.pong = null;
         try { console.warn('[trip] WebGL context lost — halting until restored'); } catch (_) {}
       }, false);
       cv.addEventListener('webglcontextrestored', () => {
@@ -795,20 +799,38 @@ void main() {
       this.ping = this.pong = null;
     }
 
-    /** Ping-pong buffers — this is what makes the temporal feedback real. */
+    /** Re-specify an existing texture's storage at a new size (no new object). */
+    _sizeTex(t, w, h) {
+      const gl = this.gl;
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    }
+
+    /** Ping-pong buffers — this is what makes the temporal feedback real.
+     *  #20 texture pooling — reuse the texture + FBO objects across adaptive-
+     *  quality resizes instead of delete+recreate. The old path freed and
+     *  reallocated 3 textures + 2 framebuffers on EVERY qScale tier change,
+     *  churning GPU objects and leaning on the GC for the whole of a live set.
+     *  Now they're created once and only their storage is re-specified on a
+     *  resize; the framebuffer objects (and their attachments) are reused. */
     _initTextures() {
       const gl = this.gl;
-      this._freeTextures();                 // reclaim the previous allocation first
       const w = this.canvas.width || 1280, h = this.canvas.height || 720;
-      this.srcTex = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-      this.ping = { tex: this._mkTex(w, h), fb: gl.createFramebuffer() };
-      this.pong = { tex: this._mkTex(w, h), fb: gl.createFramebuffer() };
+      if (!this.srcTex) {
+        this.srcTex = gl.createTexture();     // uploaded from the video each frame — no fixed storage here
+        gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      }
+
+      if (!this.ping) this.ping = { tex: this._mkTex(w, h), fb: gl.createFramebuffer() };
+      else this._sizeTex(this.ping.tex, w, h);
+      if (!this.pong) this.pong = { tex: this._mkTex(w, h), fb: gl.createFramebuffer() };
+      else this._sizeTex(this.pong.tex, w, h);
+
       for (const p of [this.ping, this.pong]) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, p.fb);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, p.tex, 0);
