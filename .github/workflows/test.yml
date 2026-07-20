@@ -411,3 +411,32 @@ jobs:
       # F7/F8 — hostile-audio decode guards + WebAudio node/context hygiene.
       - name: Audio robustness (F7/F8)
         run: npm run test:audio-robustness
+
+      # Accel router (Phase 4.2): the unified graceful-fallback layer — an
+      # accelerated path that is absent OR throws silently falls back to the
+      # wasm/WebGL path so no workflow ever goes down.
+      - name: Accel graceful-fallback router
+        run: npm run test:accel-router
+
+      # OPFS streaming (Phase 1.3): media moves through OPFS block-by-block
+      # (never whole-in-RAM); a real video survives the round trip byte-exact
+      # and decodes to the same frame count. Falls back to memory off-OPFS.
+      - name: OPFS block streaming
+        run: npm run test:opfs-stream
+
+      # OPFS upload loader: fileToMemfs streams a File into MEMFS (frame-exact),
+      # OPFS path and forced-fallback path both decode to the same frames.
+      - name: OPFS upload → MEMFS
+        run: npm run test:opfs-upload
+
+      # OPFS → bin → wasm handoff: a real upload through the UI is binned via the
+      # OPFS load path, a standard downscale-480p workflow runs on it, and the
+      # output decodes to ~60 frames at 480p — plus the OPFS-disabled fallback.
+      - name: OPFS→bin→workflow handoff
+        run: npm run test:opfs-bin-workflow
+
+      # Streaming demux input (Phase 1.1): hwaccel.feedDemuxer feeds the WebCodecs
+      # demuxer block-by-block from an OPFS stream with byte-exact, contiguous
+      # fileStart offsets — so a hardware transcode never materialises the file.
+      - name: Streaming demux input
+        run: npm run test:hw-demux-stream

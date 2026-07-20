@@ -82,7 +82,12 @@
     "test:audio-robustness": "node .test/audio-robustness.mjs",
     "test:mobile-camera": "node .test/mobile-camera.mjs",
     "changelog": "node scripts/generate-changelog.js",
-    "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js"
+    "verify": "node -c app.js && node -c build-info.js && node -c pipeline.js && node -c .test/roundtrip.mjs && node scripts/generate-changelog.js",
+    "test:accel-router": "node .test/accel-router.mjs",
+    "test:opfs-stream": "node .test/opfs-stream.mjs",
+    "test:opfs-upload": "node .test/opfs-upload.mjs",
+    "test:opfs-bin-workflow": "node .test/opfs-bin-workflow.mjs",
+    "test:hw-demux-stream": "node .test/hw-demux-stream.mjs"
   },
   "engines": {
     "node": ">=18"

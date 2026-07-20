@@ -231,6 +231,81 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // 4b. STREAMING DEMUX INPUT  (feed the demuxer block-by-block, never whole
+  //     in the JS heap — the point of the OPFS pipeline)
+  // ---------------------------------------------------------------------------
+  // mp4box parses incrementally: appendBuffer() takes an ArrayBuffer tagged with
+  // its byte offset in the file (`fileStart`). Feeding it a ReadableStream (e.g.
+  // FFOpfsStream.readable()) block-by-block means the container is demuxed
+  // without the whole file ever being resident — for a hardware-capable
+  // transcode, MEMFS is never touched at all.
+  //
+  // `append(arrayBuffer)` is called once per block, in order, with a correct,
+  // contiguous `fileStart`. Source may be a ReadableStream, Blob/File,
+  // Uint8Array or ArrayBuffer. Returns the total bytes fed. This feeder is the
+  // new, testable risk surface; mp4box's own parsing is unchanged.
+  async function feedDemuxer(append, source, chunkSize) {
+    chunkSize = chunkSize || (4 * 1024 * 1024);
+    let offset = 0;
+    const emit = (u8) => {
+      // mp4box wants a standalone ArrayBuffer; copy the view out when it isn't
+      // already the whole backing buffer, then tag it with the byte offset.
+      const ab = (u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength) ? u8.buffer : u8.slice().buffer;
+      ab.fileStart = offset;
+      append(ab);
+      offset += u8.byteLength;
+    };
+    if (source && typeof source.getReader === 'function') {            // ReadableStream
+      const rd = source.getReader();
+      for (;;) { const { value, done } = await rd.read(); if (done) break; if (value && value.byteLength) emit(value instanceof Uint8Array ? value : new Uint8Array(value)); }
+    } else if (typeof Blob !== 'undefined' && source instanceof Blob) { // Blob / File
+      for (let o = 0; o < source.size; o += chunkSize) emit(new Uint8Array(await source.slice(o, Math.min(source.size, o + chunkSize)).arrayBuffer()));
+    } else if (source instanceof Uint8Array) {
+      for (let o = 0; o < source.length; o += chunkSize) emit(source.subarray(o, Math.min(source.length, o + chunkSize)));
+    } else if (source instanceof ArrayBuffer) {
+      const u = new Uint8Array(source); for (let o = 0; o < u.length; o += chunkSize) emit(u.subarray(o, Math.min(u.length, o + chunkSize)));
+    }
+    return offset;
+  }
+
+  // Demux from any streamable source (a ReadableStream, an OPFS entry name via
+  // { opfsName }, or a File/Blob). Same result shape as demuxMP4. mp4box is fed
+  // incrementally through feedDemuxer, so the file is never whole-in-heap.
+  async function demuxSource(source, opts = {}) {
+    await loadScript(MP4BOX_URL);
+    const MP4Box = window.MP4Box;
+    // resolve an OPFS entry name to a ReadableStream when asked
+    let src = source;
+    if (source && source.opfsName && window.FFOpfsStream) src = window.FFOpfsStream.readable(source.opfsName, opts);
+
+    return new Promise((resolve, reject) => {
+      const mp4 = MP4Box.createFile();
+      const samples = [];
+      let config = null, track = null;
+      mp4.onError = (e) => reject(new Error(`Demux failed: ${e}`));
+      mp4.onReady = (info) => {
+        track = info.videoTracks[0];
+        if (!track) return reject(new Error('No video track.'));
+        const trak = mp4.getTrackById(track.id);
+        let desc = null;
+        for (const entry of trak.mdia.minf.stbl.stsd.entries) {
+          const box = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
+          if (box) { const s = new (window.DataStream || MP4Box.DataStream)(undefined, 0, 1); box.write(s); desc = new Uint8Array(s.buffer, 8); break; }
+        }
+        config = { codec: track.codec, codedWidth: track.video.width, codedHeight: track.video.height, description: desc || undefined, hardwareAcceleration: 'prefer-hardware' };
+        mp4.setExtractionOptions(track.id, null, { nbSamples: Infinity });
+        mp4.start();
+      };
+      mp4.onSamples = (_id, _user, list) => {
+        for (const s of list) samples.push(new EncodedVideoChunk({ type: s.is_sync ? 'key' : 'delta', timestamp: (s.cts * 1e6) / s.timescale, duration: (s.duration * 1e6) / s.timescale, data: s.data }));
+        if (samples.length >= track.nb_samples) resolve({ config, samples, width: track.video.width, height: track.video.height, fps: track.nb_samples / (track.duration / track.timescale), durationSec: track.duration / track.timescale });
+      };
+      // stream the source into mp4box block by block, then flush.
+      feedDemuxer((ab) => mp4.appendBuffer(ab), src, opts.chunkSize).then(() => mp4.flush()).catch(reject);
+    });
+  }
+
   // ===========================================================================
   // 5. THE HARDWARE TRANSCODE
   // ===========================================================================
@@ -397,7 +472,7 @@
 
   window.FFHardware = {
     CAPS, init, probeCodecs, detectGPU, renderHwPanel,
-    demuxMP4, hwTranscode, makeShaderPass, canUseHardware, pathBadge,
+    demuxMP4, demuxSource, feedDemuxer, hwTranscode, makeShaderPass, canUseHardware, pathBadge,
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
