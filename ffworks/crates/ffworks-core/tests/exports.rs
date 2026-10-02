@@ -27,6 +27,7 @@ fn every_available_preset_renders_with_the_right_codec() {
     let mut done = vec![];
     for st in ExportSettings::builtin() {
         let usable = st.video_codec.as_ref().is_none_or(|c| caps.has_encoder(c)) && st.audio_codec.as_ref().is_none_or(|c| caps.has_encoder(c));
+        let usable = usable && st.video_codec.as_deref().is_none_or(|v| !ffworks_core::hwenc::is_hardware(v) || ffworks_core::hwenc::works(&tools(), v));
         if !usable {
             continue;
         }

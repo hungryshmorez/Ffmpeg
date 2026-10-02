@@ -19,6 +19,8 @@ struct AppState {
     engine: Mutex<Engine>,
     queue: JobQueue,
     caps: Mutex<Option<Capabilities>>,
+    /// Hardware encoders that really work on this machine (probed once per FFmpeg build, see `hwenc`).
+    hw: Mutex<Option<Vec<String>>>,
     cache_dir: PathBuf,
     recovery_dir: PathBuf,
     settings_file: PathBuf,
@@ -248,6 +250,7 @@ fn set_settings(state: State<AppState>, ffmpeg_path: Option<String>, ffprobe_pat
     state.queue.set_tools(tools.clone());
     state.engine.lock().unwrap().tools = tools;
     *state.caps.lock().unwrap() = None;
+    *state.hw.lock().unwrap() = None;
     Ok(serde_json::json!({ "ffmpeg": ff, "ffprobe": pr }))
 }
 
@@ -529,6 +532,7 @@ fn apply_tools(state: &AppState, st: &ffworks_core::settings::Settings) -> Resul
     state.queue.set_tools(tools.clone());
     state.engine.lock().unwrap().tools = tools;
     *state.caps.lock().unwrap() = None;
+    *state.hw.lock().unwrap() = None;
     Ok(ff)
 }
 
@@ -696,10 +700,22 @@ fn list_clip_props() -> serde_json::Value {
 fn list_export_presets(state: State<AppState>) -> Vec<ExportSettings> {
     // only offer presets this FFmpeg build can encode (the h264 default is always kept so the dialog is never empty)
     let c = caps(&state);
+    let hw = usable_hardware(&state, c.as_ref());
     ExportSettings::builtin()
         .into_iter()
         .filter(|p| p.id == "h264_mp4" || c.as_ref().is_none_or(|c| p.video_codec.iter().chain(p.audio_codec.iter()).all(|e| c.has_encoder(e))))
+        .filter(|p| p.video_codec.as_deref().is_none_or(|v| !ffworks_core::hwenc::is_hardware(v) || hw.iter().any(|h| h == v)))
         .collect()
+}
+
+/// Hardware encoders that exist in the current FFmpeg and actually encode on this machine (probed once, then cached).
+fn usable_hardware(state: &AppState, c: Option<&Capabilities>) -> Vec<String> {
+    let mut slot = state.hw.lock().unwrap();
+    if slot.is_none() {
+        let tools = state.engine.lock().unwrap().tools.clone();
+        *slot = Some(ffworks_core::hwenc::usable(&tools, |e| c.is_none_or(|c| c.has_encoder(e))));
+    }
+    slot.clone().unwrap_or_default()
 }
 
 fn caps(state: &AppState) -> Option<Capabilities> {
@@ -833,6 +849,7 @@ pub fn run() {
                 engine: Mutex::new(Engine::new("Untitled", ProjectSettings::default(), tools)),
                 queue,
                 caps: Mutex::new(None),
+                hw: Mutex::new(None),
                 cache_dir: base.join("analysis"),
                 recovery_dir: base.join("recovery"),
                 settings_file,
