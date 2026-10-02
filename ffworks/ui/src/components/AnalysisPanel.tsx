@@ -52,6 +52,10 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
     void dispatch({ type: "batch", label: `Split at ${times.length} scene cuts`, commands });
   };
 
+  const view = useProject((s) => s.view);
+  const [syncRef, setSyncRef] = useState("");
+  const [sync, setSync] = useState<{ lag: number; confidence: number; start: number } | null>(null);
+  const others = audio ? (view?.project.sequences[0]?.tracks.filter((t) => t.kind === "audio").flatMap((t) => t.clips).filter((c) => c.id !== audio.id) ?? []) : [];
   const target = kind === "silence" ? audio ?? video : video ?? audio;
   const markRanges = () => {
     if (!target || !found) return;
@@ -101,6 +105,24 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
               <p className="muted" data-testid="range-summary">{found.ranges.length} ranges · {found.ranges.slice(0, 6).map(([a, b]) => `${a.toFixed(1)}–${b.toFixed(1)}`).join(", ")}{found.ranges.length > 6 ? "…" : ""} s</p>
               <button onClick={markRanges} title="Put a marker at the start of every range (one undo step)">Mark ranges</button>
               <button onClick={cutRanges} title="Cut every range out of this clip and its linked clips and close the gaps (one undo step)">Cut ranges out</button>
+            </>
+          )}
+        </div>
+      )}
+      {audio && others.length > 0 && (
+        <div className="field" aria-label="Auto-sync">
+          <label>Auto-sync to</label>
+          <div className="row">
+            <select aria-label="Reference clip" value={syncRef} onChange={(e) => { setSyncRef(e.target.value); setSync(null); }}>
+              <option value="">choose a clip…</option>
+              {others.map((c) => <option key={c.id} value={c.id}>{c.name} @ {toSec(c.start).toFixed(1)} s</option>)}
+            </select>
+            <button disabled={busy !== null || !syncRef} onClick={() => void run("sync", async () => setSync(await api.syncOffset(syncRef, audio.id)))}>{busy === "sync" ? "Matching…" : "Match"}</button>
+          </div>
+          {sync && (
+            <>
+              <p className="muted" data-testid="sync-summary">{sync.lag >= 0 ? "later" : "earlier"} by {Math.abs(sync.lag).toFixed(3)} s · confidence {(sync.confidence * 100).toFixed(0)}%{sync.confidence < 0.1 ? " (weak: the recordings may not share sound)" : ""}</p>
+              <button onClick={() => void dispatch({ type: "move_clip", clip: audio.id, start: fromSec(sync.start) })} title="Move this clip (and its linked video) so both recordings line up">Move into sync</button>
             </>
           )}
         </div>

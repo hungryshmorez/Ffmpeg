@@ -20,6 +20,7 @@ export const api = {
   detectScenes: (mediaId: string, threshold: number) => invoke<SceneAnalysis>("detect_scenes", { mediaId, threshold }),
   detectRanges: (mediaId: string, kind: DetectKind, threshold: number, minLen: number) => invoke<[number, number][]>("detect_ranges", { mediaId, kind, threshold, minLen }),
   importSubtitles: (path: string, offset: number) => invoke<StateView>("import_subtitles", { path, offset }),
+  syncOffset: (reference: string, clip: string) => invoke<{ lag: number; confidence: number; start: number }>("sync_offset", { reference, clip }),
   measureLoudness: (mediaId: string) => invoke<Loudness>("measure_loudness", { mediaId }),
   getBeats: (mediaId: string) => invoke<BeatAnalysis>("get_beats", { mediaId }),
   getSettings: () => invoke<AppSettings>("get_settings"),
