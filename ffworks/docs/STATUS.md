@@ -26,7 +26,13 @@ Toolbar "Filters" opens a searchable list of every filter in the installed FFmpe
 * Honest limits: video only (no audio graphs yet); not combinable with transitions (refused both ways); option values cannot be keyframed; effects see the already-padded project-size frame (letterbox bars included); the filter/option denylist (files, plugins, network, outputs) is not a sandbox; only `split`/`inputs`/`outputs` pad counts are derived for dynamic-pad filters; no per-node preview thumbnails; Delete in the editor no longer reaches the timeline (global shortcuts now ignore open dialogs — this was a real bug found by the GUI test).
 * Not yet: filter presets/favourites from the browser into the graph, "Add to clip" from the Filters dialog, graph templates, audio graph.
 
-## Requested additions (user, not started)
+## Favourites and random / stacked effects (done)
+* Star any effect or transition (★ in the lists) and sort them into named groups (Favourites dialog); stored in the user settings file, kept when tool paths change. Random buttons draw from everything, the starred set or one group.
+* 🎲 Random effect(s): stack 1–20 random effects on a clip (audio clips get audio effects) with moderate random parameter values; 🎲 Random transition(s): random transitions on up to N consecutive cuts starting after the selected clip. Each is one undoable Batch. Picks are seeded (SplitMix64); the seed is shown and can be typed back to reproduce a result.
+* Tests: 5 real-FFmpeg tests (determinism, pools, one-undo, real renders of 5 random stacks, transition skipping with reasons), favourites unit tests, UI unit tests, `random.sh` 17 GUI checks (real clicks, persisted settings, export + saved project verified independently).
+* Honest limits: a "transition stack" means consecutive cuts, not several layered on one cut (FFmpeg path allows one per cut); cuts without media handles or on retimed clips are skipped and reported; random effect values are moderate, not guaranteed pretty; custom graph effects are never picked or starred.
+
+## Requested additions (still to do: GL transitions, demo mode)
 * **GL Transitions library** (gl-transitions.com, MIT). Stock Windows FFmpeg has no `gl-transition` filter, so plan is to port shaders to `xfade` custom expressions (approach of the MIT `xfade-easing` project) — only shaders expressible that way; the rest are listed as unsupported, not faked.
 * **Transition demo mode**: button that cycles random transitions through the timeline continuously (preview/playback only, nothing written to the project unless "Keep").
 * **Effects demo mode**: same for effects; two separate boards (transitions / effects) that can run combined.
