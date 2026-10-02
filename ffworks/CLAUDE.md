@@ -22,7 +22,7 @@ GUI tests build the UI with `VITE_UITEST=1`, build the Tauri app with `--feature
 * FFmpeg is always spawned with argv arrays, never shell strings. Filter graphs are inlined (<20k chars) else passed via a file whose option depends on version: `-/filter_complex` (FFmpeg ≥7) vs `-filter_complex_script` (<7). `-filter_complex_script` is **gone in FFmpeg 8**.
 * **One `-i` per clip use** (linked A/V share one). Never feed several branches from one input via `split`/`asplit` — late branches get starved (silent audio). Limit 200 inputs per render.
 * Time is exact rational (`time.rs`). Never use float seconds as truth.
-* Capability parsing: `ffmpeg -filters` has **no** `------` separator; transitions come from `ffmpeg -h filter=xfade`.
+* Capability parsing: `ffmpeg -filters` has a `------` separator on some builds (Windows CI) and none on others, and 2- or 3-character flag columns — never rely on either; transitions come from `ffmpeg -h filter=xfade`.
 * Tests compare real output: pixel sampling and `volumedetect` mean (not max) levels. `eq=brightness` only moves luma.
 * GUI tests: use `waitFor` on results, not fixed sleeps (the app can take >500 ms). Every script must isolate `XDG_CACHE_HOME`/`XDG_CONFIG_HOME`, otherwise a leftover autosave opens the Recovery dialog and covers the UI. Don't `pkill -f ffworks-app` from a Bash call (it kills your own shell).
 * Shell escaping inside heredoc-generated JS bites; keep test JS in separate files with `__PLACEHOLDER__` substitution via `sed ... g`.

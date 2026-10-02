@@ -46,8 +46,9 @@ pub fn parse_filter_list(out: &str) -> Vec<FilterInfo> {
     for line in out.lines() {
         let mut p = line.split_whitespace();
         let (Some(flags), Some(name), Some(io)) = (p.next(), p.next(), p.next()) else { continue };
-        // three flag columns (`T`imeline, `S`lice threads, `C`ommand); newer FFmpeg may add letters, so accept any `.`/capital
-        if flags.len() != 3 || !flags.chars().all(|c| c == '.' || c.is_ascii_uppercase()) || !io.contains("->") {
+        // flag columns (`T`imeline, `S`lice threads, `C`ommand): three on FFmpeg 6/7 but only two (`TS`, `..`) on the Windows
+        // build in CI, so accept 2-3 characters of `.`/capitals
+        if !(2..=3).contains(&flags.len()) || !flags.chars().all(|c| c == '.' || c.is_ascii_uppercase()) || !io.contains("->") {
             continue;
         }
         let desc: Vec<&str> = p.collect();
@@ -228,6 +229,16 @@ mod tests {
         assert_eq!(l[1].name, "hue");
         assert!(l[1].timeline);
         assert_eq!(l[2].io, "|->V");
+    }
+
+    #[test]
+    fn parses_two_column_flags_and_separator_line() {
+        // verbatim from the Windows CI FFmpeg
+        let o = "Filters:\r\n  T.. = Timeline support\r\n  .S. = Slice threading\r\n  | = Source or sink filter\r\n  ------\r\n TS aap               AA->A      Apply Affine Projection algorithm to first audio stream.\r\n .. abench            A->A       Benchmark part of a filtergraph.\r\n";
+        let l = parse_filter_list(o);
+        assert_eq!(l.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["aap", "abench"]);
+        assert!(l[0].timeline && !l[1].timeline);
+        assert_eq!(l[0].io, "AA->A");
     }
 
     #[test]
