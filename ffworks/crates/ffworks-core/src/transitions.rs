@@ -9,18 +9,67 @@ use crate::project::{Clip, Id, Project, Track, TrackKind};
 use crate::time::{Fps, Rational};
 use serde::{Deserialize, Serialize};
 
-/// (id, display name) of supported FFmpeg `xfade` transitions.
+/// (id, display name) of FFmpeg `xfade` transitions known at build time (FFmpeg 6.1/7.x: 57). The app asks the installed FFmpeg for the
+/// list it really supports (`Capabilities::xfade_transitions`); this is the fallback and the source of display names.
 pub const KINDS: &[(&str, &str)] = &[
-    ("fade", "Cross dissolve"),
-    ("fadeblack", "Dip to black"),
-    ("fadewhite", "Dip to white"),
+    ("fade", "Fade"),
     ("wipeleft", "Wipe left"),
     ("wiperight", "Wipe right"),
+    ("wipeup", "Wipe up"),
+    ("wipedown", "Wipe down"),
     ("slideleft", "Slide left"),
     ("slideright", "Slide right"),
-    ("circleopen", "Circle open"),
+    ("slideup", "Slide up"),
+    ("slidedown", "Slide down"),
+    ("circlecrop", "Circle crop"),
+    ("rectcrop", "Rect crop"),
+    ("distance", "Distance"),
+    ("fadeblack", "Fadeblack"),
+    ("fadewhite", "Fadewhite"),
     ("radial", "Radial"),
+    ("smoothleft", "Smoothleft"),
+    ("smoothright", "Smoothright"),
+    ("smoothup", "Smoothup"),
+    ("smoothdown", "Smoothdown"),
+    ("circleopen", "Circleopen"),
+    ("circleclose", "Circleclose"),
+    ("vertopen", "Vert open"),
+    ("vertclose", "Vert close"),
+    ("horzopen", "Horz open"),
+    ("horzclose", "Horz close"),
+    ("dissolve", "Dissolve"),
     ("pixelize", "Pixelize"),
+    ("diagtl", "Diag tl"),
+    ("diagtr", "Diag tr"),
+    ("diagbl", "Diag bl"),
+    ("diagbr", "Diag br"),
+    ("hlslice", "Hl slice"),
+    ("hrslice", "Hr slice"),
+    ("vuslice", "Vu slice"),
+    ("vdslice", "Vd slice"),
+    ("hblur", "Hblur"),
+    ("fadegrays", "Fadegrays"),
+    ("wipetl", "Wipe tl"),
+    ("wipetr", "Wipe tr"),
+    ("wipebl", "Wipe bl"),
+    ("wipebr", "Wipe br"),
+    ("squeezeh", "Squeeze h"),
+    ("squeezev", "Squeeze v"),
+    ("zoomin", "Zoom in"),
+    ("fadefast", "Fast fade"),
+    ("fadeslow", "Slow fade"),
+    ("hlwind", "Hl wind"),
+    ("hrwind", "Hr wind"),
+    ("vuwind", "Vu wind"),
+    ("vdwind", "Vd wind"),
+    ("coverleft", "Cover left"),
+    ("coverright", "Cover right"),
+    ("coverup", "Cover up"),
+    ("coverdown", "Cover down"),
+    ("revealleft", "Reveal left"),
+    ("revealright", "Reveal right"),
+    ("revealup", "Reveal up"),
+    ("revealdown", "Reveal down"),
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -45,8 +94,10 @@ pub fn snap_duration(d: Rational, fps: Fps) -> Rational {
     Rational::new(even, 1).div(fps)
 }
 
+/// Accept any plain lowercase xfade name (newer FFmpegs add transitions); the name goes into a filter graph, so nothing else is allowed.
+/// Whether the *installed* FFmpeg supports it is checked when the render is compiled.
 pub fn check_kind(kind: &str) -> Result<()> {
-    if KINDS.iter().any(|(k, _)| *k == kind) {
+    if !kind.is_empty() && kind != "custom" && kind.len() <= 24 && kind.chars().all(|c| c.is_ascii_lowercase()) {
         Ok(())
     } else {
         Err(Error::validation(format!("unknown transition '{kind}'")))
@@ -113,8 +164,12 @@ mod tests {
     }
 
     #[test]
-    fn kinds_are_known() {
+    fn kind_names_are_validated_for_safe_use_in_a_filter_graph() {
         assert!(check_kind("fade").is_ok());
-        assert!(check_kind("nope").is_err());
+        assert!(check_kind("zoomin").is_ok());
+        for bad in ["", "custom", "fade;movie=x", "Fade", "a b", "x:y", "waytoolongtransitionname_here"] {
+            assert!(check_kind(bad).is_err(), "{bad}");
+        }
+        assert!(KINDS.len() >= 50 && KINDS.iter().all(|(k, _)| check_kind(k).is_ok()));
     }
 }

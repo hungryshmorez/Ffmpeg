@@ -224,6 +224,11 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     require(&t.a.requires)?;
                     require(&t.b.requires)?;
                     require(&["xfade".to_string()])?;
+                    if let Some(caps) = caps {
+                        if !caps.xfade_transitions.is_empty() && !caps.xfade_transitions.iter().any(|(k, _)| *k == t.kind) {
+                            return Err(Error::validation(format!("the installed FFmpeg does not support the '{}' transition (it needs a newer FFmpeg)", t.kind)));
+                        }
+                    }
                     let (la, lb) = (take(t.a.input), take(t.b.input));
                     f.push(format!("{}[ta{n}]", vchain(&la, t.a.input, t.a.source_in, t.duration, None, &t.a.filters)));
                     f.push(format!("{}[tb{n}]", vchain(&lb, t.b.input, t.b.source_in, t.duration, None, &t.b.filters)));

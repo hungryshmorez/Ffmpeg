@@ -52,6 +52,7 @@ export type Command =
   | { type: "add_transition"; clip_a: string; clip_b: string; kind: string; duration: Rational }
   | { type: "remove_transition"; transition: string }
   | { type: "set_transition"; transition: string; kind?: string | null; duration?: Rational | null }
+  | { type: "batch"; label: string; commands: Command[] }
   | { type: "rename_project"; name: string };
 
 export interface Waveform { bins_per_sec: number; peaks: number[] }
@@ -72,3 +73,5 @@ export interface RecoveryInfo { saved_unix: number; original_path: string | null
 export interface AppSettings { ffmpeg_path: string | null; ffprobe_path: string | null }
 export interface RelinkResult { state: StateView; relinked: string[]; unresolved: { mediaId: string; candidates: { path: string; exact: boolean; reason: string }[] }[] }
 export interface BeatAnalysis { beats: number[]; bpm: number; duration: number }
+export interface SceneAnalysis { cuts: number[]; scenes: [number, number][]; threshold: number }
+export interface Loudness { integrated_lufs: number | null; range_lu: number; true_peak_dbtp: number | null }

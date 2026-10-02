@@ -128,6 +128,9 @@ pub struct Capabilities {
     pub encoders: BTreeSet<String>,
     pub decoders: BTreeSet<String>,
     pub hwaccels: Vec<String>,
+    /// `(name, description)` of the `xfade` transitions this FFmpeg supports.
+    #[serde(default)]
+    pub xfade_transitions: Vec<(String, String)>,
 }
 
 impl Capabilities {
@@ -152,8 +155,28 @@ impl Capabilities {
                 .map(|l| l.trim().to_string())
                 .filter(|l| !l.is_empty())
                 .collect(),
+            xfade_transitions: run(&["-h", "filter=xfade"]).map(|o| parse_xfade(&o)).unwrap_or_default(),
         })
     }
+}
+
+/// Parse the `transition` choices out of `ffmpeg -h filter=xfade` (lines like `     fade   0   ..FV....... fade transition`).
+pub fn parse_xfade(help: &str) -> Vec<(String, String)> {
+    help.lines()
+        .filter_map(|l| {
+            let rest = l.strip_prefix("     ")?;
+            let mut it = rest.split_whitespace();
+            let (name, idx, _flags) = (it.next()?, it.next()?, it.next()?);
+            idx.parse::<i32>().ok()?;
+            if name == "custom" || !name.chars().all(|c| c.is_ascii_lowercase()) {
+                return None;
+            }
+            let desc: Vec<&str> = it.collect();
+            let d = desc.join(" ");
+            let d = d.strip_suffix(" transition").unwrap_or(&d);
+            Some((name.to_string(), d.to_string()))
+        })
+        .collect()
 }
 
 /// Parse `ffmpeg -filters/-encoders/-decoders`. Rows are `<flags> <name> ...`; legend lines look like
@@ -174,6 +197,12 @@ fn parse_table(out: &str, _unused: usize) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_xfade_transition_list() {
+        let h = "xfade AVOptions:\n   transition        <int>        ..FV....... set cross fade transition (from -1 to 57) (default fade)\n     custom          -1           ..FV....... custom transition\n     fade            0            ..FV....... fade transition\n     wipeleft        1            ..FV....... wipe left transition\n   duration          <duration>   ..FV....... set cross fade duration (default 1)\n";
+        assert_eq!(parse_xfade(h), vec![("fade".to_string(), "fade".to_string()), ("wipeleft".to_string(), "wipe left".to_string())]);
+    }
 
     #[test]
     fn filter_file_style_by_version() {

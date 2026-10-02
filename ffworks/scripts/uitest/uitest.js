@@ -47,8 +47,10 @@
     step("second clip placed at playhead 00:00:04", vclips().length === 2 && Math.abs(parseFloat(vclips()[1].style.left) - 4 * px()) < 1, vclips().map((c) => c.style.left).join(","));
 
     // trim A end by -1s
+    const t0 = Date.now();
     await drag(vclips()[0].querySelector(".handle.right"), -px());
-    step("trim: dragging the right handle shortens clip A to 3s", Math.abs(parseFloat(vclips()[0].style.width) - 3 * px()) < 2, vclips()[0].style.width);
+    await waitFor(() => Math.abs(parseFloat(vclips()[0].style.width) - 3 * px()) < 2, 8000);
+    step("trim: dragging the right handle shortens clip A to 3s", Math.abs(parseFloat(vclips()[0].style.width) - 3 * px()) < 2, `${vclips()[0].style.width} after ${Date.now() - t0} ms`);
 
     // split B at 6s
     vclips()[1].dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, button: 0, clientX: center(vclips()[1])[0], clientY: center(vclips()[1])[1] }));

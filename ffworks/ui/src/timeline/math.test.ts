@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { cutsInsideClip } from "../components/AnalysisPanel";
 import { beatPoints, dbToGain, linkedIds, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
 import { fromSec, snapToFrame, timecode, toSec } from "../time";
 import type { Clip, Sequence } from "../types";
@@ -64,4 +65,12 @@ describe("timeline math", () => {
     expect(tickStep(200)).toBeLessThan(tickStep(10));
   });
   it("db to gain", () => expect(dbToGain(-6)).toBeCloseTo(0.501, 2));
+});
+
+describe("scene cuts", () => {
+  it("maps source-relative cuts into the clip, drops edge cuts, orders latest first", () => {
+    const c = { ...clip("v", "10", "6", "video", null, "2"), media: "m" }; // timeline 10..16 from source 2..8
+    // source cuts at 1 (before), 2.05 (too close to start), 4, 7, 7.95 (too close to end), 9 (after)
+    expect(cutsInsideClip(c, [1, 2.05, 4, 7, 7.95, 9])).toEqual([15, 12]);
+  });
 });

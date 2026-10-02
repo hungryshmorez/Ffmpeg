@@ -25,6 +25,8 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design.
 | Beat detection (ported from the browser app's `beat-detection.js`: spectral flux, adaptive peaks, median-interval BPM) via FFmpeg decode, cached; beat ticks on audio clips; snap to beats | done, tested (synthetic + FFmpeg click tracks, real GUI) |
 | Render queue: background jobs with priorities (export > background), configurable concurrency (default 1), cancel while queued or running, per-job FFmpeg log (also for failed/canceled), Queue panel | done, tested (real FFmpeg + real GUI) |
 | Transitions between adjacent video clips (10 FFmpeg `xfade` kinds + linked-audio `acrossfade`), centred on the cut so timeline length is unchanged; media-handle/adjacency/opacity validation with clear errors; Inspector UI and timeline marker | done, tested (pixel + audio verified in real FFmpeg, real GUI) |
+| Scene detection (via the `scenesdetect` crate) with "Split clip at scene cuts" as one undo step; loudness (LUFS/LRA/true peak via `ebur128`) with "Normalize to −14 LUFS" | done, tested (reference values, real video, GUI) |
+| All 57 FFmpeg `xfade` transitions, read from the installed FFmpeg (each rendered in tests) | done |
 | Keyframes, proxies | **not started** (rest of Phase 2) |
 | Automation DSL, macros, blueprints, analysis, glitch/datamosh labs, plugins | **not started** (Phases 3–10) |
 
@@ -50,10 +52,11 @@ Headless: `cargo run -p ffworks-cli -- command project.ffworks` prints the exact
 ## Tests
 
 ```bash
-cargo test --workspace            # 78 tests: time, model, commands/undo, effects, ffprobe parsing, real-FFmpeg e2e
+cargo test --workspace            # 91 tests: time, model, commands/undo, effects, ffprobe parsing, real-FFmpeg e2e
 (cd ui && npm test)               # timeline math + beat points
 scripts/uitest/run.sh             # headless GUI test under Xvfb (Linux): 36 steps in the real webview
 scripts/uitest/recovery.sh        # kill -9 crash-recovery test: 9 steps across 3 app launches
+scripts/uitest/analysis.sh        # scene detection + loudness through the Inspector: 6 steps
 scripts/uitest/transitions.sh     # transitions end-to-end: 13 checks incl. exported pixels and audio
 scripts/uitest/beats.sh           # beat detection, ticks, snap-to-beats: 6 steps
 scripts/uitest/relink.sh          # offline media + relink + FFmpeg-path settings: 10 steps across 2 launches

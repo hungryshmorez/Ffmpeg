@@ -5,6 +5,7 @@ import { useProject, useUi } from "../state/stores";
 import { CommitSlider } from "./CommitSlider";
 import { EffectsPanel } from "./EffectsPanel";
 import { TransitionPanel } from "./TransitionPanel";
+import { AnalysisPanel } from "./AnalysisPanel";
 
 export function Inspector() {
   const beats = useAnalysis((s) => s.beats);
@@ -77,6 +78,7 @@ export function Inspector() {
           })()}
         </div>
       )}
+      <AnalysisPanel video={videoClip} audio={audio} />
       {videoClip && <TransitionPanel clip={videoClip} track={findClip(seq, videoClip.id)!.track} seq={seq} />}
       {videoClip && <EffectsPanel clip={videoClip} />}
     </div>

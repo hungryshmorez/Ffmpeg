@@ -265,8 +265,34 @@ async fn get_beats(state: State<'_, AppState>, media_id: String) -> Result<ffwor
 }
 
 #[tauri::command]
-fn list_transitions() -> Vec<(&'static str, &'static str)> {
-    ffworks_core::transitions::KINDS.to_vec()
+async fn detect_scenes(state: State<'_, AppState>, media_id: String, threshold: f64) -> Result<ffworks_core::scenes::SceneAnalysis, String> {
+    let (tools, path, key) = media_for(&state, &media_id)?;
+    let duration = state.engine.lock().unwrap().project.media(&media_id).map_err(s)?.info.duration.as_f64();
+    let cache = state.cache_dir.clone();
+    tauri::async_runtime::spawn_blocking(move || ffworks_core::scenes::detect(&tools, &path, duration, &cache, &key, threshold)).await.map_err(s)?.map_err(s)
+}
+
+#[tauri::command]
+async fn measure_loudness(state: State<'_, AppState>, media_id: String) -> Result<ffworks_core::loudness::Loudness, String> {
+    let (tools, path, key) = media_for(&state, &media_id)?;
+    let cache = state.cache_dir.clone();
+    tauri::async_runtime::spawn_blocking(move || ffworks_core::loudness::analyze(&tools, &path, &cache, &key)).await.map_err(s)?.map_err(s)
+}
+
+#[tauri::command]
+fn list_transitions(state: State<AppState>) -> Vec<(String, String)> {
+    // what the installed FFmpeg really supports; falls back to the built-in list
+    match caps(&state) {
+        Some(c) if !c.xfade_transitions.is_empty() => c
+            .xfade_transitions
+            .into_iter()
+            .map(|(k, d)| {
+                let label = ffworks_core::transitions::KINDS.iter().find(|(n, _)| *n == k).map(|(_, l)| l.to_string()).unwrap_or_else(|| { let mut c = d.chars(); c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or(d.clone()) });
+                (k, label)
+            })
+            .collect(),
+        _ => ffworks_core::transitions::KINDS.iter().map(|(k, l)| (k.to_string(), l.to_string())).collect(),
+    }
 }
 
 #[tauri::command]
@@ -432,12 +458,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

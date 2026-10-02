@@ -11,7 +11,7 @@ sed -e "s|__A__|$W/m ü/a red.mp4|g" -e "s|__B__|$W/m ü/b_blue.mp4|g" -e "s|__P
 (cd ui && VITE_UITEST=1 npx vite build >/dev/null)
 touch src-tauri/src/lib.rs
 cargo build -p ffworks-app --features custom-protocol,uitest 2>&1 | tail -2
-export DISPLAY=:99
+export DISPLAY=:99 XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/cfg"  # isolate app state (autosaves/settings) from earlier runs
 pgrep Xvfb >/dev/null || { Xvfb :99 -screen 0 1600x1000x24 >/dev/null 2>&1 & sleep 2; }
 FFWORKS_UITEST_SCRIPT="$W/uitest.js" FFWORKS_UITEST_OUT="$W/report.json" WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 target/debug/ffworks-app >"$W/app.log" 2>&1 &
 APP=$!

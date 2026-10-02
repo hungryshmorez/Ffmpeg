@@ -338,7 +338,7 @@ fn transitions_validate_handles_adjacency_and_undo() {
     let (mut e, m, v, _) = engine();
     let (a, b) = two_clips(&mut e, &m, &v, 3, 4);
     let add = |k: &str, d: Rational| Command::AddTransition { clip_a: a.clone(), clip_b: b.clone(), kind: k.into(), duration: d };
-    assert!(e.dispatch(add("bogus", secs(1))).is_err());
+    assert!(e.dispatch(add("Bad;name", secs(1))).is_err(), "names go into a filter graph, so only plain lowercase names are accepted");
     let before = e.project.clone();
     e.dispatch(add("fade", r(1, 2))).unwrap(); // 15 frames -> snapped to 16 frames
     let t = e.project.active().unwrap().tracks[0].transitions[0].clone();
@@ -407,4 +407,23 @@ fn render_graph_splits_clips_around_a_transition() {
     // linked audio crossfades too
     assert_eq!(g.audio_transitions.len(), 1);
     assert_eq!(g.audio.len(), 2);
+}
+
+#[test]
+fn a_transition_the_installed_ffmpeg_lacks_is_refused_when_the_render_is_compiled() {
+    use ffworks_core::ffmpeg::{compile, ExportSettings, RenderOptions};
+    use ffworks_core::process::Capabilities;
+    let (mut e, m, v, _) = engine();
+    let (a, b) = two_clips(&mut e, &m, &v, 3, 4);
+    // a well-formed name that a newer FFmpeg might add is accepted by the model...
+    e.dispatch(Command::AddTransition { clip_a: a, clip_b: b, kind: "futuristicwipe".into(), duration: secs(1) }).unwrap();
+    let g = ffworks_core::render_graph::build(&e.project).unwrap();
+    let mut caps = Capabilities::default();
+    caps.filters.insert("xfade".into());
+    caps.filters.insert("acrossfade".into());
+    caps.encoders.insert("libx264".into());
+    caps.encoders.insert("aac".into());
+    caps.xfade_transitions = vec![("fade".into(), "fade".into())];
+    let r = compile(&g, &RenderOptions { output: "/tmp/x.mp4".into(), settings: ExportSettings::find("h264_mp4").unwrap(), range: None, scale_div: 1 }, Some(&caps));
+    assert!(matches!(r, Err(ffworks_core::Error::Validation(m)) if m.contains("futuristicwipe") && m.contains("newer FFmpeg")));
 }

@@ -663,11 +663,18 @@ fn dip_to_black_goes_dark_at_the_cut_and_the_transition_is_deterministic() {
 #[test]
 fn every_transition_kind_renders_in_real_ffmpeg() {
     let dir = tempfile::tempdir().unwrap();
-    for (kind, _) in ffworks_core::transitions::KINDS {
+    let t = tools();
+    let caps = Capabilities::discover(&t).unwrap();
+    assert!(caps.xfade_transitions.len() >= 40, "installed FFmpeg reports its xfade list: {}", caps.xfade_transitions.len());
+    // every transition the installed FFmpeg supports must render (range around the cut keeps this quick)
+    for (kind, _) in &caps.xfade_transitions {
         let eng = transition_project(dir.path(), kind);
+        let g = render_graph::build(&eng.project).unwrap();
         let out = dir.path().join(format!("{kind}.mp4"));
-        export(&eng, &out, "h264_mp4"); // panics with FFmpeg's message if the graph is rejected
-        assert!((probe(&tools(), &out).unwrap().duration.as_f64() - 4.0).abs() < 0.15, "{kind}");
+        let mut job = compile(&g, &RenderOptions { output: out.clone(), settings: ExportSettings::find("h264_mp4").unwrap(), range: Some((Rational::new(3, 2), Rational::new(5, 2))), scale_div: 2 }, Some(&caps)).unwrap();
+        job.program = t.ffmpeg.clone();
+        run_job(&t, &job, "k", "t", &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("{kind}: {e}"));
+        assert!((probe(&t, &out).unwrap().duration.as_f64() - 1.0).abs() < 0.15, "{kind}");
     }
 }
 
@@ -717,4 +724,33 @@ fn large_graphs_use_the_version_appropriate_file_option_and_still_render() {
     };
     assert!(log.args.iter().any(|a| a == want), "{:?}", log.args);
     assert!(dir.path().join("f.mp4").exists());
+}
+
+#[test]
+fn scene_detection_finds_cuts_in_a_real_video_and_loudness_matches_a_known_level() {
+    let dir = tempfile::tempdir().unwrap();
+    // 3 colour segments of 3 s each, concatenated -> cuts at 3 s and 6 s
+    let seg = |name: &str, color: &str| -> PathBuf {
+        let p = dir.path().join(name);
+        ffmpeg(&["-f", "lavfi", "-i", &format!("testsrc2=s=320x240:r=24:d=3,hue=h={color}"), "-c:v", "libx264", "-pix_fmt", "yuv420p", p.to_str().unwrap()]);
+        p
+    };
+    let (a, b, c) = (seg("a.mp4", "0"), seg("b.mp4", "120"), seg("c.mp4", "240"));
+    let list = dir.path().join("l.txt");
+    std::fs::write(&list, format!("file '{}'\nfile '{}'\nfile '{}'\n", a.display(), b.display(), c.display())).unwrap();
+    let all = dir.path().join("all.mp4");
+    ffmpeg(&["-f", "concat", "-safe", "0", "-i", list.to_str().unwrap(), "-c", "copy", all.to_str().unwrap()]);
+    let r = ffworks_core::scenes::detect(&tools(), &all, 9.0, &dir.path().join("cache"), "k", 27.0).unwrap();
+    assert_eq!(r.cuts.len(), 2, "{:?}", r.cuts);
+    assert!((r.cuts[0] - 3.0).abs() < 0.2 && (r.cuts[1] - 6.0).abs() < 0.2, "{:?}", r.cuts);
+    assert_eq!(r.scenes.len(), 3);
+    assert_eq!(ffworks_core::scenes::detect(&tools(), &all, 9.0, &dir.path().join("cache"), "k", 27.0).unwrap(), r, "cached");
+
+    // loudness: identical stereo sine whose peak is about -38.06 dBFS measures about -38.1 LUFS
+    let wav = dir.path().join("s.wav");
+    ffmpeg(&["-f", "lavfi", "-i", "sine=f=1000:r=48000:d=6", "-af", "volume=-20dB,pan=stereo|c0=c0|c1=c0", wav.to_str().unwrap()]);
+    let l = ffworks_core::loudness::analyze(&tools(), &wav, &dir.path().join("cache"), "w").unwrap();
+    // sine filter default amplitude is 1/8 (-18.06 dBFS) before the -20 dB volume
+    assert!((l.integrated_lufs.unwrap() - -38.1).abs() < 0.4, "{l:?}");
+    assert!(ffworks_core::loudness::analyze(&tools(), &all, &dir.path().join("cache"), "nov").is_err(), "no audio stream -> clean error");
 }
