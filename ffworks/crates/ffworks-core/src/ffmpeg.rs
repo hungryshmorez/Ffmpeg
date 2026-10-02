@@ -2,7 +2,7 @@
 //! No shell strings anywhere; arguments are an argv vector (spec §3, §52, §98).
 
 use crate::error::{Error, Result};
-use crate::process::Capabilities;
+use crate::process::{Capabilities, FilterFileStyle};
 use crate::render_graph::RenderGraph;
 use crate::time::Rational;
 use serde::{Deserialize, Serialize};
@@ -60,16 +60,29 @@ pub struct FfmpegJob {
     /// Timeline length being rendered, used to turn FFmpeg progress into a true percentage.
     pub total_duration: Rational,
     pub output: PathBuf,
+    /// Always pass the graph through a file (used by tests to exercise that path on small graphs).
+    pub force_file: bool,
 }
 
 impl FfmpegJob {
-    /// Full argv. If `script` is given the filter graph is read from that file (avoids the Windows
-    /// 32k command-line limit on large timelines); otherwise it is inlined.
-    pub fn argv(&self, script: Option<&Path>) -> Vec<String> {
+    /// Graphs up to this many characters are passed inline (works on every FFmpeg version); larger ones go through a file
+    /// to stay below the Windows 32 767-character command-line limit.
+    pub const INLINE_LIMIT: usize = 20_000;
+
+    pub fn needs_file(&self) -> bool {
+        self.filter_graph.len() > Self::INLINE_LIMIT || self.force_file
+    }
+
+    /// Full argv. With `script` the filter graph is read from that file using the syntax `style` names; otherwise it is inlined.
+    pub fn argv(&self, script: Option<(&Path, FilterFileStyle)>) -> Vec<String> {
         let mut a = self.pre.clone();
         match script {
-            Some(p) => {
+            Some((p, FilterFileStyle::Legacy)) => {
                 a.push("-filter_complex_script".into());
+                a.push(p.to_string_lossy().into_owned());
+            }
+            Some((p, FilterFileStyle::Slash)) => {
+                a.push("-/filter_complex".into());
                 a.push(p.to_string_lossy().into_owned());
             }
             None => {
@@ -301,7 +314,7 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
     post.push(opts.output.to_string_lossy().into_owned());
 
     // Unreferenced inputs would trigger "does not contain any stream" noise; graph building only adds used inputs.
-    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: opts.output.clone() })
+    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: opts.output.clone(), force_file: false })
 }
 
 /// Case-insensitive on Windows, exact elsewhere; compares canonical paths when both exist.

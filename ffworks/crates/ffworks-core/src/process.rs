@@ -85,6 +85,41 @@ pub fn explain_failure(stderr: &str) -> String {
     if hint.is_empty() { tail } else { format!("{hint} — {tail}") }
 }
 
+/// How to pass a filter graph from a file. FFmpeg 7.0 deprecated `-filter_complex_script` in favour of `-/filter_complex <file>`,
+/// and newer builds (8.x) no longer accept the old option at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilterFileStyle {
+    /// `-filter_complex_script <file>` (FFmpeg < 7)
+    Legacy,
+    /// `-/filter_complex <file>` (FFmpeg >= 7, and git/nightly builds)
+    Slash,
+}
+
+/// Parse the first line of `ffmpeg -version`. Unknown formats (git/nightly builds such as `N-123456-g...`) are treated as new.
+pub fn filter_file_style(version_line: &str) -> FilterFileStyle {
+    let v = version_line.split_whitespace().nth(2).unwrap_or("");
+    let digits: String = v.trim_start_matches(['n', 'N']).chars().take_while(|c| c.is_ascii_digit()).collect();
+    match digits.parse::<u32>() {
+        Ok(major) if v.starts_with(|c: char| c.is_ascii_digit() || c == 'n') && major < 7 => FilterFileStyle::Legacy,
+        _ => FilterFileStyle::Slash,
+    }
+}
+
+impl Tools {
+    /// Detected once per process (the installed FFmpeg does not change while running; a settings change restarts detection on next run).
+    pub fn filter_file_style(&self) -> FilterFileStyle {
+        use std::sync::Mutex;
+        static CACHE: Mutex<Vec<(PathBuf, FilterFileStyle)>> = Mutex::new(Vec::new());
+        let mut c = CACHE.lock().unwrap();
+        if let Some((_, st)) = c.iter().find(|(p, _)| *p == self.ffmpeg) {
+            return *st;
+        }
+        let st = self.run_capture(&self.ffmpeg, &["-version"], None).map(|o| filter_file_style(o.lines().next().unwrap_or(""))).unwrap_or(FilterFileStyle::Slash);
+        c.push((self.ffmpeg.clone(), st));
+        st
+    }
+}
+
 /// What the installed FFmpeg can actually do (spec §21). Never assume a build's capabilities.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Capabilities {
@@ -139,6 +174,17 @@ fn parse_table(out: &str, _unused: usize) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filter_file_style_by_version() {
+        assert_eq!(filter_file_style("ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023"), FilterFileStyle::Legacy);
+        assert_eq!(filter_file_style("ffmpeg version 4.4.2 Copyright"), FilterFileStyle::Legacy);
+        assert_eq!(filter_file_style("ffmpeg version n6.0 Copyright"), FilterFileStyle::Legacy);
+        assert_eq!(filter_file_style("ffmpeg version 7.0 Copyright"), FilterFileStyle::Slash);
+        assert_eq!(filter_file_style("ffmpeg version 8.0-essentials_build-www.gyan.dev Copyright"), FilterFileStyle::Slash);
+        assert_eq!(filter_file_style("ffmpeg version N-117770-g1234abc Copyright"), FilterFileStyle::Slash);
+        assert_eq!(filter_file_style("garbage"), FilterFileStyle::Slash);
+    }
 
     #[test]
     fn parses_encoder_table() {

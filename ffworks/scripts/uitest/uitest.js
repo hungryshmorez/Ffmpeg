@@ -168,7 +168,7 @@
       step("the other two jobs complete in the background", !!done, ids.map((id) => ($(`.job-row[data-job='${id}']`) || {}).textContent).join(" || "));
       const logBtn = [...$(`.job-row[data-job='${ids[0]}']`).querySelectorAll("button")].find((b) => b.textContent === "Log"); logBtn.click(); await sleep(500);
       const logTxt = ($(`.job-row[data-job='${ids[0]}'] pre`) || {}).textContent || "";
-      step("job log shows exit code 0 and the real FFmpeg command line", /exit code: 0/.test(logTxt) && /-filter_complex_script/.test(logTxt), logTxt.slice(0, 120));
+      step("job log shows exit code 0 and the real FFmpeg command line", /exit code: 0/.test(logTxt) && /-filter_complex/.test(logTxt), logTxt.slice(0, 120));
       let v1 = null, v2 = null, v3 = true;
       try { v1 = await inv("verify_output", { path: A }); v2 = await inv("verify_output", { path: B }); } catch (e) { v1 = null; }
       try { await inv("verify_output", { path: C }); } catch (e) { v3 = false; }

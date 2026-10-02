@@ -104,10 +104,14 @@ fn run_inner(
         };
     }
     tri!(std::fs::create_dir_all(temp_dir).map_err(|e| Error::io(temp_dir, e)));
-    // Write the filter graph to a managed temp file (never to a shell). Removed afterwards.
+    // Large graphs go through a managed temp file (never a shell); normal ones are inlined, which every FFmpeg version accepts.
     let script: PathBuf = temp_dir.join(format!("{job_id}.filtergraph"));
-    tri!(std::fs::write(&script, &job.filter_graph).map_err(|e| Error::io(&script, e)));
-    let args = job.argv(Some(&script));
+    let args = if job.needs_file() {
+        tri!(std::fs::write(&script, &job.filter_graph).map_err(|e| Error::io(&script, e)));
+        job.argv(Some((&script, tools.filter_file_style())))
+    } else {
+        job.argv(None)
+    };
 
     // Render to a partial file and rename on success, so a failed/canceled export never leaves a
     // truncated file at the destination and never clobbers a good one.

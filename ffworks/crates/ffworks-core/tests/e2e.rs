@@ -568,7 +568,7 @@ mod queue_tests {
         }
         let log = q.log(&high).expect("completed job has a log");
         assert_eq!(log.exit_code, Some(0));
-        assert!(log.args.iter().any(|a| a == "-filter_complex_script"));
+        assert!(log.args.iter().any(|a| a == "-filter_complex"), "normal-sized graphs are passed inline");
         assert!(q.log(&canceled_while_queued).is_none(), "a job that never ran has no log");
         q.clear_finished();
         assert!(q.snapshot().is_empty());
@@ -699,4 +699,22 @@ fn same_media_used_far_apart_keeps_audio_in_both_places() {
     assert!(mean_volume_db(&out, 0.3, 1.5) > -35.0, "first use has audio");
     assert!(mean_volume_db(&out, 6.3, 1.5) > -35.0, "second, much later use has audio");
     assert!(mean_volume_db(&out, 3.0, 2.0) < -60.0, "gap is silent");
+}
+
+#[test]
+fn large_graphs_use_the_version_appropriate_file_option_and_still_render() {
+    let dir = tempfile::tempdir().unwrap();
+    let (eng, _) = single_clip_project(dir.path(), "red");
+    let t = tools();
+    let g = render_graph::build(&eng.project).unwrap();
+    let mut job = compile(&g, &RenderOptions { output: dir.path().join("f.mp4"), settings: ExportSettings::find("h264_mp4").unwrap(), range: None, scale_div: 1 }, None).unwrap();
+    job.program = t.ffmpeg.clone();
+    job.force_file = true;
+    let log = run_job(&t, &job, "file", "export", &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).unwrap();
+    let want = match t.filter_file_style() {
+        ffworks_core::process::FilterFileStyle::Legacy => "-filter_complex_script",
+        ffworks_core::process::FilterFileStyle::Slash => "-/filter_complex",
+    };
+    assert!(log.args.iter().any(|a| a == want), "{:?}", log.args);
+    assert!(dir.path().join("f.mp4").exists());
 }
