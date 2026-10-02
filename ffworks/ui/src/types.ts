@@ -26,7 +26,10 @@ export interface StateView {
   history: string[];
   duration: Rational;
   offlineMedia: string[];
+  renderHash: string;
 }
+
+export interface PreviewInfo { path: string; start: Rational; end: Rational; renderHash: string; cached: boolean; scaleDiv: number }
 
 /** Commands accepted by the backend command bus (serde tag = "type"). */
 export type Command =

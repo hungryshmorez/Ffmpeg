@@ -40,6 +40,8 @@ struct StateView {
     history: Vec<String>,
     duration: Rational,
     offline_media: Vec<String>,
+    /// Content hash the processed preview must match to be considered current.
+    render_hash: String,
 }
 
 fn view(e: &Engine) -> StateView {
@@ -53,6 +55,7 @@ fn view(e: &Engine) -> StateView {
         history: e.history(),
         duration: e.project.active().map(|s| s.duration()).unwrap_or_default(),
         offline_media: e.offline_media(),
+        render_hash: ffworks_core::preview::project_hash(&e.project).unwrap_or_default(),
     }
 }
 
@@ -158,6 +161,36 @@ async fn get_thumbnails(app: AppHandle, state: State<'_, AppState>, media_id: St
     let scope = app.asset_protocol_scope();
     let _ = scope.allow_directory(&state.cache_dir, true);
     Ok(files.into_iter().map(|p| p.to_string_lossy().into_owned()).collect())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewInfo {
+    path: String,
+    start: Rational,
+    end: Rational,
+    render_hash: String,
+    cached: bool,
+    scale_div: u32,
+}
+
+/// Render (or reuse) a processed preview of `[start, end)` using the same compiler as export.
+#[tauri::command]
+async fn render_preview(app: AppHandle, state: State<'_, AppState>, start: String, end: String, scale_div: u32) -> Result<PreviewInfo, String> {
+    let (project, tools) = {
+        let e = state.engine.lock().unwrap();
+        (e.project.clone(), e.tools.clone())
+    };
+    let caps = caps(&state);
+    let cache = state.cache_dir.clone();
+    let (start, end) = (start.parse::<Rational>()?, end.parse::<Rational>()?);
+    let render_hash = ffworks_core::preview::project_hash(&project).map_err(s)?;
+    let r = tauri::async_runtime::spawn_blocking(move || ffworks_core::preview::render(&tools, caps.as_ref(), &project, start, end, scale_div, &cache, &CancelToken::new(), &mut |_| {}))
+        .await
+        .map_err(s)?
+        .map_err(s)?;
+    let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
+    Ok(PreviewInfo { path: r.path.to_string_lossy().into_owned(), start: r.start, end: r.end, render_hash, cached: r.cached, scale_div })
 }
 
 #[tauri::command]
@@ -314,12 +347,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            list_effects, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
+            list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            list_effects, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
+            list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

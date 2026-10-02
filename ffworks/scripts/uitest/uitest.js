@@ -99,6 +99,20 @@
     step("playback advances the playhead in real time", t1 > 0.8 && t1 < 1.6, t1);
     step("monitor attaches the active clip's source", !!v.src, v.src);
 
+    // processed preview: render, verify it is used, goes stale on edit, and is current again after redo
+    {
+      window.__ffworks.usePlayhead.getState().setT(1.0);
+      const b = $$("button").find((x) => x.textContent.includes("Render preview")); b.click();
+      const ok = await waitFor(() => $(".bypass-badge.ok"), 60000);
+      step("render preview produces a processed preview shown in the monitor", !!ok, ok && ok.textContent);
+      R.info.previewSrc = $(".monitor video").src;
+      step("monitor plays the rendered preview file", /previews/.test(decodeURIComponent($(".monitor video").src)), $(".monitor video").src);
+      clickBtn("Undo"); await sleep(300);
+      step("an edit marks the preview out of date (never shown as current)", !!$$(".bypass-badge").find((x) => /out of date/.test(x.textContent)) && !$(".bypass-badge.ok"));
+      clickBtn("Redo"); await sleep(300);
+      step("redo restores the identical project, so the cached preview is current again", !!$(".bypass-badge.ok"));
+    }
+
     // save, wipe, reopen
     window.__ffworks.useUi.getState().select(null);
     const before = JSON.stringify(view().project.sequences);

@@ -10,6 +10,7 @@ pub mod ffprobe;
 pub mod jobs;
 pub mod migrate;
 pub mod patch;
+pub mod preview;
 pub mod process;
 pub mod project;
 pub mod render_graph;

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { Command, EffectDef, ExportPreset, JobEvent, StateView, Waveform } from "./types";
+import type { Command, EffectDef, ExportPreset, JobEvent, PreviewInfo, StateView, Waveform } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -15,6 +15,7 @@ export const api = {
   getWaveform: (mediaId: string) => invoke<Waveform>("get_waveform", { mediaId }),
   getThumbnails: (mediaId: string) => invoke<string[]>("get_thumbnails", { mediaId }),
   listEffects: () => invoke<EffectDef[]>("list_effects"),
+  renderPreview: (start: string, end: string, scaleDiv: number) => invoke<PreviewInfo>("render_preview", { start, end, scaleDiv }),
   listExportPresets: () => invoke<ExportPreset[]>("list_export_presets"),
   previewCommand: (preset: string, output: string) => invoke<string>("preview_command", { preset, output }),
   startExport: (preset: string, output: string) => invoke<string>("start_export", { preset, output }),

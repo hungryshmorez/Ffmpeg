@@ -1,8 +1,10 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "../api";
 import { fpsOf, timecode, toSec } from "../time";
 import { clipAt, dbToGain, sourceTime, times, visibleVideoAt } from "../timeline/math";
-import { usePlayhead, useProject } from "../state/stores";
+import { usePlayhead, useProject, useUi } from "../state/stores";
+import { fromSec } from "../time";
 import type { Sequence, Track } from "../types";
 
 /** Keeps a media element's src/time/volume in step with the timeline clock. */
@@ -31,12 +33,12 @@ function useSyncedElement(ref: React.RefObject<HTMLMediaElement | null>, url: st
   });
 }
 
-function AudioLane({ track, seq, t, playing }: { track: Track; seq: Sequence; t: number; playing: boolean }) {
+function AudioLane({ track, seq, t, playing, silenced }: { track: Track; seq: Sequence; t: number; playing: boolean; silenced: boolean }) {
   const view = useProject((s) => s.view)!;
   const ref = useRef<HTMLAudioElement>(null);
   const clip = clipAt(track, t);
   const media = clip ? view.project.media.find((m) => m.id === clip.media) : undefined;
-  const url = clip && media ? convertFileSrc(media.path) : null;
+  const url = clip && media && !silenced ? convertFileSrc(media.path) : null;
   // Preview volume cannot exceed unity; export applies the full gain.
   const vol = clip ? dbToGain(clip.gain_db + track.gain_db) : 0;
   useSyncedElement(ref, url, clip ? sourceTime(clip, t) : 0, playing, vol, track.muted);
@@ -56,7 +58,33 @@ export function Monitor() {
 
   const vis = visibleVideoAt(seq, t);
   const media = vis ? view.project.media.find((m) => m.id === vis.clip.media) : undefined;
-  useSyncedElement(videoRef, vis && media ? convertFileSrc(media.path) : null, vis ? sourceTime(vis.clip, t) : 0, playing, 0, true);
+
+  // A processed preview is only used while it matches the project's current content hash and covers the playhead.
+  const preview = useUi((s) => s.preview);
+  const busy = useUi((s) => s.previewBusy);
+  const [div, setDiv] = useState(2);
+  const previewCurrent = preview !== null && preview.renderHash === view.renderHash;
+  const usePreview = previewCurrent && t >= toSec(preview.start) && t < toSec(preview.end);
+  const videoUrl = usePreview ? convertFileSrc(preview.path) : vis && media ? convertFileSrc(media.path) : null;
+  const videoTime = usePreview ? t - toSec(preview.start) : vis ? sourceTime(vis.clip, t) : 0;
+  // The preview file carries the mixed audio, so it plays unmuted and the per-track source audio is silenced.
+  useSyncedElement(videoRef, videoUrl, videoTime, playing, 1, !usePreview);
+
+  const renderPreview = async () => {
+    const dur = toSec(view.duration);
+    if (dur <= 0) return useProject.getState().toast("error", "Nothing on the timeline to preview");
+    const span = 10;
+    const start = Math.max(0, Math.min(t, dur - span));
+    useUi.getState().setPreviewBusy(true);
+    try {
+      useUi.getState().setPreview(await api.renderPreview(fromSec(start), fromSec(Math.min(dur, start + span)), div));
+    } catch (e) {
+      useProject.getState().toast("error", `Preview failed: ${e}`);
+    } finally {
+      useUi.getState().setPreviewBusy(false);
+    }
+  };
+  const effectsActive = !!vis && (vis.clip.opacity < 1 || vis.clip.effects.some((e) => e.enabled));
 
   // Playback clock: wall-clock driven so audio/video drift is corrected against it, not the other way round.
   const durRef = useRef(duration);
@@ -97,12 +125,14 @@ export function Monitor() {
   return (
     <div className="monitor" aria-label="Program monitor">
       <div className="monitor-screen" style={{ aspectRatio: `${width} / ${height}` }}>
-        <video ref={videoRef} muted playsInline preload="auto" style={{ visibility: vis ? "visible" : "hidden" }} />
-        {!vis && <div className="gap-label">{seq.tracks.some((x) => x.clips.length) ? "no video at playhead" : "Import media and add it to the timeline"}</div>}
-        {vis && (vis.clip.opacity < 1 || vis.clip.effects.some((e) => e.enabled)) && <div className="bypass-badge" role="status">Effects bypassed in preview — export to see them</div>}
-        <div className="monitor-note">Source preview — edit decisions only (cuts, gaps, volume, mute). Effects and opacity are not rendered here; export is the authoritative render.</div>
+        <video ref={videoRef} playsInline preload="auto" style={{ visibility: vis || usePreview ? "visible" : "hidden" }} />
+        {!vis && !usePreview && <div className="gap-label">{seq.tracks.some((x) => x.clips.length) ? "no video at playhead" : "Import media and add it to the timeline"}</div>}
+        {usePreview && <div className="bypass-badge ok" role="status">Processed preview · 1/{preview.scaleDiv} resolution</div>}
+        {!usePreview && preview !== null && !previewCurrent && <div className="bypass-badge" role="status">Preview out of date — render again</div>}
+        {!usePreview && effectsActive && (preview === null || previewCurrent) && <div className="bypass-badge" role="status">Effects bypassed — render a preview or export to see them</div>}
+        <div className="monitor-note">Source preview — edit decisions only (cuts, gaps, volume, mute). Effects and opacity appear only in a rendered preview; export is the authoritative render.</div>
       </div>
-      {audioTracks.map((tr) => <AudioLane key={tr.id} track={tr} seq={seq} t={t} playing={playing} />)}
+      {audioTracks.map((tr) => <AudioLane key={tr.id} track={tr} seq={seq} t={t} playing={playing} silenced={usePreview} />)}
       <div className="transport" role="toolbar" aria-label="Transport">
         <span className="timecode" aria-live="off">{timecode(t, fps)}</span>
         <button title="Previous edit" onClick={prevEdit}>⏮</button>
@@ -113,6 +143,11 @@ export function Monitor() {
         <button title="Next edit" onClick={nextEdit}>⏭</button>
         <label className="check"><input type="checkbox" onChange={(e) => (loop.current = e.target.checked)} /> Loop</label>
         <span className="timecode dim">{timecode(duration, fps)}</span>
+        <span className="sep" />
+        <select aria-label="Preview quality" value={div} onChange={(e) => setDiv(Number(e.target.value))}>
+          <option value={1}>Full</option><option value={2}>1/2</option><option value={4}>1/4</option><option value={8}>1/8</option>
+        </select>
+        <button disabled={busy} onClick={() => void renderPreview()} title="Render a processed preview of the next 10 seconds from the playhead">{busy ? "Rendering preview…" : "Render preview"}</button>
       </div>
     </div>
   );

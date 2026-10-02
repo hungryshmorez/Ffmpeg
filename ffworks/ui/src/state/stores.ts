@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "../api";
-import type { Command, StateView } from "../types";
+import type { Command, PreviewInfo, StateView } from "../types";
 
 /** Persistent project state mirrored from the Rust engine (serialisable; the engine is the source of truth). */
 interface ProjectStore {
@@ -53,6 +53,10 @@ export const usePlayhead = create<PlayheadStore>((set) => ({
 
 /** Transient UI state: never saved in the project file. */
 interface UiStore {
+  preview: PreviewInfo | null;
+  previewBusy: boolean;
+  setPreview: (p: PreviewInfo | null) => void;
+  setPreviewBusy: (b: boolean) => void;
   pxPerSec: number;
   selected: string | null;
   exportOpen: boolean;
@@ -63,6 +67,10 @@ interface UiStore {
   setDiagOpen: (o: boolean) => void;
 }
 export const useUi = create<UiStore>((set) => ({
+  preview: null,
+  previewBusy: false,
+  setPreview: (preview) => set({ preview }),
+  setPreviewBusy: (previewBusy) => set({ previewBusy }),
   pxPerSec: 80,
   selected: null,
   exportOpen: false,

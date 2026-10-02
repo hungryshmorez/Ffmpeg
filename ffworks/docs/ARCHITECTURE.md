@@ -50,6 +50,10 @@ A registry of `EffectDef`s (id, category, required FFmpeg filters, `ParamDef`s w
 
 **Preview/final parity:** preview renders (`range`, `scale_div`) use the same compiler; only resolution/range differ.
 
+## Preview (`preview.rs`)
+
+`preview::render` compiles the same render graph with a `range` and `scale_div` into a cached `previews/<key>.mp4`. The key is a SHA-256 of the project JSON (minus the display name) + range + quality, so any edit yields a new key and the UI compares `renderHash` to decide whether a preview is current. Cached hits skip FFmpeg. Not yet done: per-range invalidation, background pre-render, frame cache.
+
 ## Jobs (`jobs.rs`)
 
 `run_job` executes on a worker thread with real progress from FFmpeg `-progress pipe:1` (`out_time_us` ÷ timeline length → fraction; no fake percentages), ETA, cancellation (watchdog kills the process tree), stderr capture, and a `JobLog` (executable, argv, timestamps, exit code, stderr). Output goes to `name.ffworks-partial.ext` and is renamed on success, so a failed/cancelled export never leaves a truncated file or clobbers a good one. Failures get a plain-language hint (`explain_failure`) alongside the raw log.

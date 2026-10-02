@@ -368,3 +368,33 @@ fn missing_filter_is_reported_before_running() {
     let r = compile(&g, &RenderOptions { output: dir.path().join("o.mp4"), settings: ExportSettings::find("h264_mp4").unwrap(), range: None, scale_div: 1 }, Some(&caps));
     assert!(matches!(r, Err(Error::Validation(m)) if m.contains("gblur")));
 }
+
+#[test]
+fn processed_preview_shows_effects_is_cached_and_invalidates() {
+    use ffworks_core::preview;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut eng, clip) = single_clip_project(dir.path(), "red");
+    let t = tools();
+    let cache = dir.path().join("cache");
+    let render = |eng: &Engine| preview::render(&t, None, &eng.project, secs(0), secs(2), 2, &cache, &CancelToken::new(), &mut |_| {}).unwrap();
+
+    let plain = render(&eng);
+    assert!(!plain.cached);
+    let info = probe(&t, &plain.path).unwrap();
+    assert_eq!((info.video[0].width, info.video[0].height), (160, 120), "half resolution");
+    assert!(pixel_at(&plain.path, 1.0).0 > 150, "unprocessed preview is red");
+    assert!(render(&eng).cached, "same project + range reuses the file");
+
+    let mut o = std::collections::BTreeMap::new();
+    o.insert("amount".to_string(), 0.0);
+    eng.dispatch(Command::AddEffect { clip, effect: "saturation".into(), params: o, index: None }).unwrap();
+    let fx = render(&eng);
+    assert_ne!(fx.key, plain.key, "an edit must change the key");
+    assert!(!fx.cached);
+    let g = pixel_at(&fx.path, 1.0);
+    assert!((g.0 as i32 - g.1 as i32).abs() < 25, "processed preview must show the effect (grey), got {g:?}");
+
+    // renaming the project does not invalidate
+    eng.dispatch(Command::RenameProject { name: "other".into() }).unwrap();
+    assert!(render(&eng).cached);
+}
