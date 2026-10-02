@@ -37,6 +37,7 @@ fn render(eng: &Engine, tools: &Tools, out: &Path, preset: &str, show_progress: 
     let caps = Capabilities::discover(tools).ok();
     let mut job = compile_project(&eng.project, &RenderOptions { output: out.to_path_buf(), settings: ExportSettings::find(preset)?, range: None, scale_div: 1 }, caps.as_ref())?;
     job.program = tools.ffmpeg.clone();
+    ffworks_core::diskspace::check(&job.output, preset, job.total_duration.as_f64())?;
     let tmp = std::env::temp_dir().join("ffworks-cli");
     let mut last = -1.0;
     run_job(tools, &job, "cli", "render", &CancelToken::new(), &tmp, &mut |s| {

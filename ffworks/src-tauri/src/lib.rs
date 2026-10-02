@@ -815,6 +815,7 @@ fn preview_command(state: State<AppState>, preset: String, output: String, engin
 #[tauri::command]
 fn start_export(state: State<AppState>, preset: String, output: String, engine: Option<String>) -> Result<String, String> {
     let job = build_job(&state, &preset, &output, None, 1, engine.as_deref())?;
+    ffworks_core::diskspace::check(&job.output, &preset, job.total_duration.as_f64()).map_err(s)?;
     Ok(state.queue.submit(job, "export", PRIORITY_EXPORT))
 }
 
