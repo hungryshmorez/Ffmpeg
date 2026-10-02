@@ -45,7 +45,8 @@
     await waitFor(async () => true); await sleep(900);
     const diag = await inv("get_diagnostics");
     step("choosing Build A makes the app run that ffmpeg", /ffA/.test(diag.ffmpegPath), diag.ffmpegPath);
-    step("the dialog marks it in use", /in use/.test($("[data-engine='" + idA + "']").textContent));
+    const marked = await waitFor(() => /in use/.test(($("[data-engine='" + idA + "']") || { textContent: "" }).textContent), 10000);
+    step("the dialog marks it in use (after it re-reads every build)", !!marked, ($("[data-engine='" + idA + "']") || { textContent: "missing" }).textContent.slice(0, 120));
 
     // an export can name another build; the Command Inspector and the output prove which one ran
     await window.__ffworks.importPaths(["__SRC__"]); await waitFor(() => $$(".media-item").length === 1);
