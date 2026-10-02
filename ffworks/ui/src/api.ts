@@ -38,6 +38,7 @@ export const api = {
   relinkMedia: (mediaId: string, path: string) => invoke<StateView>("relink_media", { mediaId, path }),
   getFavourites: () => invoke<Favourites>("get_favourites"),
   setFavourites: (favourites: Favourites) => invoke<Favourites>("set_favourites", { favourites }),
+  contactSheet: (clip: string, count: number, stack: number, pool: string, seed: number | null, at: number) => invoke<{ path: string; columns: number; rows: number; seeds: number[]; effects: string[][]; baseSeed: number }>("contact_sheet", { clip, count, stack, pool, seed, at }),
   randomEffects: (clip: string, count: number, pool: string, seed?: number) => invoke<RandomResult>("random_effects", { clip, count, pool, seed: seed ?? null }),
   randomTransitions: (clip: string, count: number, pool: string, seed?: number) => invoke<RandomResult>("random_transitions", { clip, count, pool, seed: seed ?? null, duration: null }),
   listTransitions: () => invoke<[string, string][]>("list_transitions"),

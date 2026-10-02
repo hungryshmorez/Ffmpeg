@@ -14,6 +14,7 @@ import { EnginesDialog } from "./components/EnginesDialog";
 import { DemoDialog } from "./components/DemoDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { SnapshotsDialog } from "./components/SnapshotsDialog";
+import { VariationsDialog } from "./components/VariationsDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -147,6 +148,7 @@ export default function App() {
       <DemoDialog />
       <CommandPalette />
       <SnapshotsDialog />
+      <VariationsDialog />
       <QueuePanel />
       <RecoveryDialog />
       <Toasts />

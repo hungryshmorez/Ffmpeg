@@ -98,6 +98,7 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           </div>
         )}
       </div>
+      {clip.kind === "video" && <div className="field"><button onClick={() => useUi.getState().setVariationsClip(clip.id)} title="See a sheet of random looks for this clip and pick one">Look variations…</button></div>}
       <RandomBar kind="effects" roll={(pool, count, seed) => api.randomEffects(clip.id, count, pool, seed)} />
       {clip.effects.length === 0 && <p className="muted pad">No effects.</p>}
       {clip.effects.map((fx, i) => {

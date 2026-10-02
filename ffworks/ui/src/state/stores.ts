@@ -84,6 +84,9 @@ interface UiStore {
   filtersOpen: boolean;
   demoOpen: boolean;
   paletteOpen: boolean;
+  /** Clip whose variation sheet is open, or null. */
+  variationsClip: string | null;
+  setVariationsClip: (c: string | null) => void;
   snapshotsOpen: boolean;
   setSnapshotsOpen: (o: boolean) => void;
   recording: boolean;
@@ -119,6 +122,8 @@ export const useUi = create<UiStore>((set) => ({
   filtersOpen: false,
   demoOpen: false,
   paletteOpen: false,
+  variationsClip: null,
+  setVariationsClip: (variationsClip) => set({ variationsClip }),
   snapshotsOpen: false,
   setSnapshotsOpen: (snapshotsOpen) => set({ snapshotsOpen }),
   recording: false,

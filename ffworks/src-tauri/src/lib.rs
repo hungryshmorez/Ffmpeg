@@ -731,6 +731,27 @@ fn random_effects(state: State<AppState>, clip: String, count: usize, pool: Stri
     Ok(serde_json::json!({ "state": view(&e), "seed": seed }))
 }
 
+/// A tiled picture of `count` random looks for `clip` at timeline time `at`; `seed` makes it reproducible.
+#[tauri::command]
+async fn contact_sheet(app: AppHandle, state: State<'_, AppState>, clip: String, count: usize, stack: usize, pool: String, seed: Option<u64>, at: f64) -> Result<serde_json::Value, String> {
+    let favs = ffworks_core::settings::Settings::load(&state.settings_file).favourites;
+    let group = favs.pool(&pool).map_err(s)?;
+    if group.is_some_and(|g| g.effects.is_empty()) {
+        return Err(format!("No favourite effects in '{pool}' yet: star some in the effect list first."));
+    }
+    let pool_ids = effect_pool(&state, group);
+    let (project, tools) = {
+        let e = state.engine.lock().unwrap();
+        (e.project.clone(), e.tools.clone())
+    };
+    let caps = caps(&state);
+    let seed = seed.unwrap_or_else(ffworks_core::random::fresh_seed);
+    let dir = state.cache_dir.join("contact");
+    let sheet = tauri::async_runtime::spawn_blocking(move || ffworks_core::contact::render_sheet(&tools, caps.as_ref(), &project, &clip, count, stack, pool_ids.as_deref(), seed, ffworks_core::Rational::from_secs_f64(at.max(0.0)), &dir)).await.map_err(s)?.map_err(s)?;
+    let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
+    Ok(serde_json::json!({ "path": sheet.path, "columns": sheet.columns, "rows": sheet.rows, "seeds": sheet.seeds, "effects": sheet.effects, "baseSeed": seed }))
+}
+
 /// Add random transitions on up to `count` consecutive cuts starting after `clip`, as one undoable step. Cuts that cannot
 /// take one (no media handles, retimed clips...) are skipped and reported.
 #[tauri::command]
@@ -966,12 +987,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

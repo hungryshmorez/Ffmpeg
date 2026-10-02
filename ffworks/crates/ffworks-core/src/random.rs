@@ -34,7 +34,8 @@ impl Rng {
 
 /// A seed from the clock, for when the user did not ask for a specific one. Callers return it so the result is reproducible.
 pub fn fresh_seed() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1)
+    // below 2^52 so the seed survives a round trip through JSON numbers in the UI (JavaScript doubles are exact only up to 2^53)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) & ((1u64 << 52) - 1)
 }
 
 /// Picks `count` items from `candidates` without repeats until they run out, then refills.
@@ -141,6 +142,18 @@ pub fn transition_stack(project: &Project, clip: &str, count: usize, seed: u64, 
         cur_id = b_id;
     }
     Ok(plan)
+}
+
+#[cfg(test)]
+mod seed_tests {
+    #[test]
+    fn fresh_seeds_are_exact_in_javascript() {
+        for _ in 0..1000 {
+            let s = super::fresh_seed();
+            assert!(s < (1u64 << 52));
+            assert_eq!(s as f64 as u64, s);
+        }
+    }
 }
 
 #[cfg(test)]
