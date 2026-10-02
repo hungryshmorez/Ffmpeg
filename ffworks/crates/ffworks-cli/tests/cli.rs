@@ -85,3 +85,19 @@ fn package_collects_a_project_with_its_media() {
     let (ok, _, e) = ffworks(&["package", dir.path().join("none.ffworks").to_str().unwrap(), out.to_str().unwrap()]);
     assert!(!ok && !e.is_empty());
 }
+
+#[test]
+fn watch_once_converts_stable_files_once_and_reports_bad_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let inp = dir.path().join("in");
+    std::fs::create_dir_all(&inp).unwrap();
+    let m = clip(dir.path(), "m.mp4");
+    std::fs::copy(&m, inp.join("a.mp4")).unwrap();
+    std::fs::write(inp.join("notes.txt"), "hello").unwrap();
+    let out = dir.path().join("out");
+    let (ok, o, e) = ffworks(&["watch", inp.to_str().unwrap(), out.to_str().unwrap(), "h264_mp4", "--once"]);
+    assert!(ok, "{o} {e}");
+    assert!(o.contains("ok     a.mp4") && o.contains("FAILED notes.txt"), "{o}");
+    assert_eq!(o.lines().filter(|l| l.starts_with("ok")).count(), 1, "converted once");
+    assert!(out.join("a.mp4").exists());
+}

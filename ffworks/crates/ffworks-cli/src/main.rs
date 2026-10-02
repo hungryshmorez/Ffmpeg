@@ -10,6 +10,7 @@
 //!   ffworks detect <media> <silence|black|freeze> [level] [min-seconds]
 //!   ffworks sync <reference-media> <other-media>              how much later the second recording is
 //!   ffworks package <project> <folder>                        copy the project and all its media into one folder
+//!   ffworks watch <input-dir> <output-dir> [preset] [--once]  convert files as they appear (once they stop growing)
 //!   ffworks batch <input-dir> <output-dir> [preset]           transcode every media file in a folder
 use ffworks_core::commands::Command;
 use ffworks_core::detect::{detect, Kind};
@@ -49,6 +50,18 @@ fn render(eng: &Engine, tools: &Tools, out: &Path, preset: &str, show_progress: 
         }
     })?;
     Ok(())
+}
+
+/// Transcode one media file to `out` with `preset` (a one-clip project rendered through the normal pipeline).
+fn convert_file(tools: &Tools, f: &Path, name: &str, out: &Path, preset: &str) -> ffworks_core::Result<()> {
+    let info = ffworks_core::ffprobe::probe(tools, f)?;
+    let (w, h, fps) = info.video.first().map(|v| (v.width, v.height, v.fps)).unwrap_or((1920, 1080, None));
+    let settings = ProjectSettings { width: w.max(2) & !1, height: h.max(2) & !1, fps: fps.unwrap_or(ffworks_core::time::Fps::new(30, 1)), sample_rate: 48000 };
+    let mut eng = Engine::new(name, settings, tools.clone());
+    let m = eng.import_media(f)?;
+    let track = eng.project.active()?.tracks.iter().find(|t| t.kind == if info.has_video() { ffworks_core::project::TrackKind::Video } else { ffworks_core::project::TrackKind::Audio }).map(|t| t.id.clone()).ok_or_else(|| Error::validation("no suitable track"))?;
+    eng.dispatch(Command::PlaceClip { media: m, track, start: ffworks_core::Rational::ZERO, source_in: None, duration: None, with_audio: true, audio_track: None })?;
+    render(&eng, tools, out, preset, false)
 }
 
 fn presets_for(tools: &Tools) -> Vec<ExportSettings> {
@@ -146,6 +159,43 @@ fn run() -> ffworks_core::Result<()> {
             let r = ffworks_core::package::package(&eng.project, Path::new(folder), &name)?;
             println!("packaged {} ({} media files, {:.1} MB)", r.project_file.display(), r.files_copied, r.bytes as f64 / 1e6);
         }
+        Some("watch") => {
+            let (input, output) = (args.get(1).ok_or_else(|| usage("watch <input-dir> <output-dir> [preset] [--once]"))?, args.get(2).ok_or_else(|| usage("watch <input-dir> <output-dir> [preset] [--once]"))?);
+            let preset = args.get(3).filter(|a| !a.starts_with("--")).cloned().unwrap_or_else(|| "h264_mp4".into());
+            let once = args.iter().any(|a| a == "--once");
+            let st = ExportSettings::find(&preset)?;
+            std::fs::create_dir_all(output).map_err(|e| Error::io(Path::new(output), e))?;
+            // a file is converted once it has stopped growing (same size on two scans), then never again this run
+            let mut seen: std::collections::HashMap<PathBuf, u64> = Default::default();
+            let mut done: std::collections::HashSet<PathBuf> = Default::default();
+            println!("watching {input} -> {output} ({preset}); Ctrl+C to stop");
+            loop {
+                let mut files: Vec<PathBuf> = std::fs::read_dir(input).map_err(|e| Error::io(Path::new(input), e))?.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_file()).collect();
+                files.sort();
+                let mut pending = false;
+                for f in files {
+                    if done.contains(&f) {
+                        continue;
+                    }
+                    let size = std::fs::metadata(&f).map(|m| m.len()).unwrap_or(0);
+                    if size == 0 || seen.insert(f.clone(), size) != Some(size) {
+                        pending = true;
+                        continue;
+                    }
+                    let name = f.file_name().unwrap().to_string_lossy().into_owned();
+                    let out = Path::new(output).join(Path::new(&name).with_extension(&st.extension));
+                    match convert_file(&tools, &f, &name, &out, &preset) {
+                        Ok(()) => println!("ok     {name} -> {}", out.display()),
+                        Err(e) => println!("FAILED {name}: {e}"),
+                    }
+                    done.insert(f);
+                }
+                if once && !pending {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(if once { 1 } else { 3 }));
+            }
+        }
         Some("batch") => {
             let (input, output) = (args.get(1).ok_or_else(|| usage("batch <input-dir> <output-dir> [preset]"))?, args.get(2).ok_or_else(|| usage("batch <input-dir> <output-dir> [preset]"))?);
             let preset = args.get(3).cloned().unwrap_or_else(|| "h264_mp4".into());
@@ -157,16 +207,7 @@ fn run() -> ffworks_core::Result<()> {
             for f in files {
                 let name = f.file_name().unwrap().to_string_lossy().into_owned();
                 let out = Path::new(output).join(Path::new(&name).with_extension(&st.extension));
-                let r = (|| -> ffworks_core::Result<()> {
-                    let info = ffworks_core::ffprobe::probe(&tools, &f)?;
-                    let (w, h, fps) = info.video.first().map(|v| (v.width, v.height, v.fps)).unwrap_or((1920, 1080, None));
-                    let settings = ProjectSettings { width: w.max(2) & !1, height: h.max(2) & !1, fps: fps.unwrap_or(ffworks_core::time::Fps::new(30, 1)), sample_rate: 48000 };
-                    let mut eng = Engine::new(&name, settings, tools.clone());
-                    let m = eng.import_media(&f)?;
-                    let track = eng.project.active()?.tracks.iter().find(|t| t.kind == if info.has_video() { ffworks_core::project::TrackKind::Video } else { ffworks_core::project::TrackKind::Audio }).map(|t| t.id.clone()).ok_or_else(|| Error::validation("no suitable track"))?;
-                    eng.dispatch(Command::PlaceClip { media: m, track, start: ffworks_core::Rational::ZERO, source_in: None, duration: None, with_audio: true, audio_track: None })?;
-                    render(&eng, &tools, &out, &preset, false)
-                })();
+                let r = convert_file(&tools, &f, &name, &out, &preset);
                 match r {
                     Ok(()) => { ok += 1; println!("ok     {name} -> {}", out.display()); }
                     Err(e) => { failed += 1; println!("FAILED {name}: {e}"); }
@@ -177,7 +218,7 @@ fn run() -> ffworks_core::Result<()> {
                 return Err(Error::validation(format!("{failed} file(s) failed")));
             }
         }
-        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|detect|sync|package|batch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
+        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
     }
     Ok(())
 }
