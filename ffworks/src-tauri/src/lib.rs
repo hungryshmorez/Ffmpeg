@@ -314,9 +314,36 @@ fn list_transitions(state: State<AppState>) -> Vec<(String, String)> {
     available_transitions(&state)
 }
 
+/// Effects to offer: the built-in ones plus installed frei0r plugins, the latter only when this FFmpeg has the frei0r filter.
+fn usable_effects(state: &AppState) -> Vec<ffworks_core::effects::EffectDef> {
+    let has_frei0r = caps(state).is_some_and(|c| c.has_filter("frei0r"));
+    ffworks_core::effects::registry().into_iter().filter(|d| has_frei0r || d.category != "Frei0r").collect()
+}
+
 #[tauri::command]
-fn list_effects() -> Vec<ffworks_core::effects::EffectDef> {
-    ffworks_core::effects::registry()
+fn list_effects(state: State<AppState>) -> Vec<ffworks_core::effects::EffectDef> {
+    usable_effects(&state)
+}
+
+/// frei0r: plugin folders, the plugins found there that FFWORKS can drive, and whether this FFmpeg can load them.
+#[tauri::command]
+fn frei0r_status(state: State<AppState>) -> serde_json::Value {
+    let offered: Vec<String> = ffworks_core::frei0r::offered().into_iter().map(|d| d.name.to_string()).collect();
+    serde_json::json!({
+        "ffmpegHasFilter": caps(&state).is_some_and(|c| c.has_filter("frei0r")),
+        "dirs": ffworks_core::settings::Settings::load(&state.settings_file).frei0r_dirs,
+        "installed": ffworks_core::frei0r::installed().len(),
+        "offered": offered,
+    })
+}
+
+#[tauri::command]
+fn set_frei0r_dirs(state: State<AppState>, dirs: Vec<String>) -> Result<(), String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    st.frei0r_dirs = dirs.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
+    st.save(&state.settings_file).map_err(s)?;
+    ffworks_core::frei0r::configure(&st.frei0r_dirs);
+    Ok(())
 }
 
 /// Proxy state of every media item (proxies are a cache next to the thumbnails, never part of the project).
@@ -500,7 +527,7 @@ async fn demo_batch(app: AppHandle, state: State<'_, AppState>, req: DemoRequest
         if group.is_some_and(|g| g.effects.is_empty()) {
             return Err(format!("No favourite effects in '{}' yet: star some first.", req.effect_pool));
         }
-        Some((req.effect_stack.clamp(1, 6), group.map(|g| g.effects.clone())))
+        Some((req.effect_stack.clamp(1, 6), effect_pool(&state, group)))
     } else {
         None
     };
@@ -538,6 +565,16 @@ fn set_favourites(state: State<AppState>, favourites: ffworks_core::settings::Fa
     Ok(st.favourites)
 }
 
+/// The effect ids a random pick may use: the favourites (or everything) limited to what this machine can really render.
+fn effect_pool(state: &AppState, group: Option<&ffworks_core::settings::FavGroup>) -> Option<Vec<String>> {
+    let usable: Vec<String> = usable_effects(state).into_iter().map(|d| d.id.to_string()).collect();
+    match group {
+        Some(g) => Some(g.effects.iter().filter(|e| usable.contains(e)).cloned().collect()),
+        None if usable.len() == ffworks_core::effects::registry().len() => None,
+        None => Some(usable),
+    }
+}
+
 /// Stack `count` random effects on a clip as one undoable step. `pool` is `all`, `favourites` or a named group.
 /// The seed (given or fresh) is returned so the same result can be recreated.
 #[tauri::command]
@@ -552,7 +589,7 @@ fn random_effects(state: State<AppState>, clip: String, count: usize, pool: Stri
             return Err(format!("No favourite effects in '{pool}' yet: star some in the effect list first."));
         }
     }
-    let cmds = ffworks_core::random::effect_stack(c, count, seed, group.map(|g| g.effects.as_slice())).map_err(s)?;
+    let cmds = ffworks_core::random::effect_stack(c, count, seed, effect_pool(&state, group).as_deref()).map_err(s)?;
     let label = format!("Random effects ×{}", cmds.len());
     e.dispatch(Command::Batch { label, commands: cmds }).map_err(s)?;
     Ok(serde_json::json!({ "state": view(&e), "seed": seed }))
@@ -729,7 +766,9 @@ pub fn run() {
             let settings_file = app.path().app_config_dir().unwrap_or_else(|_| base.clone()).join("settings.json");
             // Installer builds ship FFmpeg/FFprobe under <resources>/ffmpeg (see tauri.windows.conf.json).
             let bundled_dir = app.path().resource_dir().ok().map(|d| d.join("ffmpeg"));
-            let tools = ffworks_core::settings::Settings::load(&settings_file).tools_with_bundled(bundled_dir.as_deref());
+            let loaded = ffworks_core::settings::Settings::load(&settings_file);
+            ffworks_core::frei0r::configure(&loaded.frei0r_dirs);
+            let tools = loaded.tools_with_bundled(bundled_dir.as_deref());
             let queue = JobQueue::new(tools.clone(), base.join("tmp"), 1);
             let emitter = app.handle().clone();
             queue.set_listener(move |snap| {
@@ -771,12 +810,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

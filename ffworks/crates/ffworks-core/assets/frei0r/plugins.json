@@ -1,0 +1,3576 @@
+{
+ "source": "frei0r-plugins (GPL-2+) parameter tables read through the frei0r C API",
+ "plugins": [
+  {
+   "id": "3dflippo",
+   "name": "3dflippo",
+   "author": "c.e. prelz AS FLUIDO <fluido@fluido.as>",
+   "kind": "filter",
+   "explanation": "Frame rotation in 3d-space",
+   "params": [
+    {
+     "name": "X axis rotation",
+     "type": "double",
+     "explanation": "Rotation on the X axis",
+     "default": 0.5
+    },
+    {
+     "name": "Y axis rotation",
+     "type": "double",
+     "explanation": "Rotation on the Y axis",
+     "default": 0.5
+    },
+    {
+     "name": "Z axis rotation",
+     "type": "double",
+     "explanation": "Rotation on the Z axis",
+     "default": 0.5
+    },
+    {
+     "name": "X axis rotation rate",
+     "type": "double",
+     "explanation": "Rotation rate on the X axis",
+     "default": 0.5
+    },
+    {
+     "name": "Y axis rotation rate",
+     "type": "double",
+     "explanation": "Rotation rate on the Y axis",
+     "default": 0.5
+    },
+    {
+     "name": "Z axis rotation rate",
+     "type": "double",
+     "explanation": "Rotation rate on the Z axis",
+     "default": 0.5
+    },
+    {
+     "name": "Center position (X)",
+     "type": "double",
+     "explanation": "Position of the center of rotation on the X axis",
+     "default": 0.0
+    },
+    {
+     "name": "Center position (Y)",
+     "type": "double",
+     "explanation": "Position of the center of rotation on the Y axis",
+     "default": 0.0
+    },
+    {
+     "name": "Invert rotation assignment",
+     "type": "bool",
+     "explanation": "If true, when mapping rotation, make inverted (wrong) assignment",
+     "default": 0.0
+    },
+    {
+     "name": "Don't blank mask",
+     "type": "bool",
+     "explanation": "Mask for frame transposition is not blanked, so a trace of old transpositions is maintained",
+     "default": 0.0
+    },
+    {
+     "name": "Fill with image or black",
+     "type": "bool",
+     "explanation": "If true, pixels that are not transposed are black, otherwise, they are copied with the original",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "B",
+   "name": "B",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Extracts Blue from Image",
+   "params": []
+  },
+  {
+   "id": "G",
+   "name": "G",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Extracts Green from Image",
+   "params": []
+  },
+  {
+   "id": "IIRblur",
+   "name": "IIR blur",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Three types of fast IIR blurring",
+   "params": [
+    {
+     "name": "Amount",
+     "type": "double",
+     "explanation": "Amount of blur",
+     "default": 0.2
+    },
+    {
+     "name": "Type",
+     "type": "double",
+     "explanation": "Blur type",
+     "default": 0.333344
+    },
+    {
+     "name": "Edge",
+     "type": "bool",
+     "explanation": "Edge compensation",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "R",
+   "name": "R",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Extracts Red from Image",
+   "params": []
+  },
+  {
+   "id": "RGB",
+   "name": "RGB",
+   "author": "Richard Spindler",
+   "kind": "mixer3",
+   "explanation": "Averages each Input and uses each as R, G or B channel of the Output",
+   "params": []
+  },
+  {
+   "id": "addition",
+   "name": "addition",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] addition operation of the pixel sources.",
+   "params": []
+  },
+  {
+   "id": "addition_alpha",
+   "name": "addition_alpha",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] addition_alpha operation of the pixel sources.",
+   "params": []
+  },
+  {
+   "id": "aech0r",
+   "name": "aech0r",
+   "author": "d-j-a-y & vloop",
+   "kind": "filter",
+   "explanation": "analog video echo",
+   "params": [
+    {
+     "name": "Fade Factor",
+     "type": "double",
+     "explanation": "Disappearance rate of the echo",
+     "default": 0.15
+    },
+    {
+     "name": "Direction",
+     "type": "bool",
+     "explanation": "Darker or Brighter echo",
+     "default": 0.0
+    },
+    {
+     "name": "Keep RED",
+     "type": "bool",
+     "explanation": "Influence on Red channel",
+     "default": 1.0
+    },
+    {
+     "name": "Keep GREEN",
+     "type": "bool",
+     "explanation": "Influence on Green channel",
+     "default": 0.0
+    },
+    {
+     "name": "Keep BLUE",
+     "type": "bool",
+     "explanation": "Influence on Blue channel",
+     "default": 0.0
+    },
+    {
+     "name": "Strobe period",
+     "type": "double",
+     "explanation": "Rate of the stroboscope: from 0 to 8 frames",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "alpha0ps",
+   "name": "alpha0ps",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Display and manipulation of the alpha channel",
+   "params": [
+    {
+     "name": "Display",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Display input alpha",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Operation",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Threshold",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Shrink/Grow/Blur amount",
+     "type": "double",
+     "explanation": "",
+     "default": 0.333344
+    },
+    {
+     "name": "Invert",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "alphaatop",
+   "name": "alphaatop",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "the alpha ATOP operation",
+   "params": []
+  },
+  {
+   "id": "alphagrad",
+   "name": "alphagrad",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Fills alpha channel with a gradient",
+   "params": [
+    {
+     "name": "Position",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Transition width",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Min",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Max",
+     "type": "double",
+     "explanation": "",
+     "default": 1.0
+    },
+    {
+     "name": "Operation",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "alphain",
+   "name": "alphain",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "the alpha IN operation",
+   "params": []
+  },
+  {
+   "id": "alphainjection",
+   "name": "Alpha Injection",
+   "author": "Richard Spindler",
+   "kind": "mixer2",
+   "explanation": "Averages Input 1 and uses this as Alpha Channel on Input 2",
+   "params": []
+  },
+  {
+   "id": "alphaout",
+   "name": "alphaout",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "the alpha OUT operation",
+   "params": []
+  },
+  {
+   "id": "alphaover",
+   "name": "alphaover",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "the alpha OVER operation",
+   "params": []
+  },
+  {
+   "id": "alphaspot",
+   "name": "alphaspot",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Draws simple shapes into the alpha channel",
+   "params": [
+    {
+     "name": "Shape",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Position X",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Position Y",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Size X",
+     "type": "double",
+     "explanation": "",
+     "default": 0.1
+    },
+    {
+     "name": "Size Y",
+     "type": "double",
+     "explanation": "",
+     "default": 0.1
+    },
+    {
+     "name": "Tilt",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Transition width",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Min",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Max",
+     "type": "double",
+     "explanation": "",
+     "default": 1.0
+    },
+    {
+     "name": "Operation",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "alphaxor",
+   "name": "alphaxor",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "the alpha XOR operation",
+   "params": []
+  },
+  {
+   "id": "balanc0r",
+   "name": "White Balance",
+   "author": "Dan Dennedy",
+   "kind": "filter",
+   "explanation": "Adjust the white balance / color temperature",
+   "params": [
+    {
+     "name": "Neutral Color",
+     "type": "color",
+     "explanation": "Choose a color from the source image that should be white."
+    },
+    {
+     "name": "Green Tint",
+     "type": "double",
+     "explanation": "Adjust the level of green.",
+     "default": 0.133333
+    }
+   ]
+  },
+  {
+   "id": "baltan",
+   "name": "Baltan",
+   "author": "Kentaro, Jaromil",
+   "kind": "filter",
+   "explanation": "delayed alpha smoothed blit of time",
+   "params": []
+  },
+  {
+   "id": "bgsubtract0r",
+   "name": "BgSubtract0r",
+   "author": "Samuel Mimram",
+   "kind": "filter",
+   "explanation": "Bluescreen the background of a static video.",
+   "params": [
+    {
+     "name": "threshold",
+     "type": "double",
+     "explanation": "Threshold for difference",
+     "default": 0.101961
+    },
+    {
+     "name": "denoise",
+     "type": "bool",
+     "explanation": "Remove noise",
+     "default": 1.0
+    },
+    {
+     "name": "blur",
+     "type": "double",
+     "explanation": "Blur alpha channel by given radius (to remove sharp edges)",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "blend",
+   "name": "blend",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform a blend operation between two sources",
+   "params": [
+    {
+     "name": "blend",
+     "type": "double",
+     "explanation": "blend factor"
+    }
+   ]
+  },
+  {
+   "id": "bluescreen0r",
+   "name": "bluescreen0r",
+   "author": "Hedde Bosman",
+   "kind": "filter",
+   "explanation": "Color to alpha (blit SRCALPHA)",
+   "params": [
+    {
+     "name": "Color",
+     "type": "color",
+     "explanation": "The color to make transparent (B G R)"
+    },
+    {
+     "name": "Distance",
+     "type": "double",
+     "explanation": "Distance to Color (127 is good)",
+     "default": 0.288
+    },
+    {
+     "name": "Invert",
+     "type": "bool",
+     "explanation": "Whether to produce the inverse of the effect on the alpha channel",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "brightness",
+   "name": "Brightness",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "filter",
+   "explanation": "Adjusts the brightness of a source image",
+   "params": [
+    {
+     "name": "Brightness",
+     "type": "double",
+     "explanation": "The brightness value",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "burn",
+   "name": "burn",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] dodge operation between the pixel sources, using the generalised algorithm:\nD = saturation of 255 or depletion of 0, of ((255 - A) * 256) / (B + 1)",
+   "params": []
+  },
+  {
+   "id": "bw0r",
+   "name": "bw0r",
+   "author": "coma@gephex.org",
+   "kind": "filter",
+   "explanation": "Turns image black/white.",
+   "params": []
+  },
+  {
+   "id": "c0rners",
+   "name": "c0rners",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Four corners geometry engine",
+   "params": [
+    {
+     "name": "Corner 1 X",
+     "type": "double",
+     "explanation": "X coordinate of corner 1",
+     "default": 0.333333
+    },
+    {
+     "name": "Corner 1 Y",
+     "type": "double",
+     "explanation": "Y coordinate of corner 1",
+     "default": 0.333333
+    },
+    {
+     "name": "Corner 2 X",
+     "type": "double",
+     "explanation": "X coordinate of corner 2",
+     "default": 0.666666
+    },
+    {
+     "name": "Corner 2 Y",
+     "type": "double",
+     "explanation": "Y coordinate of corner 2",
+     "default": 0.333333
+    },
+    {
+     "name": "Corner 3 X",
+     "type": "double",
+     "explanation": "X coordinate of corner 3",
+     "default": 0.666666
+    },
+    {
+     "name": "Corner 3 Y",
+     "type": "double",
+     "explanation": "Y coordinate of corner 3",
+     "default": 0.666666
+    },
+    {
+     "name": "Corner 4 X",
+     "type": "double",
+     "explanation": "X coordinate of corner 4",
+     "default": 0.333333
+    },
+    {
+     "name": "Corner 4 Y",
+     "type": "double",
+     "explanation": "Y coordinate of corner 4",
+     "default": 0.666666
+    },
+    {
+     "name": "Enable Stretch",
+     "type": "bool",
+     "explanation": "Enable stretching",
+     "default": 0.0
+    },
+    {
+     "name": "Stretch X",
+     "type": "double",
+     "explanation": "Amount of stretching in X direction",
+     "default": 0.5
+    },
+    {
+     "name": "Stretch Y",
+     "type": "double",
+     "explanation": "Amount of stretching in Y direction",
+     "default": 0.5
+    },
+    {
+     "name": "Interpolator",
+     "type": "double",
+     "explanation": "Quality of interpolation",
+     "default": 0.166667
+    },
+    {
+     "name": "Transparent Background",
+     "type": "bool",
+     "explanation": "Makes background transparent",
+     "default": 0.0
+    },
+    {
+     "name": "Feather Alpha",
+     "type": "double",
+     "explanation": "Makes smooth transition into transparent",
+     "default": 0.01
+    },
+    {
+     "name": "Alpha operation",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "cairoaffineblend",
+   "name": "cairoaffineblend",
+   "author": "Janne Liljeblad",
+   "kind": "mixer2",
+   "explanation": "Composites second input on first input applying user-defined transformation, opacity and blend mode",
+   "params": [
+    {
+     "name": "x",
+     "type": "double",
+     "explanation": "X position of second input, value interperted as range -2*width - 3*width"
+    },
+    {
+     "name": "y",
+     "type": "double",
+     "explanation": "Y position of second input, value interperted as range -2*height - 3*height"
+    },
+    {
+     "name": "x scale",
+     "type": "double",
+     "explanation": "X scale of second input, value interperted as range 0 - 5"
+    },
+    {
+     "name": "y scale",
+     "type": "double",
+     "explanation": "Y scale of second input, value interperted as range 0 - 5"
+    },
+    {
+     "name": "rotation",
+     "type": "double",
+     "explanation": "Rotation of second input, value interperted as range 0 - 360"
+    },
+    {
+     "name": "opacity",
+     "type": "double",
+     "explanation": "Opacity of second input"
+    },
+    {
+     "name": "blend mode",
+     "type": "string",
+     "explanation": "Blend mode used to compose image. Accepted values: 'normal', 'add', 'saturate', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'colordodge', 'colorburn', 'hardlight', 'softlight', 'difference', 'exclusion', 'hslhue', 'hslsaturation', 'hslcolor', 'hslluminosity'"
+    },
+    {
+     "name": "anchor x",
+     "type": "double",
+     "explanation": "X position of rotation center within the second input"
+    },
+    {
+     "name": "anchor y",
+     "type": "double",
+     "explanation": "Y position of rotation center within the second input"
+    }
+   ]
+  },
+  {
+   "id": "cairoblend",
+   "name": "cairoblend",
+   "author": "Janne Liljeblad",
+   "kind": "mixer2",
+   "explanation": "Composites second input on the first input with user-defined blend mode and opacity.",
+   "params": [
+    {
+     "name": "opacity",
+     "type": "double",
+     "explanation": "Opacity of composited image"
+    },
+    {
+     "name": "blend mode",
+     "type": "string",
+     "explanation": "Blend mode used to compose image. Accepted values: 'normal', 'add', 'saturate', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'colordodge', 'colorburn', 'hardlight', 'softlight', 'difference', 'exclusion', 'hslhue', 'hslsaturation', 'hslcolor', 'hslluminosity'"
+    }
+   ]
+  },
+  {
+   "id": "cairogradient",
+   "name": "cairogradient",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Draws a gradient on top of image. Filter is given gradient start and end points, colors and opacities.",
+   "params": [
+    {
+     "name": "pattern",
+     "type": "string",
+     "explanation": "Linear or radial gradient"
+    },
+    {
+     "name": "start color",
+     "type": "color",
+     "explanation": "First color of the gradient"
+    },
+    {
+     "name": "start opacity",
+     "type": "double",
+     "explanation": "Opacity of the first color of the gradient",
+     "default": 0.5
+    },
+    {
+     "name": "end color",
+     "type": "color",
+     "explanation": "Second color of the gradient"
+    },
+    {
+     "name": "end opacity",
+     "type": "double",
+     "explanation": "Opacity of the second color of the gradient",
+     "default": 0.5
+    },
+    {
+     "name": "start x",
+     "type": "double",
+     "explanation": "X position of the start point of the gradient",
+     "default": 0.5
+    },
+    {
+     "name": "start y",
+     "type": "double",
+     "explanation": "Y position of the start point of the gradient",
+     "default": 0.0
+    },
+    {
+     "name": "end x",
+     "type": "double",
+     "explanation": "X position of the end point of the gradient",
+     "default": 0.5
+    },
+    {
+     "name": "end y",
+     "type": "double",
+     "explanation": "Y position of the end point of the gradient",
+     "default": 1.0
+    },
+    {
+     "name": "offset",
+     "type": "double",
+     "explanation": "Position of first color in the line connecting gradient ends, really useful only for radial gradient",
+     "default": 0.0
+    },
+    {
+     "name": "blend mode",
+     "type": "string",
+     "explanation": "Blend mode used to compose gradient on image. Accepted values: 'normal', 'add', 'saturate', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'colordodge', 'colorburn', 'hardlight', 'softlight', 'difference', 'exclusion', 'hslhue', 'hslsaturation', 'hslcolor', 'hslluminosity'"
+    }
+   ]
+  },
+  {
+   "id": "cairoimagegrid",
+   "name": "cairoimagegrid",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Draws a grid of input images.",
+   "params": [
+    {
+     "name": "rows",
+     "type": "double",
+     "explanation": "Number of rows in the image grid. Input range 0 - 1 is interpreted as range 1 - 20",
+     "default": 0.105263
+    },
+    {
+     "name": "columns",
+     "type": "double",
+     "explanation": "Number of columns in the image grid. Input range 0 - 1 is interpreted as range 1 - 20",
+     "default": 0.105263
+    }
+   ]
+  },
+  {
+   "id": "cartoon",
+   "name": "Cartoon",
+   "author": "Dries Pruimboom, Jaromil",
+   "kind": "filter",
+   "explanation": "Cartoonify video, do a form of edge detect",
+   "params": [
+    {
+     "name": "triplevel",
+     "type": "double",
+     "explanation": "level of trip: mapped to [0,1] asymptotical",
+     "default": 1.0
+    },
+    {
+     "name": "diffspace",
+     "type": "double",
+     "explanation": "difference space: a value from 0 to 256 (mapped to [0,1])",
+     "default": 0.003906
+    }
+   ]
+  },
+  {
+   "id": "cluster",
+   "name": "K-Means Clustering",
+   "author": "binarymillenium",
+   "kind": "filter",
+   "explanation": "Clusters of a source image by color and spatial distance",
+   "params": [
+    {
+     "name": "Num",
+     "type": "double",
+     "explanation": "The number of clusters",
+     "default": 0.5
+    },
+    {
+     "name": "Dist weight",
+     "type": "double",
+     "explanation": "The weight on distance",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "colgate",
+   "name": "White Balance (LMS space)",
+   "author": "Steinar H. Gunderson",
+   "kind": "filter",
+   "explanation": "Do simple color correction, in a physically meaningful way",
+   "params": [
+    {
+     "name": "Neutral Color",
+     "type": "color",
+     "explanation": "Choose a color from the source image that should be white."
+    },
+    {
+     "name": "Color Temperature",
+     "type": "double",
+     "explanation": "Choose an output color temperature, if different from 6500 K.",
+     "default": 0.433333
+    }
+   ]
+  },
+  {
+   "id": "color_only",
+   "name": "color_only",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform a conversion to color only of the source input1 using the hue and saturation values of input2.",
+   "params": []
+  },
+  {
+   "id": "coloradj_RGB",
+   "name": "coloradj_RGB",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Simple color adjustment",
+   "params": [
+    {
+     "name": "R",
+     "type": "double",
+     "explanation": "Amount of red",
+     "default": 0.5
+    },
+    {
+     "name": "G",
+     "type": "double",
+     "explanation": "Amount of green",
+     "default": 0.5
+    },
+    {
+     "name": "B",
+     "type": "double",
+     "explanation": "Amount of blue",
+     "default": 0.5
+    },
+    {
+     "name": "Action",
+     "type": "double",
+     "explanation": "Type of color adjustment",
+     "default": 0.333344
+    },
+    {
+     "name": "Keep luma",
+     "type": "bool",
+     "explanation": "Don't change brightness",
+     "default": 1.0
+    },
+    {
+     "name": "Alpha controlled",
+     "type": "bool",
+     "explanation": "Adjust only areas with nonzero alpha",
+     "default": 0.0
+    },
+    {
+     "name": "Luma formula",
+     "type": "double",
+     "explanation": "",
+     "default": 0.500025
+    }
+   ]
+  },
+  {
+   "id": "colordistance",
+   "name": "Color Distance",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Calculates the distance between the selected color and the current pixel and uses that value as new pixel value",
+   "params": [
+    {
+     "name": "Color",
+     "type": "color",
+     "explanation": "The Source Color"
+    }
+   ]
+  },
+  {
+   "id": "colorhalftone",
+   "name": "colorhalftone",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Filters image to resemble a halftone print in which tones are represented as variable sized dots",
+   "params": [
+    {
+     "name": "dot radius",
+     "type": "double",
+     "explanation": "Halftone pattern dot size",
+     "default": 0.4
+    },
+    {
+     "name": "cyan angle",
+     "type": "double",
+     "explanation": "Cyan dots angle",
+     "default": 0.3
+    },
+    {
+     "name": "magenta angle",
+     "type": "double",
+     "explanation": "Magenta dots angle",
+     "default": 0.45
+    },
+    {
+     "name": "yellow angle",
+     "type": "double",
+     "explanation": "Yellow dots angle",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "colorize",
+   "name": "colorize",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Colorizes image to selected hue, saturation and lightness",
+   "params": [
+    {
+     "name": "hue",
+     "type": "double",
+     "explanation": "Color shade of the colorized image",
+     "default": 0.5
+    },
+    {
+     "name": "saturation",
+     "type": "double",
+     "explanation": "Amount of color in the colorized image",
+     "default": 0.5
+    },
+    {
+     "name": "lightness",
+     "type": "double",
+     "explanation": "Lightness of the colorized image",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "colortap",
+   "name": "colortap",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Applies a pre-made color effect to image",
+   "params": [
+    {
+     "name": "table",
+     "type": "string",
+     "explanation": "Lookup table used to filter colors. One of: xpro, sepia, heat, red_green, old_photo, xray, esses, yellow_blue"
+    }
+   ]
+  },
+  {
+   "id": "composition",
+   "name": "Composition",
+   "author": "Richard Spindler",
+   "kind": "mixer2",
+   "explanation": "Composites Image 2 onto Image 1 according to its Alpha Channel",
+   "params": []
+  },
+  {
+   "id": "contrast0r",
+   "name": "Contrast0r",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "filter",
+   "explanation": "Adjusts the contrast of a source image",
+   "params": [
+    {
+     "name": "Contrast",
+     "type": "double",
+     "explanation": "The contrast value",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "curves",
+   "name": "Curves",
+   "author": "Maksim Golovkin, Till Theato",
+   "kind": "filter",
+   "explanation": "Adjust luminance or color channel intensity with curve level mapping",
+   "params": [
+    {
+     "name": "Channel",
+     "type": "double",
+     "explanation": "Channel to adjust (0 = red, 0.1 = green, 0.2 = blue, 0.3 = alpha, 0.4 = luma, 0.5 = rgb, 0.6 = hue, 0.7 = saturation)",
+     "default": 0.5
+    },
+    {
+     "name": "Show curves",
+     "type": "bool",
+     "explanation": "Draw curve graph on output image",
+     "default": 1.0
+    },
+    {
+     "name": "Graph position",
+     "type": "double",
+     "explanation": "Output image corner where curve graph will be drawn (0.1 = TOP,LEFT; 0.2 = TOP,RIGHT; 0.3 = BOTTOM,LEFT; 0.4 = BOTTOM, RIGHT)",
+     "default": 0.3
+    },
+    {
+     "name": "Curve point number",
+     "type": "double",
+     "explanation": "Number of points to use to build curve (/10 to fit [0,1] parameter range). Minimum 2 (0.2), Maximum 5 (0.5). Not relevant for B\u00e9zier spline.",
+     "default": 0.2
+    },
+    {
+     "name": "Luma formula",
+     "type": "bool",
+     "explanation": "Use Rec. 601 (false) or Rec. 709 (true)",
+     "default": 1.0
+    },
+    {
+     "name": "B\u00e9zier spline",
+     "type": "string",
+     "explanation": "Use cubic B\u00e9zier spline. Has to be a sorted list of points in the format \"handle1x;handle1y#pointx;pointy#handle2x;handle2y\"(pointx = in, pointy = out). Points are separated by a \"|\".The values can have \"double\" precision. x, y for points should be in the range 0-1. x,y for handles might also be out of this range."
+    },
+    {
+     "name": "Point 1 input value",
+     "type": "double",
+     "explanation": "Point 1 input value",
+     "default": 0.0
+    },
+    {
+     "name": "Point 1 output value",
+     "type": "double",
+     "explanation": "Point 1 output value",
+     "default": 0.0
+    },
+    {
+     "name": "Point 2 input value",
+     "type": "double",
+     "explanation": "Point 2 input value",
+     "default": 1.0
+    },
+    {
+     "name": "Point 2 output value",
+     "type": "double",
+     "explanation": "Point 2 output value",
+     "default": 1.0
+    },
+    {
+     "name": "Point 3 input value",
+     "type": "double",
+     "explanation": "Point 3 input value",
+     "default": 0.0
+    },
+    {
+     "name": "Point 3 output value",
+     "type": "double",
+     "explanation": "Point 3 output value",
+     "default": 0.0
+    },
+    {
+     "name": "Point 4 input value",
+     "type": "double",
+     "explanation": "Point 4 input value",
+     "default": 0.0
+    },
+    {
+     "name": "Point 4 output value",
+     "type": "double",
+     "explanation": "Point 4 output value",
+     "default": 0.0
+    },
+    {
+     "name": "Point 5 input value",
+     "type": "double",
+     "explanation": "Point 5 input value",
+     "default": 0.0
+    },
+    {
+     "name": "Point 5 output value",
+     "type": "double",
+     "explanation": "Point 5 output value",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "d90stairsteppingfix",
+   "name": "Nikon D90 Stairstepping fix",
+   "author": "Simon A. Eugster (Granjow)",
+   "kind": "filter",
+   "explanation": "Removes the Stairstepping from Nikon D90 videos (720p only) by interpolation",
+   "params": []
+  },
+  {
+   "id": "darken",
+   "name": "darken",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform a darken operation between two sources (minimum value of both sources).",
+   "params": []
+  },
+  {
+   "id": "defish0r",
+   "name": "Defish0r",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Non rectilinear lens mappings",
+   "params": [
+    {
+     "name": "Amount",
+     "type": "double",
+     "explanation": "Focal Ratio",
+     "default": 0.0
+    },
+    {
+     "name": "DeFish",
+     "type": "bool",
+     "explanation": "Fish or Defish",
+     "default": -0.0
+    },
+    {
+     "name": "Type",
+     "type": "double",
+     "explanation": "Mapping function",
+     "default": 0.666667
+    },
+    {
+     "name": "Scaling",
+     "type": "double",
+     "explanation": "Scaling method",
+     "default": 0.666667
+    },
+    {
+     "name": "Manual Scale",
+     "type": "double",
+     "explanation": "Manual Scale",
+     "default": 0.5
+    },
+    {
+     "name": "Interpolator",
+     "type": "double",
+     "explanation": "Quality of interpolation",
+     "default": 0.166667
+    },
+    {
+     "name": "Aspect type",
+     "type": "double",
+     "explanation": "Pixel aspect ratio presets",
+     "default": 0.0
+    },
+    {
+     "name": "Manual Aspect",
+     "type": "double",
+     "explanation": "Manual Pixel Aspect ratio",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "delay0r",
+   "name": "delay0r",
+   "author": "Martin Bayer",
+   "kind": "filter",
+   "explanation": "video delay",
+   "params": [
+    {
+     "name": "DelayTime",
+     "type": "double",
+     "explanation": "the delay time",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "delaygrab",
+   "name": "Delaygrab",
+   "author": "Bill Spinhover, Andreas Schiffler, Jaromil",
+   "kind": "filter",
+   "explanation": "delayed frame blitting mapped on a time bitmap",
+   "params": []
+  },
+  {
+   "id": "difference",
+   "name": "difference",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] difference operation between the pixel sources.",
+   "params": []
+  },
+  {
+   "id": "distort0r",
+   "name": "Distort0r",
+   "author": "Gephex crew",
+   "kind": "filter",
+   "explanation": "Plasma",
+   "params": [
+    {
+     "name": "Amplitude",
+     "type": "double",
+     "explanation": "The amplitude of the plasma signal",
+     "default": 1.0
+    },
+    {
+     "name": "Frequency",
+     "type": "double",
+     "explanation": "The frequency of the plasma signal",
+     "default": 0.005
+    },
+    {
+     "name": "Use Velocity",
+     "type": "bool",
+     "explanation": "'Time Based' or 'Adjustable Velocity'",
+     "default": 0.0
+    },
+    {
+     "name": "Velocity",
+     "type": "double",
+     "explanation": "Changing speed of the plasma signal",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "dither",
+   "name": "dither",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Dithers the image and reduces the number of available colors",
+   "params": [
+    {
+     "name": "levels",
+     "type": "double",
+     "explanation": "Number of values per channel",
+     "default": 0.104167
+    },
+    {
+     "name": "matrixid",
+     "type": "double",
+     "explanation": "Id of matrix used for dithering",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "divide",
+   "name": "divide",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] divide operation between the pixel sources: input1 is the numerator, input2 the denominator",
+   "params": []
+  },
+  {
+   "id": "dodge",
+   "name": "dodge",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] dodge operation between the pixel sources, using the generalised algorithm:\nD = saturation of 255 or (A * 256) / (256 - B)",
+   "params": []
+  },
+  {
+   "id": "edgeglow",
+   "name": "Edgeglow",
+   "author": "Salsaman",
+   "kind": "filter",
+   "explanation": "Edgeglow filter",
+   "params": [
+    {
+     "name": "lthresh",
+     "type": "double",
+     "explanation": "threshold for edge lightening",
+     "default": 0.0
+    },
+    {
+     "name": "lupscale",
+     "type": "double",
+     "explanation": "multiplier for upscaling edge brightness",
+     "default": 0.0
+    },
+    {
+     "name": "lredscale",
+     "type": "double",
+     "explanation": "multiplier for downscaling non-edge brightness",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "elastic_scale",
+   "name": "Elastic scale filter",
+   "author": "Matthias Schnoell",
+   "kind": "filter",
+   "explanation": "This is a frei0r filter which allows one to scale video footage non-linearly.",
+   "params": [
+    {
+     "name": "Center",
+     "type": "double",
+     "explanation": "Horizontal center position of the linear area",
+     "default": 0.5
+    },
+    {
+     "name": "Linear Width",
+     "type": "double",
+     "explanation": "Width of the linear area",
+     "default": 0.0
+    },
+    {
+     "name": "Linear Scale Factor",
+     "type": "double",
+     "explanation": "Amount how much the linear area is scaled",
+     "default": 0.7
+    },
+    {
+     "name": "Non-Linear Scale Factor",
+     "type": "double",
+     "explanation": "Amount how much the outer left and outer right areas are scaled non linearly",
+     "default": 0.7125
+    }
+   ]
+  },
+  {
+   "id": "emboss",
+   "name": "emboss",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Creates embossed relief image of source image",
+   "params": [
+    {
+     "name": "azimuth",
+     "type": "double",
+     "explanation": "Light direction",
+     "default": 0.375
+    },
+    {
+     "name": "elevation",
+     "type": "double",
+     "explanation": "Background lightness",
+     "default": 0.333333
+    },
+    {
+     "name": "width45",
+     "type": "double",
+     "explanation": "Bump height",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "equaliz0r",
+   "name": "Equaliz0r",
+   "author": "Jean-Sebastien Senecal (Drone)",
+   "kind": "filter",
+   "explanation": "Equalizes the intensity histograms",
+   "params": []
+  },
+  {
+   "id": "facebl0r",
+   "name": "FaceBl0r",
+   "author": "ZioKernel, Biilly, Jilt, Jaromil, ddennedy",
+   "kind": "filter",
+   "explanation": "automatic face blur",
+   "params": [
+    {
+     "name": "Classifier",
+     "type": "string",
+     "explanation": "Full path to the XML pattern model for recognition; look in /usr/share/opencv/haarcascades"
+    },
+    {
+     "name": "Ellipse",
+     "type": "bool",
+     "explanation": "Draw a red ellipse around the object",
+     "default": 0.0
+    },
+    {
+     "name": "Recheck",
+     "type": "double",
+     "explanation": "How often to detect an object in number of frames, divided by 1000",
+     "default": 0.025
+    },
+    {
+     "name": "Threads",
+     "type": "double",
+     "explanation": "How many threads to use divided by 100; 0 uses CPU count",
+     "default": 0.01
+    },
+    {
+     "name": "Search scale",
+     "type": "double",
+     "explanation": "The search window scale factor, divided by 10",
+     "default": 0.12
+    },
+    {
+     "name": "Neighbors",
+     "type": "double",
+     "explanation": "Minimum number of rectangles that makes up an object, divided by 100",
+     "default": 0.02
+    },
+    {
+     "name": "Smallest",
+     "type": "double",
+     "explanation": "Minimum window size in pixels, divided by 1000",
+     "default": 0.0
+    },
+    {
+     "name": "Largest",
+     "type": "double",
+     "explanation": "Maximum object size in pixels, divided by 10000",
+     "default": 0.05
+    }
+   ]
+  },
+  {
+   "id": "facedetect",
+   "name": "opencvfacedetect",
+   "author": "binarymillenium, ddennedy",
+   "kind": "filter",
+   "explanation": "detect faces and draw shapes on them",
+   "params": [
+    {
+     "name": "Classifier",
+     "type": "string",
+     "explanation": "Full path to the XML pattern model for recognition; look in /usr/share/opencv/haarcascades"
+    },
+    {
+     "name": "Threads",
+     "type": "double",
+     "explanation": "How many threads to use divided by 100; 0 uses CPU count",
+     "default": 0.01
+    },
+    {
+     "name": "Shape",
+     "type": "double",
+     "explanation": "The shape to draw: 0=circle, 0.1=ellipse, 0.2=rectangle, 1=random",
+     "default": 0.0
+    },
+    {
+     "name": "Recheck",
+     "type": "double",
+     "explanation": "How often to detect an object in number of frames, divided by 1000",
+     "default": 0.025
+    },
+    {
+     "name": "Search scale",
+     "type": "double",
+     "explanation": "The search window scale factor, divided by 10",
+     "default": 0.12
+    },
+    {
+     "name": "Neighbors",
+     "type": "double",
+     "explanation": "Minimum number of rectangles that makes up an object, divided by 100",
+     "default": 0.02
+    },
+    {
+     "name": "Smallest",
+     "type": "double",
+     "explanation": "Minimum window size in pixels, divided by 1000",
+     "default": 0.0
+    },
+    {
+     "name": "Scale",
+     "type": "double",
+     "explanation": "Down scale the image prior detection",
+     "default": 0.666667
+    },
+    {
+     "name": "Stroke",
+     "type": "double",
+     "explanation": "Line width, divided by 100, or fill if 0",
+     "default": 0.0
+    },
+    {
+     "name": "Antialias",
+     "type": "bool",
+     "explanation": "Draw with antialiasing",
+     "default": 0.0
+    },
+    {
+     "name": "Alpha",
+     "type": "double",
+     "explanation": "The alpha channel value for the shapes",
+     "default": 1.0
+    },
+    {
+     "name": "Color 1",
+     "type": "color",
+     "explanation": "The color of the first object"
+    },
+    {
+     "name": "Color 2",
+     "type": "color",
+     "explanation": "The color of the second object"
+    },
+    {
+     "name": "Color 3",
+     "type": "color",
+     "explanation": "The color of the third object"
+    },
+    {
+     "name": "Color 4",
+     "type": "color",
+     "explanation": "The color of the fourth object"
+    },
+    {
+     "name": "Color 5",
+     "type": "color",
+     "explanation": "The color of the fifth object"
+    }
+   ]
+  },
+  {
+   "id": "flippo",
+   "name": "Flippo",
+   "author": "Carlo Emilio, Jean-Sebastien Senecal",
+   "kind": "filter",
+   "explanation": "Flipping in x and y axis",
+   "params": [
+    {
+     "name": "X axis",
+     "type": "bool",
+     "explanation": "Flipping on the horizontal axis",
+     "default": 0.0
+    },
+    {
+     "name": "Y axis",
+     "type": "bool",
+     "explanation": "Flipping on the vertical axis",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "gamma",
+   "name": "Gamma",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "filter",
+   "explanation": "Adjusts the gamma value of a source image",
+   "params": [
+    {
+     "name": "Gamma",
+     "type": "double",
+     "explanation": "The gamma value",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "glitch0r",
+   "name": "Glitch0r",
+   "author": "IDENT Software",
+   "kind": "filter",
+   "explanation": "Adds glitches and block shifting",
+   "params": [
+    {
+     "name": "Glitch frequency",
+     "type": "double",
+     "explanation": "How frequently the glitch should be applied",
+     "default": 0.0
+    },
+    {
+     "name": "Block height",
+     "type": "double",
+     "explanation": "Height range of the block that will be shifted/glitched",
+     "default": 0.492063
+    },
+    {
+     "name": "Shift intensity",
+     "type": "double",
+     "explanation": "How much we should move blocks when glitching",
+     "default": 0.492063
+    },
+    {
+     "name": "Color glitching intensity",
+     "type": "double",
+     "explanation": "How intensive should be color distortion",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "glow",
+   "name": "Glow",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Creates a Glamorous Glow",
+   "params": [
+    {
+     "name": "Blur",
+     "type": "double",
+     "explanation": "Blur of the glow",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "grain_extract",
+   "name": "grain_extract",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] grain-extract operation between the pixel sources.",
+   "params": []
+  },
+  {
+   "id": "grain_merge",
+   "name": "grain_merge",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] grain-merge operation between the pixel sources.",
+   "params": []
+  },
+  {
+   "id": "hardlight",
+   "name": "hardlight",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] hardlight operation between the pixel sources",
+   "params": []
+  },
+  {
+   "id": "hqdn3d",
+   "name": "hqdn3d",
+   "author": "Marko Cebokli, Daniel Moreno",
+   "kind": "filter",
+   "explanation": "High quality 3D denoiser from Mplayer",
+   "params": [
+    {
+     "name": "Spatial",
+     "type": "double",
+     "explanation": "Amount of spatial filtering",
+     "default": 0.04
+    },
+    {
+     "name": "Temporal",
+     "type": "double",
+     "explanation": "Amount of temporal filtering",
+     "default": 0.06
+    }
+   ]
+  },
+  {
+   "id": "hue",
+   "name": "hue",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform a conversion to hue only of the source input1 using the hue of input2.",
+   "params": []
+  },
+  {
+   "id": "hueshift0r",
+   "name": "Hueshift0r",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "filter",
+   "explanation": "Shifts the hue of a source image",
+   "params": [
+    {
+     "name": "Hue",
+     "type": "double",
+     "explanation": "The shift value",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "invert0r",
+   "name": "Invert0r",
+   "author": "Gephex crew",
+   "kind": "filter",
+   "explanation": "Inverts all colors of a source image",
+   "params": []
+  },
+  {
+   "id": "ising0r",
+   "name": "Ising0r",
+   "author": "Gephex crew",
+   "kind": "source",
+   "explanation": "Generates ising noise",
+   "params": [
+    {
+     "name": "Temperature",
+     "type": "double",
+     "explanation": "Noise Temperature",
+     "default": 0.0
+    },
+    {
+     "name": "Border Growth",
+     "type": "double",
+     "explanation": "Border Growth",
+     "default": 1.0
+    },
+    {
+     "name": "Spontaneous Growth",
+     "type": "double",
+     "explanation": "Spontaneous Growth",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "keyspillm0pup",
+   "name": "keyspillm0pup",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Reduces the visibility of key color spill in chroma keying",
+   "params": [
+    {
+     "name": "Key color",
+     "type": "color",
+     "explanation": "Key color that was used for chroma keying"
+    },
+    {
+     "name": "Target color",
+     "type": "color",
+     "explanation": "Desired color to replace key residue with"
+    },
+    {
+     "name": "Mask type",
+     "type": "string",
+     "explanation": "Which mask to apply [0,1,2,3]"
+    },
+    {
+     "name": "Tolerance",
+     "type": "double",
+     "explanation": "Range of colors around the key, where effect is full strength",
+     "default": 0.24
+    },
+    {
+     "name": "Slope",
+     "type": "double",
+     "explanation": "Range of colors around the key where effect gradually decreases",
+     "default": 0.4
+    },
+    {
+     "name": "Hue gate",
+     "type": "double",
+     "explanation": "Restrict mask to hues close to key",
+     "default": 0.25
+    },
+    {
+     "name": "Saturation threshold",
+     "type": "double",
+     "explanation": "Restrict mask to saturated colors",
+     "default": 0.15
+    },
+    {
+     "name": "Operation 1",
+     "type": "string",
+     "explanation": "First operation 1 [0,1,2]"
+    },
+    {
+     "name": "Amount 1",
+     "type": "double",
+     "explanation": "",
+     "default": 0.55
+    },
+    {
+     "name": "Operation 2",
+     "type": "string",
+     "explanation": "Second operation 2 [0,1,2]"
+    },
+    {
+     "name": "Amount 2",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Show mask",
+     "type": "bool",
+     "explanation": "Replace image with the mask",
+     "default": 0.0
+    },
+    {
+     "name": "Mask to Alpha",
+     "type": "bool",
+     "explanation": "Replace alpha channel with the mask",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "lenscorrection",
+   "name": "Lens Correction",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Allows compensation of lens distortion",
+   "params": [
+    {
+     "name": "X center",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Y center",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Correction near center",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Correction near edges",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Brightness",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "letterb0xed",
+   "name": "LetterB0xed",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Adds Black Borders at top and bottom for Cinema Look",
+   "params": [
+    {
+     "name": "Border Width",
+     "type": "double",
+     "explanation": "",
+     "default": 0.4
+    },
+    {
+     "name": "Transparency",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "levels",
+   "name": "Levels",
+   "author": "Maksim Golovkin",
+   "kind": "filter",
+   "explanation": "Adjust luminance or color channel intensity",
+   "params": [
+    {
+     "name": "Channel",
+     "type": "double",
+     "explanation": "Channel to adjust levels. 0%=R, 10%=G, 20%=B, 30%=Luma",
+     "default": 0.3
+    },
+    {
+     "name": "Input black level",
+     "type": "double",
+     "explanation": "Input black level",
+     "default": 0.0
+    },
+    {
+     "name": "Input white level",
+     "type": "double",
+     "explanation": "Input white level",
+     "default": 1.0
+    },
+    {
+     "name": "Gamma",
+     "type": "double",
+     "explanation": "Gamma",
+     "default": 0.25
+    },
+    {
+     "name": "Black output",
+     "type": "double",
+     "explanation": "Black output",
+     "default": 0.0
+    },
+    {
+     "name": "White output",
+     "type": "double",
+     "explanation": "White output",
+     "default": 1.0
+    },
+    {
+     "name": "Show histogram",
+     "type": "bool",
+     "explanation": "Show histogram",
+     "default": 1.0
+    },
+    {
+     "name": "Histogram position",
+     "type": "double",
+     "explanation": "Histogram position. 0%=TL, 10%=TR, 20%=BL, 30%=BR",
+     "default": 0.3
+    }
+   ]
+  },
+  {
+   "id": "lighten",
+   "name": "lighten",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform a lighten operation between two sources (maximum value of both sources).",
+   "params": []
+  },
+  {
+   "id": "lightgraffiti",
+   "name": "Light Graffiti",
+   "author": "Simon A. Eugster (Granjow)",
+   "kind": "filter",
+   "explanation": "Creates light graffitis from a video by keeping the brightest spots.",
+   "params": [
+    {
+     "name": "sensitivity",
+     "type": "double",
+     "explanation": "Sensitivity of the effect for light (higher sensitivity will lead to brighter lights)",
+     "default": 0.2
+    },
+    {
+     "name": "backgroundWeight",
+     "type": "double",
+     "explanation": "Describes how strong the (accumulated) background should shine through",
+     "default": 0.0
+    },
+    {
+     "name": "thresholdBrightness",
+     "type": "double",
+     "explanation": "Brightness threshold to distinguish between foreground and background",
+     "default": 0.588235
+    },
+    {
+     "name": "thresholdDifference",
+     "type": "double",
+     "explanation": "Threshold: Difference to background to distinguish between fore- and background",
+     "default": 0.0
+    },
+    {
+     "name": "thresholdDiffSum",
+     "type": "double",
+     "explanation": "Threshold for sum of differences. Can in most cases be ignored (set to 0).",
+     "default": 0.0
+    },
+    {
+     "name": "dim",
+     "type": "double",
+     "explanation": "Dimming of the light mask",
+     "default": 0.0
+    },
+    {
+     "name": "saturation",
+     "type": "double",
+     "explanation": "Saturation of lights",
+     "default": 0.25
+    },
+    {
+     "name": "lowerOverexposure",
+     "type": "double",
+     "explanation": "Prevents some overexposure if the light source stays steady too long (varying speed)",
+     "default": 0.0
+    },
+    {
+     "name": "statsBrightness",
+     "type": "bool",
+     "explanation": "Display the brightness and threshold, for adjusting the brightness threshold parameter",
+     "default": 0.0
+    },
+    {
+     "name": "statsDifference",
+     "type": "bool",
+     "explanation": "Display the background difference and threshold",
+     "default": 0.0
+    },
+    {
+     "name": "statsDiffSum",
+     "type": "bool",
+     "explanation": "Display the sum of the background difference and the threshold",
+     "default": 0.0
+    },
+    {
+     "name": "reset",
+     "type": "bool",
+     "explanation": "Reset filter masks",
+     "default": 0.0
+    },
+    {
+     "name": "transparentBackground",
+     "type": "bool",
+     "explanation": "Make the background transparent",
+     "default": 0.0
+    },
+    {
+     "name": "blackReference",
+     "type": "bool",
+     "explanation": "Uses black as background image instead of the first frame.",
+     "default": 0.0
+    },
+    {
+     "name": "longAlpha",
+     "type": "double",
+     "explanation": "Alpha value for moving average",
+     "default": 0.0
+    },
+    {
+     "name": "nonlinearDim",
+     "type": "bool",
+     "explanation": "Nonlinear dimming (may look more natural)",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "lissajous0r",
+   "name": "Lissajous0r",
+   "author": "Martin Bayer",
+   "kind": "source",
+   "explanation": "Generates Lissajous0r images",
+   "params": [
+    {
+     "name": "ratiox",
+     "type": "double",
+     "explanation": "x-ratio",
+     "default": 0.0
+    },
+    {
+     "name": "ratioy",
+     "type": "double",
+     "explanation": "y-ratio",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "luminance",
+   "name": "Luminance",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Creates a luminance map of the image",
+   "params": []
+  },
+  {
+   "id": "mask0mate",
+   "name": "Mask0Mate",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Creates an square alpha-channel mask",
+   "params": [
+    {
+     "name": "Left",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Right",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Top",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Bottom",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Invert",
+     "type": "bool",
+     "explanation": "Invert the mask, creates a hole in the frame.",
+     "default": 0.0
+    },
+    {
+     "name": "Blur",
+     "type": "double",
+     "explanation": "Blur the outline of the mask",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "medians",
+   "name": "Medians",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Implements several median-type filters",
+   "params": [
+    {
+     "name": "Type",
+     "type": "string",
+     "explanation": "Choose type of median: Cross5, Square3x3, Bilevel, Diamond3x3, Square5x5, Temp3, Temp5, ArceBI, ML3D, ML3dEX, VarSize"
+    },
+    {
+     "name": "Size",
+     "type": "double",
+     "explanation": "Size for 'var size' type filter",
+     "default": 0.1
+    }
+   ]
+  },
+  {
+   "id": "multiply",
+   "name": "multiply",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] multiply operation between the pixel sources.",
+   "params": []
+  },
+  {
+   "id": "ndvi",
+   "name": "NDVI filter",
+   "author": "Brian Matherly",
+   "kind": "filter",
+   "explanation": "This filter creates a false image from a visible + infrared source.",
+   "params": [
+    {
+     "name": "Color Map",
+     "type": "string",
+     "explanation": "The color map to use. One of 'earth', 'grayscale', 'heat' or 'rainbow'."
+    },
+    {
+     "name": "Levels",
+     "type": "double",
+     "explanation": "The number of color levels to use in the false image (divided by 1000).",
+     "default": 0.256
+    },
+    {
+     "name": "VIS Scale",
+     "type": "double",
+     "explanation": "A scaling factor to be applied to the visible component (divided by 10).",
+     "default": 0.1
+    },
+    {
+     "name": "VIS Offset",
+     "type": "double",
+     "explanation": "An offset to be applied to the visible component (mapped to [-100%, 100%].",
+     "default": 0.5
+    },
+    {
+     "name": "NIR Scale",
+     "type": "double",
+     "explanation": "A scaling factor to be applied to the near-infrared component (divided by 10).",
+     "default": 0.1
+    },
+    {
+     "name": "NIR Offset",
+     "type": "double",
+     "explanation": "An offset to be applied to the near-infrared component (mapped to [-100%, 100%].",
+     "default": 0.5
+    },
+    {
+     "name": "Visible Channel",
+     "type": "string",
+     "explanation": "The channel to use for the visible component. One of 'r', 'g', or 'b'."
+    },
+    {
+     "name": "NIR Channel",
+     "type": "string",
+     "explanation": "The channel to use for the near-infrared component. One of 'r', 'g', or 'b'."
+    },
+    {
+     "name": "Index Calculation",
+     "type": "string",
+     "explanation": "The index calculation to use. One of 'ndvi' or 'vi'."
+    },
+    {
+     "name": "Legend",
+     "type": "string",
+     "explanation": "Control legend display. One of 'off' or 'bottom'."
+    }
+   ]
+  },
+  {
+   "id": "nervous",
+   "name": "Nervous",
+   "author": "Tannenbaum, Kentaro, Jaromil",
+   "kind": "filter",
+   "explanation": "flushes frames in time in a nervous way",
+   "params": []
+  },
+  {
+   "id": "nois0r",
+   "name": "Nois0r",
+   "author": "Martin Bayer",
+   "kind": "source",
+   "explanation": "Generates white noise images",
+   "params": []
+  },
+  {
+   "id": "normaliz0r",
+   "name": "Normaliz0r",
+   "author": "Chungzuwalla (chungzuwalla@rling.com)",
+   "kind": "filter",
+   "explanation": "Normalize (aka histogram stretch, contrast stretch)",
+   "params": [
+    {
+     "name": "BlackPt",
+     "type": "color",
+     "explanation": "Output color to which darkest input color is mapped (default black)"
+    },
+    {
+     "name": "WhitePt",
+     "type": "color",
+     "explanation": "Output color to which brightest input color is mapped (default white)"
+    },
+    {
+     "name": "Smoothing",
+     "type": "double",
+     "explanation": "Amount of temporal smoothing of the input range, to reduce flicker (default 0.0)",
+     "default": 0.0
+    },
+    {
+     "name": "Independence",
+     "type": "double",
+     "explanation": "Proportion of independent to linked channel normalization (default 1.0)",
+     "default": 1.0
+    },
+    {
+     "name": "Strength",
+     "type": "double",
+     "explanation": "Strength of filter, from no effect to full normalization (default 1.0)",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "nosync0r",
+   "name": "nosync0r",
+   "author": "Martin Bayer",
+   "kind": "filter",
+   "explanation": "broken tv",
+   "params": [
+    {
+     "name": "HSync",
+     "type": "double",
+     "explanation": "the hsync offset",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "onecol0r",
+   "name": "onecol0r",
+   "author": "Martin Bayer",
+   "kind": "source",
+   "explanation": "image with just one color",
+   "params": [
+    {
+     "name": "Color",
+     "type": "color",
+     "explanation": "the color of the image"
+    }
+   ]
+  },
+  {
+   "id": "overlay",
+   "name": "overlay",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] overlay operation between the pixel sources, using the generalised algorithm:\nD =  A * (B + (2 * B) * (255 - A))",
+   "params": []
+  },
+  {
+   "id": "partik0l",
+   "name": "Partik0l",
+   "author": "Jaromil",
+   "kind": "source",
+   "explanation": "Particles generated on prime number sinusoidal blossoming",
+   "params": [
+    {
+     "name": "up",
+     "type": "double",
+     "explanation": "blossom on a higher prime number",
+     "default": 0.0
+    },
+    {
+     "name": "down",
+     "type": "double",
+     "explanation": "blossom on a lower prime number",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "perspective",
+   "name": "Perspective",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Distorts the image for a pseudo perspective",
+   "params": [
+    {
+     "name": "Top Left",
+     "type": "position",
+     "explanation": ""
+    },
+    {
+     "name": "Top Right",
+     "type": "position",
+     "explanation": ""
+    },
+    {
+     "name": "Bottom Left",
+     "type": "position",
+     "explanation": ""
+    },
+    {
+     "name": "Bottom Right",
+     "type": "position",
+     "explanation": ""
+    }
+   ]
+  },
+  {
+   "id": "pixeliz0r",
+   "name": "pixeliz0r",
+   "author": "Gephex crew",
+   "kind": "filter",
+   "explanation": "Pixelize input image.",
+   "params": [
+    {
+     "name": "Block width",
+     "type": "double",
+     "explanation": "Horizontal size of one \"pixel\"",
+     "default": 0.21875
+    },
+    {
+     "name": "Block height",
+     "type": "double",
+     "explanation": "Vertical size of one \"pixel\"",
+     "default": 0.21875
+    }
+   ]
+  },
+  {
+   "id": "plasma",
+   "name": "Plasma",
+   "author": "Jaromil",
+   "kind": "source",
+   "explanation": "Demo scene 8bit plasma",
+   "params": [
+    {
+     "name": "1_speed",
+     "type": "double",
+     "explanation": " ",
+     "default": 1.0
+    },
+    {
+     "name": "2_speed",
+     "type": "double",
+     "explanation": " ",
+     "default": 1.0
+    },
+    {
+     "name": "3_speed",
+     "type": "double",
+     "explanation": " ",
+     "default": 1.0
+    },
+    {
+     "name": "4_speed",
+     "type": "double",
+     "explanation": " ",
+     "default": 1.0
+    },
+    {
+     "name": "1_move",
+     "type": "double",
+     "explanation": " ",
+     "default": 1.0
+    },
+    {
+     "name": "2_move",
+     "type": "double",
+     "explanation": " ",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "posterize",
+   "name": "posterize",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Posterizes image by reducing the number of colors used in image",
+   "params": [
+    {
+     "name": "levels",
+     "type": "double",
+     "explanation": "Number of values per channel",
+     "default": 0.104167
+    }
+   ]
+  },
+  {
+   "id": "pr0be",
+   "name": "pr0be",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Measure video values",
+   "params": [
+    {
+     "name": "Measurement",
+     "type": "double",
+     "explanation": "What measurement to display",
+     "default": 0.0
+    },
+    {
+     "name": "X",
+     "type": "double",
+     "explanation": "X position of probe",
+     "default": 0.5
+    },
+    {
+     "name": "Y",
+     "type": "double",
+     "explanation": "Y position of probe",
+     "default": 0.5
+    },
+    {
+     "name": "X size",
+     "type": "double",
+     "explanation": "X size of probe",
+     "default": 0.25
+    },
+    {
+     "name": "Y size",
+     "type": "double",
+     "explanation": "Y size of probe",
+     "default": 0.25
+    },
+    {
+     "name": "256 scale",
+     "type": "bool",
+     "explanation": "use 0-255 instead of 0.0-1.0",
+     "default": 0.0
+    },
+    {
+     "name": "Show alpha",
+     "type": "bool",
+     "explanation": "Display alpha value too",
+     "default": 0.0
+    },
+    {
+     "name": "Big window",
+     "type": "bool",
+     "explanation": "Display more data",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "pr0file",
+   "name": "pr0file",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "2D video oscilloscope",
+   "params": [
+    {
+     "name": "X",
+     "type": "double",
+     "explanation": "X position of profile",
+     "default": 0.5
+    },
+    {
+     "name": "Y",
+     "type": "double",
+     "explanation": "Y position of profile",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt",
+     "type": "double",
+     "explanation": "Tilt of profile",
+     "default": 0.5
+    },
+    {
+     "name": "Length",
+     "type": "double",
+     "explanation": "Length of profile",
+     "default": 0.397109
+    },
+    {
+     "name": "Channel",
+     "type": "double",
+     "explanation": "Channel to numerically display",
+     "default": 0.375005
+    },
+    {
+     "name": "Marker 1",
+     "type": "double",
+     "explanation": "Position of marker 1",
+     "default": 0.0
+    },
+    {
+     "name": "Marker 2",
+     "type": "double",
+     "explanation": "Position of marker 2",
+     "default": 0.0
+    },
+    {
+     "name": "R trace",
+     "type": "bool",
+     "explanation": "Show R trace on scope",
+     "default": 1.0
+    },
+    {
+     "name": "G trace",
+     "type": "bool",
+     "explanation": "Show G trace on scope",
+     "default": 1.0
+    },
+    {
+     "name": "B trace",
+     "type": "bool",
+     "explanation": "Show B trace on scope",
+     "default": 1.0
+    },
+    {
+     "name": "Y trace",
+     "type": "bool",
+     "explanation": "Show Y' trace on scope",
+     "default": 0.0
+    },
+    {
+     "name": "Pr trace",
+     "type": "bool",
+     "explanation": "Show Pr trace on scope",
+     "default": 0.0
+    },
+    {
+     "name": "Pb trace",
+     "type": "bool",
+     "explanation": "Show Pb trace on scope",
+     "default": 0.0
+    },
+    {
+     "name": "Alpha trace",
+     "type": "bool",
+     "explanation": "Show Alpha trace on scope",
+     "default": 0.0
+    },
+    {
+     "name": "Display average",
+     "type": "bool",
+     "explanation": "e",
+     "default": 1.0
+    },
+    {
+     "name": "Display RMS",
+     "type": "bool",
+     "explanation": "",
+     "default": 1.0
+    },
+    {
+     "name": "Display minimum",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Display maximum",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "256 scale",
+     "type": "bool",
+     "explanation": "use 0-255 instead of 0.0-1.0",
+     "default": 0.0
+    },
+    {
+     "name": "Color",
+     "type": "double",
+     "explanation": "rec 601 or rec 709",
+     "default": 0.0
+    },
+    {
+     "name": "Crosshair color",
+     "type": "double",
+     "explanation": "Color of the profile marker",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "premultiply",
+   "name": "Premultiply or Unpremultiply",
+   "author": "Dan Dennedy",
+   "kind": "filter",
+   "explanation": "Multiply (or divide) each color component by the pixel's alpha value",
+   "params": [
+    {
+     "name": "unpremultiply",
+     "type": "bool",
+     "explanation": "Whether to unpremultiply instead",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "primaries",
+   "name": "primaries",
+   "author": "Hedde Bosman",
+   "kind": "filter",
+   "explanation": "Reduce image to primary colors",
+   "params": [
+    {
+     "name": "Factor",
+     "type": "double",
+     "explanation": "influence of mean px value. > 32 = 0",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "rgbnoise",
+   "name": "rgbnoise",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Adds RGB noise to image.",
+   "params": [
+    {
+     "name": "noise",
+     "type": "double",
+     "explanation": "Amount of noise added",
+     "default": 0.2
+    }
+   ]
+  },
+  {
+   "id": "rgbparade",
+   "name": "RGB-Parade",
+   "author": "Albert Frisch",
+   "kind": "filter",
+   "explanation": "Displays a histogram of R, G and B of the video-data",
+   "params": [
+    {
+     "name": "mix",
+     "type": "double",
+     "explanation": "The amount of source image mixed into background of display",
+     "default": 0.0
+    },
+    {
+     "name": "overlay sides",
+     "type": "bool",
+     "explanation": "If false, the sides of image are shown without overlay",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "rgbsplit0r",
+   "name": "rgbsplit0r",
+   "author": "IDENT Software",
+   "kind": "filter",
+   "explanation": "RGB splitting and shifting",
+   "params": [
+    {
+     "name": "Vertical split distance",
+     "type": "double",
+     "explanation": "How far should layers be moved vertically from each other",
+     "default": 0.5
+    },
+    {
+     "name": "Horizontal split distance",
+     "type": "double",
+     "explanation": "How far should layers be moved horizontally from each other",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "saturat0r",
+   "name": "Saturat0r",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "filter",
+   "explanation": "Adjusts the saturation of a source image",
+   "params": [
+    {
+     "name": "Saturation",
+     "type": "double",
+     "explanation": "The saturation value",
+     "default": 0.125
+    }
+   ]
+  },
+  {
+   "id": "saturation",
+   "name": "saturation",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform a conversion to saturation only of the source input1 using the saturation level of input2.",
+   "params": []
+  },
+  {
+   "id": "scale0tilt",
+   "name": "Scale0Tilt",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Scales, Tilts and Crops an Image",
+   "params": [
+    {
+     "name": "Clip left",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Clip right",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Clip top",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Clip bottom",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Scale X",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Scale Y",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt X",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt Y",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "scanline0r",
+   "name": "scanline0r",
+   "author": "Martin Bayer",
+   "kind": "filter",
+   "explanation": "interlaced dark lines",
+   "params": []
+  },
+  {
+   "id": "screen",
+   "name": "screen",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] screen operation between the pixel sources, using the generalised algorithm:\nD = 255 - (255 - A) * (255 - B)",
+   "params": []
+  },
+  {
+   "id": "select0r",
+   "name": "select0r",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Color based alpha selection",
+   "params": [
+    {
+     "name": "Color to select",
+     "type": "color",
+     "explanation": ""
+    },
+    {
+     "name": "Invert selection",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Delta R / A / Hue",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Delta G / B / Chroma",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Delta B / I / I",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Slope",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Selection subspace",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Subspace shape",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Edge mode",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Operation",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "sharpness",
+   "name": "Sharpness",
+   "author": "Marko Cebokli, Remi Guyomarch",
+   "kind": "filter",
+   "explanation": "Unsharp masking (port from Mplayer)",
+   "params": [
+    {
+     "name": "Amount",
+     "type": "double",
+     "explanation": "",
+     "default": 0.3
+    },
+    {
+     "name": "Size",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "sigmoidaltransfer",
+   "name": "sigmoidaltransfer",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Desaturates image and creates a particular look that could be called Stamp, Newspaper or Photocopy",
+   "params": [
+    {
+     "name": "brightness",
+     "type": "double",
+     "explanation": "Brightnesss of image",
+     "default": 0.75
+    },
+    {
+     "name": "sharpness",
+     "type": "double",
+     "explanation": "Sharpness of transfer",
+     "default": 0.85
+    }
+   ]
+  },
+  {
+   "id": "sobel",
+   "name": "Sobel",
+   "author": "Jean-Sebastien Senecal (Drone)",
+   "kind": "filter",
+   "explanation": "Sobel filter",
+   "params": []
+  },
+  {
+   "id": "softglow",
+   "name": "softglow",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Does softglow effect on highlights",
+   "params": [
+    {
+     "name": "blur",
+     "type": "double",
+     "explanation": "Blur of the glow",
+     "default": 0.5
+    },
+    {
+     "name": "brightness",
+     "type": "double",
+     "explanation": "Brightness of highlight areas",
+     "default": 0.75
+    },
+    {
+     "name": "sharpness",
+     "type": "double",
+     "explanation": "Sharpness of highlight areas",
+     "default": 0.85
+    },
+    {
+     "name": "blurblend",
+     "type": "double",
+     "explanation": "Blend mode used to blend highlight blur with input image",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "softlight",
+   "name": "softlight",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] softlight operation between the pixel sources.",
+   "params": []
+  },
+  {
+   "id": "sopsat",
+   "name": "SOP/Sat",
+   "author": "Simon A. Eugster (Granjow)",
+   "kind": "filter",
+   "explanation": "Slope/Offset/Power and Saturation color corrections according to the ASC CDL (Color Decision List)",
+   "params": [
+    {
+     "name": "rSlope",
+     "type": "double",
+     "explanation": "Slope of the red color component",
+     "default": 0.05
+    },
+    {
+     "name": "gSlope",
+     "type": "double",
+     "explanation": "Slope of the green color component",
+     "default": 0.05
+    },
+    {
+     "name": "bSlope",
+     "type": "double",
+     "explanation": "Slope of the blue color component",
+     "default": 0.05
+    },
+    {
+     "name": "aSlope",
+     "type": "double",
+     "explanation": "Slope of the alpha component",
+     "default": 0.05
+    },
+    {
+     "name": "rOffset",
+     "type": "double",
+     "explanation": "Offset of the red color component",
+     "default": 0.5
+    },
+    {
+     "name": "gOffset",
+     "type": "double",
+     "explanation": "Offset of the green color component",
+     "default": 0.5
+    },
+    {
+     "name": "bOffset",
+     "type": "double",
+     "explanation": "Offset of the blue color component",
+     "default": 0.5
+    },
+    {
+     "name": "aOffset",
+     "type": "double",
+     "explanation": "Offset of the alpha component",
+     "default": 0.5
+    },
+    {
+     "name": "rPower",
+     "type": "double",
+     "explanation": "Power (Gamma) of the red color component",
+     "default": 0.05
+    },
+    {
+     "name": "gPower",
+     "type": "double",
+     "explanation": "Power (Gamma) of the green color component",
+     "default": 0.05
+    },
+    {
+     "name": "bPower",
+     "type": "double",
+     "explanation": "Power (Gamma) of the blue color component",
+     "default": 0.05
+    },
+    {
+     "name": "aPower",
+     "type": "double",
+     "explanation": "Power (Gamma) of the alpha component",
+     "default": 0.05
+    },
+    {
+     "name": "saturation",
+     "type": "double",
+     "explanation": "Overall saturation",
+     "default": 0.1
+    }
+   ]
+  },
+  {
+   "id": "spillsupress",
+   "name": "spillsupress",
+   "author": "Janne Liljeblad",
+   "kind": "filter",
+   "explanation": "Remove green or blue spill light from subjects shot in front of green or blue screen",
+   "params": [
+    {
+     "name": "supresstype",
+     "type": "double",
+     "explanation": "Defines if green or blue screen spill suppress is applied",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "squareblur",
+   "name": "Squareblur",
+   "author": "Drone",
+   "kind": "filter",
+   "explanation": "Variable-size square blur",
+   "params": [
+    {
+     "name": "Kernel size",
+     "type": "double",
+     "explanation": "The size of the kernel, as a proportion to its coverage of the image",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "subtract",
+   "name": "subtract",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform an RGB[A] subtract operation of the pixel source input2 from input1.",
+   "params": []
+  },
+  {
+   "id": "tehroxx0r",
+   "name": "TehRoxx0r",
+   "author": "Coma",
+   "kind": "filter",
+   "explanation": "Something videowall-ish",
+   "params": [
+    {
+     "name": "Interval",
+     "type": "double",
+     "explanation": "Changing speed of small blocks",
+     "default": 0.01
+    }
+   ]
+  },
+  {
+   "id": "test_pat_B",
+   "name": "test_pat_B",
+   "author": "Marko Cebokli",
+   "kind": "source",
+   "explanation": "Generates test card lookalikes",
+   "params": [
+    {
+     "name": "Type",
+     "type": "double",
+     "explanation": "8 choices, select test pattern",
+     "default": 0.0
+    },
+    {
+     "name": "Aspect type",
+     "type": "double",
+     "explanation": "7 choices, pixel aspect ratio",
+     "default": 0.0
+    },
+    {
+     "name": "Manual Aspect",
+     "type": "double",
+     "explanation": "Manual pixel aspect ratio (Aspect type 6)",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "test_pat_C",
+   "name": "test_pat_C",
+   "author": "Marko Cebokli",
+   "kind": "source",
+   "explanation": "Generates cross sections of color spaces",
+   "params": [
+    {
+     "name": "Color space",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Cross section",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Third axis value",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Fullscreen",
+     "type": "bool",
+     "explanation": ""
+    }
+   ]
+  },
+  {
+   "id": "test_pat_G",
+   "name": "test_pat_G",
+   "author": "Marko Cebokli",
+   "kind": "source",
+   "explanation": "Generates geometry test pattern images",
+   "params": [
+    {
+     "name": "Type",
+     "type": "double",
+     "explanation": "Type of test pattern",
+     "default": 0.0
+    },
+    {
+     "name": "Size 1",
+     "type": "double",
+     "explanation": "Size of major features",
+     "default": 0.28125
+    },
+    {
+     "name": "Size 2",
+     "type": "double",
+     "explanation": "Size of minor features",
+     "default": 0.0625
+    },
+    {
+     "name": "Negative",
+     "type": "bool",
+     "explanation": "Polarity of image",
+     "default": 0.0
+    },
+    {
+     "name": "Aspect type",
+     "type": "double",
+     "explanation": "Pixel aspect ratio presets",
+     "default": 0.0
+    },
+    {
+     "name": "Manual Aspect",
+     "type": "double",
+     "explanation": "Manual pixel aspect ratio",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "test_pat_I",
+   "name": "test_pat_I",
+   "author": "Marko Cebokli",
+   "kind": "source",
+   "explanation": "Generates spatial impulse and step test patterns",
+   "params": [
+    {
+     "name": "Type",
+     "type": "double",
+     "explanation": "Type of test pattern",
+     "default": 0.0
+    },
+    {
+     "name": "Channel",
+     "type": "double",
+     "explanation": "Into which color channel to draw",
+     "default": 0.0
+    },
+    {
+     "name": "Amplitude",
+     "type": "double",
+     "explanation": "Amplitude (contrast) of the pattern",
+     "default": 0.8
+    },
+    {
+     "name": "Width",
+     "type": "double",
+     "explanation": "Width of impulse",
+     "default": 0.040404
+    },
+    {
+     "name": "Tilt",
+     "type": "double",
+     "explanation": "Angle of step function",
+     "default": 0.5
+    },
+    {
+     "name": "Negative",
+     "type": "bool",
+     "explanation": "Change polarity of impulse/step",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "test_pat_L",
+   "name": "test_pat_L",
+   "author": "Marko Cebokli",
+   "kind": "source",
+   "explanation": "Generates linearity checking patterns",
+   "params": [
+    {
+     "name": "Type",
+     "type": "double",
+     "explanation": "Type of test pattern",
+     "default": 0.0
+    },
+    {
+     "name": "Channel",
+     "type": "double",
+     "explanation": "Into which color channel to draw",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "test_pat_R",
+   "name": "test_pat_R",
+   "author": "Marko Cebokli",
+   "kind": "source",
+   "explanation": "Generates resolution test patterns",
+   "params": [
+    {
+     "name": "Type",
+     "type": "double",
+     "explanation": "Type of test pattern",
+     "default": 0.0
+    },
+    {
+     "name": "Channel",
+     "type": "double",
+     "explanation": "Into which color channel to draw",
+     "default": 0.0
+    },
+    {
+     "name": "Amplitude",
+     "type": "double",
+     "explanation": "Amplitude (contrast) of the pattern",
+     "default": 0.8
+    },
+    {
+     "name": "Lin P swp",
+     "type": "bool",
+     "explanation": "Use linear period sweep",
+     "default": 0.0
+    },
+    {
+     "name": "Freq 1",
+     "type": "double",
+     "explanation": "Pattern 7 H frequency",
+     "default": 0.03
+    },
+    {
+     "name": "Freq 2",
+     "type": "double",
+     "explanation": "Pattern 7 V frequency",
+     "default": 0.03
+    },
+    {
+     "name": "Aspect type",
+     "type": "double",
+     "explanation": "Pixel aspect ratio presets",
+     "default": 0.0
+    },
+    {
+     "name": "Manual aspect",
+     "type": "double",
+     "explanation": "Manual pixel aspect ratio",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "three_point_balance",
+   "name": "3 point color balance",
+   "author": "Maksim Golovkin",
+   "kind": "filter",
+   "explanation": "Adjust color balance with 3 color points",
+   "params": [
+    {
+     "name": "Black color",
+     "type": "color",
+     "explanation": "Black color"
+    },
+    {
+     "name": "Gray color",
+     "type": "color",
+     "explanation": "Gray color"
+    },
+    {
+     "name": "White color",
+     "type": "color",
+     "explanation": "White color"
+    },
+    {
+     "name": "Split preview",
+     "type": "bool",
+     "explanation": "Split privew",
+     "default": 1.0
+    },
+    {
+     "name": "Source image on left side",
+     "type": "bool",
+     "explanation": "Source image on left side",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "threelay0r",
+   "name": "threelay0r",
+   "author": "Hedde Bosman",
+   "kind": "filter",
+   "explanation": "dynamic 3 level thresholding",
+   "params": []
+  },
+  {
+   "id": "threshold0r",
+   "name": "Threshold0r",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "filter",
+   "explanation": "Thresholds a source image",
+   "params": [
+    {
+     "name": "Threshold",
+     "type": "double",
+     "explanation": "The threshold",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "timeout",
+   "name": "Timeout indicator",
+   "author": "Simon A. Eugster",
+   "kind": "filter",
+   "explanation": "Timeout indicators e.g. for slides.",
+   "params": [
+    {
+     "name": "time",
+     "type": "double",
+     "explanation": "Current time",
+     "default": 0.0
+    },
+    {
+     "name": "color",
+     "type": "color",
+     "explanation": "Indicator colour"
+    },
+    {
+     "name": "transparency",
+     "type": "double",
+     "explanation": "Indicator transparency",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "tint0r",
+   "name": "Tint0r",
+   "author": "Maksim Golovkin",
+   "kind": "filter",
+   "explanation": "Tint a source image with specified color",
+   "params": [
+    {
+     "name": "Map black to",
+     "type": "color",
+     "explanation": "The color to map source color with null luminance"
+    },
+    {
+     "name": "Map white to",
+     "type": "color",
+     "explanation": "The color to map source color with full luminance"
+    },
+    {
+     "name": "Tint amount",
+     "type": "double",
+     "explanation": "Amount of color",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "transparency",
+   "name": "Transparency",
+   "author": "Richard Spindler",
+   "kind": "filter",
+   "explanation": "Tunes the alpha channel.",
+   "params": [
+    {
+     "name": "Transparency",
+     "type": "double",
+     "explanation": "The transparency value",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "twolay0r",
+   "name": "Twolay0r",
+   "author": "Martin Bayer",
+   "kind": "filter",
+   "explanation": "dynamic thresholding",
+   "params": []
+  },
+  {
+   "id": "uvmap",
+   "name": "UV Map",
+   "author": "Richard Spindler",
+   "kind": "mixer2",
+   "explanation": "Uses Input 1 as UV Map to distort Input 2",
+   "params": []
+  },
+  {
+   "id": "value",
+   "name": "value",
+   "author": "Jean-Sebastien Senecal",
+   "kind": "mixer2",
+   "explanation": "Perform a conversion to value only of the source input1 using the value of input2.",
+   "params": []
+  },
+  {
+   "id": "vectorscope",
+   "name": "Vectorscope",
+   "author": "Albert Frisch",
+   "kind": "filter",
+   "explanation": "Displays the vectorscope of the video-data",
+   "params": [
+    {
+     "name": "mix",
+     "type": "double",
+     "explanation": "The amount of source image mixed into background of display",
+     "default": 0.0
+    },
+    {
+     "name": "overlay sides",
+     "type": "bool",
+     "explanation": "If false, the sides of image are shown without overlay",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "vertigo",
+   "name": "Vertigo",
+   "author": "Fukuchi Kentarou",
+   "kind": "filter",
+   "explanation": "alpha blending with zoomed and rotated images",
+   "params": [
+    {
+     "name": "PhaseIncrement",
+     "type": "double",
+     "explanation": "Phase increment",
+     "default": 0.02
+    },
+    {
+     "name": "Zoomrate",
+     "type": "double",
+     "explanation": "Zoomrate",
+     "default": 0.202
+    }
+   ]
+  },
+  {
+   "id": "vignette",
+   "name": "Vignette",
+   "author": "Simon A. Eugster (Granjow)",
+   "kind": "filter",
+   "explanation": "Lens vignetting effect, applies natural vignetting",
+   "params": [
+    {
+     "name": "aspect",
+     "type": "double",
+     "explanation": "Aspect ratio",
+     "default": 0.5
+    },
+    {
+     "name": "clearCenter",
+     "type": "double",
+     "explanation": "Size of the unaffected center",
+     "default": 0.0
+    },
+    {
+     "name": "soft",
+     "type": "double",
+     "explanation": "Softness",
+     "default": 0.6
+    }
+   ]
+  },
+  {
+   "id": "xfade0r",
+   "name": "xfade0r",
+   "author": "Martin Bayer",
+   "kind": "mixer2",
+   "explanation": "a simple xfader",
+   "params": [
+    {
+     "name": "fader",
+     "type": "double",
+     "explanation": "the fader position"
+    }
+   ]
+  }
+ ]
+}

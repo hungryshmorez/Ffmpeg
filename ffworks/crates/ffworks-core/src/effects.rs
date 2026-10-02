@@ -41,7 +41,14 @@ const fn pa(id: &'static str, name: &'static str, min: f64, max: f64, default: f
     ParamDef { id, name, min, max, default, step, unit, animatable: true }
 }
 
+/// All effects offered on this machine: the built-in ones plus the frei0r plugins that are installed.
 pub fn registry() -> Vec<EffectDef> {
+    let mut v = builtin_registry();
+    v.extend(crate::frei0r::offered());
+    v
+}
+
+fn builtin_registry() -> Vec<EffectDef> {
     let e = |id, name, category, requires: &'static [&'static str], params| EffectDef { id, name, kind: "video", category, requires, params, alpha: false };
     let au = |id, name, category, requires: &'static [&'static str], params| EffectDef { id, name, kind: "audio", category, requires, params, alpha: false };
     vec![
@@ -79,6 +86,10 @@ pub fn registry() -> Vec<EffectDef> {
 }
 
 pub fn find(id: &str) -> Result<EffectDef> {
+    // frei0r effects always resolve (so saved projects load anywhere); `registry()` lists only the installed ones
+    if let Some(d) = crate::frei0r::find(id) {
+        return Ok(d);
+    }
     registry().into_iter().find(|e| e.id == id).ok_or_else(|| Error::validation(format!("unknown effect '{id}'")))
 }
 
@@ -158,6 +169,7 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
     };
     let eval = |k: &str| if animated(k) { ":eval=frame" } else { "" };
     Ok(Some(match inst.effect.as_str() {
+        id if id.starts_with(crate::frei0r::PREFIX) => crate::frei0r::filter_text(id, &inst.params).ok_or_else(|| Error::validation(format!("bad frei0r effect '{id}'")))?,
         GRAPH_EFFECT => {
             let g = inst.graph.as_ref().ok_or_else(|| Error::validation("graph effect has no graph"))?;
             // a pure pass-through changes nothing

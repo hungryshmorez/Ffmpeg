@@ -2,7 +2,7 @@
 # GUI test for registering several FFmpeg builds, switching the active one and exporting with another.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-W=$(mktemp -d "/tmp/ffworks-engines.XXXXXX"); mkdir -p "$W/cache" "$W/builds/ffA/bin" "$W/builds/ffB" "$W/builds/orphan"
+W=$(mktemp -d "/tmp/ffworks-engines.XXXXXX"); mkdir -p "$W/cache" "$W/builds/ffA/bin" "$W/builds/ffB" "$W/builds/orphan" "$W/builds/f0"
 FF=$(command -v ffmpeg); FP=$(command -v ffprobe)
 ln -s "$FF" "$W/builds/ffA/bin/ffmpeg"; ln -s "$FP" "$W/builds/ffA/bin/ffprobe"
 ln -s "$FF" "$W/builds/ffB/ffmpeg";     ln -s "$FP" "$W/builds/ffB/ffprobe"

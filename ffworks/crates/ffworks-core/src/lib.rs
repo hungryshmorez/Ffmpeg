@@ -14,6 +14,7 @@ pub mod ffprobe;
 pub mod filterdb;
 pub mod filtergraph;
 pub mod fonts;
+pub mod frei0r;
 pub mod generators;
 pub mod jobs;
 pub mod glx;

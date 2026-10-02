@@ -69,6 +69,30 @@
     await sleep(500);
     const d2 = await inv("get_diagnostics");
     step("removing the build in use returns the app to the default", !/ffA/.test(d2.ffmpegPath) && /in use/.test(rows()[0].textContent), d2.ffmpegPath);
+
+    // frei0r: status, extra folders, and the plugin showing up as an effect
+    const st = await waitFor(() => /frei0r/.test(($("[data-frei0r-status]") || { textContent: "" }).textContent) && !/Checking/.test($("[data-frei0r-status]").textContent) && $("[data-frei0r-status]"));
+    const f0 = await inv("frei0r_status");
+    step("the dialog reports frei0r support and found plugins", !!st && f0.ffmpegHasFilter && f0.installed > 20 && /can load frei0r/.test(st.textContent), st && st.textContent);
+    step("glitch0r is among the usable plugins", f0.offered.includes("Glitch0r"), f0.offered.slice(0, 8).join());
+    const ta = $("#f0dirs"); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "__BUILDS__/f0"); ta.dispatchEvent(new Event("input", { bubbles: true })); await sleep(100);
+    btn(/^Save and rescan$/, $(".engines-dialog")).click();
+    await waitFor(async () => true); await sleep(600);
+    const saved = await inv("get_settings");
+    step("extra plugin folders are saved in the settings", JSON.stringify(saved.frei0r_dirs) === JSON.stringify(["__BUILDS__/f0"]), JSON.stringify(saved.frei0r_dirs));
+    btn(/^Close$/, $(".engines-dialog")).click(); await sleep(200);
+    const clip = $$(".track.video .clip")[0];
+    const r = clip.getBoundingClientRect();
+    clip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, button: 0, clientX: r.left + 20, clientY: r.top + 10 })); clip.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })); await sleep(400);
+    const sel = await waitFor(() => { const e = $("[data-kind='video'] select[aria-label='Effect to add']"); return e && e.options.length > 5 ? e : null; });
+    const opt = sel && [...sel.options].find((o) => /Glitch0r/.test(o.textContent));
+    step("the effect list offers Glitch0r in a Frei0r group", !!opt && opt.parentElement.label === "Frei0r", opt && opt.parentElement.label);
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(sel, opt.value); sel.dispatchEvent(new Event("change", { bubbles: true }));
+    btn(/^Add$/, $("[data-kind='video']")).click();
+    const fx = await waitFor(() => view().project.sequences[0].tracks.flatMap((t) => t.clips).flatMap((c) => c.effects).find((e) => e.effect === "f0:glitch0r"));
+    step("adding it puts a frei0r effect on the clip", !!fx, JSON.stringify(fx));
+    await waitFor(() => /Glitch frequency/.test(($("[data-effect='f0:glitch0r']") || { textContent: "" }).textContent));
+    step("its four parameters are sliders named by the plugin", ["Glitch frequency", "Block height", "Shift intensity", "Color glitching intensity"].every((n) => ($("[data-effect='f0:glitch0r']") || { textContent: "" }).textContent.includes(n)), ($("[data-effect='f0:glitch0r']") || { textContent: "" }).textContent.slice(0, 200));
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

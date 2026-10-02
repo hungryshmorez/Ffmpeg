@@ -19,6 +19,9 @@ pub struct Settings {
     /// Id of the registered build used for everything unless an export names another; when unset, `ffmpeg_path` etc. apply.
     #[serde(default)]
     pub active_engine: Option<String>,
+    /// Extra folders holding frei0r plugins (glitch0r, pixeliz0r...), searched before the standard ones.
+    #[serde(default)]
+    pub frei0r_dirs: Vec<String>,
 }
 
 /// A set of favourite effects and transitions (ids as listed by the effect registry / FFmpeg's transition names).

@@ -27,10 +27,13 @@ export function EnginesDialog() {
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
+  const [f0, setF0] = useState<{ ffmpegHasFilter: boolean; dirs: string[]; installed: number; offered: string[] } | null>(null);
+  const [f0dirs, setF0dirs] = useState("");
   const refresh = useCallback(async () => {
     try { const r = await api.listEngines(); setList(r.engines); setActive(r.active); } catch (e) { toast("error", String(e)); }
   }, [toast]);
-  useEffect(() => { if (open) void refresh(); }, [open, refresh]);
+  const refreshF0 = useCallback(async () => { try { const r = await api.frei0rStatus(); setF0(r); setF0dirs(r.dirs.join("\n")); } catch (e) { toast("error", String(e)); } }, [toast]);
+  useEffect(() => { if (open) { void refresh(); void refreshF0(); } }, [open, refresh, refreshF0]);
   if (!open) return null;
   const guard = async (f: () => Promise<unknown>) => { setBusy(true); try { await f(); await refresh(); } catch (e) { toast("error", String(e)); } finally { setBusy(false); } };
   const scan = async () => {
@@ -83,6 +86,18 @@ export function EnginesDialog() {
           <input type="text" aria-label="Path of ffmpeg" placeholder="Path of ffmpeg.exe" value={path} onChange={(e) => setPath(e.target.value)} className="grow" />
           <button disabled={busy} onClick={async () => { const p = await pickPath({ title: "Select ffmpeg" }); if (typeof p === "string") setPath(p); }}>Browse…</button>
           <button disabled={busy || !name.trim() || !path.trim()} onClick={() => void guard(async () => { await api.addEngine(name, path); setName(""); setPath(""); })}>Add</button>
+        </div>
+        <h3>frei0r plugins (glitch0r and friends)</h3>
+        <p className="muted" data-frei0r-status>
+          {f0 ? (f0.ffmpegHasFilter ? `The FFmpeg in use can load frei0r plugins. ${f0.installed} plugin file(s) found, ${f0.offered.length} usable as effects (listed under “Frei0r” in the effect list).` : "The FFmpeg in use has no frei0r filter; pick a build that has it (the “full” builds usually do). Plugins found: " + f0.installed + ".") : "Checking…"}
+        </p>
+        <div className="field">
+          <label htmlFor="f0dirs">Extra plugin folders (one per line)</label>
+          <textarea id="f0dirs" rows={2} value={f0dirs} onChange={(e) => setF0dirs(e.target.value)} placeholder="C:\\frei0r-1\\lib" />
+          <div className="row">
+            <button onClick={async () => { const d = await pickPath({ directory: true, title: "Folder with frei0r plugins (.dll)" }); if (typeof d === "string") setF0dirs((v) => (v.trim() ? v.trim() + "\n" : "") + d); }}>Add folder…</button>
+            <button disabled={busy} onClick={() => void guard(async () => { await api.setFrei0rDirs(f0dirs.split("\n")); await refreshF0(); })}>Save and rescan</button>
+          </div>
         </div>
         <div className="row end"><button onClick={() => setOpen(false)}>Close</button></div>
       </div>
