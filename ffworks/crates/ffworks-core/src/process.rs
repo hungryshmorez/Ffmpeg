@@ -131,6 +131,9 @@ pub struct Capabilities {
     /// `(name, description)` of the `xfade` transitions this FFmpeg supports.
     #[serde(default)]
     pub xfade_transitions: Vec<(String, String)>,
+    /// Does `xfade` accept `transition=custom:expr=...`? Needed for the bundled GL transitions.
+    #[serde(default)]
+    pub xfade_custom: bool,
 }
 
 impl Capabilities {
@@ -156,8 +159,14 @@ impl Capabilities {
                 .filter(|l| !l.is_empty())
                 .collect(),
             xfade_transitions: run(&["-h", "filter=xfade"]).map(|o| parse_xfade(&o)).unwrap_or_default(),
+            xfade_custom: run(&["-h", "filter=xfade"]).map(|o| xfade_has_custom(&o)).unwrap_or(false),
         })
     }
+}
+
+/// Does the `-h filter=xfade` text list the `custom` transition and the `expr` option?
+pub fn xfade_has_custom(help: &str) -> bool {
+    help.lines().any(|l| l.split_whitespace().next() == Some("custom")) && help.lines().any(|l| l.split_whitespace().next() == Some("expr"))
 }
 
 /// Parse the `transition` choices out of `ffmpeg -h filter=xfade` (lines like `     fade   0   ..FV....... fade transition`).
@@ -202,6 +211,12 @@ mod tests {
     fn parses_xfade_transition_list() {
         let h = "xfade AVOptions:\n   transition        <int>        ..FV....... set cross fade transition (from -1 to 57) (default fade)\n     custom          -1           ..FV....... custom transition\n     fade            0            ..FV....... fade transition\n     wipeleft        1            ..FV....... wipe left transition\n   duration          <duration>   ..FV....... set cross fade duration (default 1)\n";
         assert_eq!(parse_xfade(h), vec![("fade".to_string(), "fade".to_string()), ("wipeleft".to_string(), "wipe left".to_string())]);
+    }
+
+    #[test]
+    fn detects_custom_xfade_support() {
+        assert!(xfade_has_custom("   transition <int> ..FV.......\n     custom          -1           ..FV....... custom transition\n   expr              <string>     ..FV....... set expression for custom transition\n"));
+        assert!(!xfade_has_custom("   transition <int> ..FV.......\n     fade            0            ..FV....... fade transition\n"));
     }
 
     #[test]

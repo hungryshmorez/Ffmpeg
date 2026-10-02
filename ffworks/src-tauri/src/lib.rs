@@ -283,20 +283,33 @@ async fn measure_loudness(state: State<'_, AppState>, media_id: String) -> Resul
     tauri::async_runtime::spawn_blocking(move || ffworks_core::loudness::analyze(&tools, &path, &cache, &key)).await.map_err(s)?.map_err(s)
 }
 
-#[tauri::command]
-fn list_transitions(state: State<AppState>) -> Vec<(String, String)> {
-    // what the installed FFmpeg really supports; falls back to the built-in list
-    match caps(&state) {
+/// Transitions this FFmpeg can really do: its native `xfade` list (falling back to the built-in names) plus the bundled GL
+/// transitions when its `xfade` accepts custom expressions.
+fn available_transitions(state: &AppState) -> Vec<(String, String)> {
+    let c = caps(state);
+    let mut list: Vec<(String, String)> = match &c {
         Some(c) if !c.xfade_transitions.is_empty() => c
             .xfade_transitions
-            .into_iter()
+            .iter()
             .map(|(k, d)| {
-                let label = ffworks_core::transitions::KINDS.iter().find(|(n, _)| *n == k).map(|(_, l)| l.to_string()).unwrap_or_else(|| { let mut c = d.chars(); c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or(d.clone()) });
-                (k, label)
+                let label = ffworks_core::transitions::KINDS.iter().find(|(n, _)| n == k).map(|(_, l)| l.to_string()).unwrap_or_else(|| {
+                    let mut ch = d.chars();
+                    ch.next().map(|f| f.to_uppercase().collect::<String>() + ch.as_str()).unwrap_or(d.clone())
+                });
+                (k.clone(), label)
             })
             .collect(),
         _ => ffworks_core::transitions::KINDS.iter().map(|(k, l)| (k.to_string(), l.to_string())).collect(),
+    };
+    if c.is_some_and(|c| c.xfade_custom) {
+        list.extend(ffworks_core::glx::all().iter().map(|(n, _)| (n.to_string(), ffworks_core::glx::label(n))));
     }
+    list
+}
+
+#[tauri::command]
+fn list_transitions(state: State<AppState>) -> Vec<(String, String)> {
+    available_transitions(&state)
 }
 
 #[tauri::command]
@@ -387,10 +400,7 @@ fn random_effects(state: State<AppState>, clip: String, count: usize, pool: Stri
 fn random_transitions(state: State<AppState>, clip: String, count: usize, pool: String, seed: Option<u64>, duration: Option<f64>) -> Result<serde_json::Value, String> {
     let favs = ffworks_core::settings::Settings::load(&state.settings_file).favourites;
     let group = favs.pool(&pool).map_err(s)?;
-    let available: Vec<String> = match caps(&state) {
-        Some(c) if !c.xfade_transitions.is_empty() => c.xfade_transitions.into_iter().map(|(k, _)| k).collect(),
-        _ => ffworks_core::transitions::KINDS.iter().map(|(k, _)| k.to_string()).collect(),
-    };
+    let available: Vec<String> = available_transitions(&state).into_iter().map(|(k, _)| k).collect();
     let kinds: Vec<String> = match group {
         Some(g) if g.transitions.is_empty() => return Err(format!("No favourite transitions in '{pool}' yet: star some in the transition list first.")),
         Some(g) => available.into_iter().filter(|k| g.transitions.contains(k)).collect(),

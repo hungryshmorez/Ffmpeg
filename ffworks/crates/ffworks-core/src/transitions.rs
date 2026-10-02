@@ -94,10 +94,10 @@ pub fn snap_duration(d: Rational, fps: Fps) -> Rational {
     Rational::new(even, 1).div(fps)
 }
 
-/// Accept any plain lowercase xfade name (newer FFmpegs add transitions); the name goes into a filter graph, so nothing else is allowed.
+/// Accept a bundled GL transition (`gl_*`, see `glx.rs`) or any plain lowercase xfade name (newer FFmpegs add transitions); the name goes into a filter graph, so nothing else is allowed.
 /// Whether the *installed* FFmpeg supports it is checked when the render is compiled.
 pub fn check_kind(kind: &str) -> Result<()> {
-    if !kind.is_empty() && kind != "custom" && kind.len() <= 24 && kind.chars().all(|c| c.is_ascii_lowercase()) {
+    if crate::glx::is_gl(kind) || (!kind.is_empty() && kind != "custom" && kind.len() <= 24 && kind.chars().all(|c| c.is_ascii_lowercase())) {
         Ok(())
     } else {
         Err(Error::validation(format!("unknown transition '{kind}'")))

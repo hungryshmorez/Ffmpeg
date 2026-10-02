@@ -382,7 +382,13 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     require(&t.a.requires)?;
                     require(&t.b.requires)?;
                     require(&["xfade".to_string()])?;
-                    if let Some(caps) = caps {
+                    let gl = crate::glx::expr(&t.kind);
+                    if let (Some(caps), Some(_)) = (caps, gl) {
+                        if !caps.xfade_custom {
+                            return Err(Error::validation(format!("'{}' is a GL transition and needs an FFmpeg whose xfade supports custom expressions", t.kind)));
+                        }
+                    }
+                    if let Some(caps) = caps.filter(|_| gl.is_none()) {
                         if !caps.xfade_transitions.is_empty() && !caps.xfade_transitions.iter().any(|(k, _)| *k == t.kind) {
                             return Err(Error::validation(format!("the installed FFmpeg does not support the '{}' transition (it needs a newer FFmpeg)", t.kind)));
                         }
@@ -390,7 +396,12 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     let (la, lb) = (take(t.a.input), take(t.b.input));
                     f.push(format!("{}[ta{n}]", vchain(&la, t.a.input, t.a.source_in, t.duration, None, &t.a.filters)));
                     f.push(format!("{}[tb{n}]", vchain(&lb, t.b.input, t.b.source_in, t.duration, None, &t.b.filters)));
-                    f.push(format!("[ta{n}][tb{n}]xfade=transition={}:duration={}:offset=0,setpts=PTS-STARTPTS+{}/TB,format=yuv420p[vs{n}]", t.kind, secs(t.duration), secs(t.start)));
+                    // a bundled GL transition is an `xfade` custom expression (values are escaped for the filter graph)
+                    let which = match gl {
+                        Some(e) => format!("custom:expr={}", crate::titles::escape_filter_value(e)),
+                        None => t.kind.clone(),
+                    };
+                    f.push(format!("[ta{n}][tb{n}]xfade=transition={which}:duration={}:offset=0,setpts=PTS-STARTPTS+{}/TB,format=yuv420p[vs{n}]", secs(t.duration), secs(t.start)));
                     f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0[base{}]", n + 1));
                 }
             }

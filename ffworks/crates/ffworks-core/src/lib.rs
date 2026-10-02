@@ -14,6 +14,7 @@ pub mod filtergraph;
 pub mod fonts;
 pub mod generators;
 pub mod jobs;
+pub mod glx;
 pub mod keyframes;
 pub mod migrate;
 pub mod patch;
