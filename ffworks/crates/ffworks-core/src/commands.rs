@@ -92,6 +92,8 @@ pub enum Command {
     AddMarker { time: Rational, name: String, color: Option<String>, note: Option<String> },
     SetMarker { marker: Id, time: Option<Rational>, name: Option<String>, color: Option<String>, note: Option<String> },
     RemoveMarker { marker: Id },
+    /// Add one FFmpeg filter (with `options`) to a video clip as a custom-graph effect: `in -> filter -> out`. One undo step.
+    AddFilterEffect { clip: Id, filter: String, #[serde(default)] options: Vec<(String, String)> },
     /// Put subtitle cues (`start`, `end`, text) on a new video track named `track` as title clips, `offset` seconds later than the
     /// file says. One undo step.
     ImportCues { track: String, offset: Rational, cues: Vec<(Rational, Rational, String)> },
@@ -150,6 +152,7 @@ impl Command {
             Command::AddTransition { kind, .. } => format!("Add {kind} transition"),
             Command::RemoveTransition { .. } => "Remove transition".into(),
             Command::SetTransition { .. } => "Edit transition".into(),
+            Command::AddFilterEffect { filter, .. } => format!("Add filter {filter}"),
             Command::ImportCues { cues, .. } => format!("Import {} subtitles", cues.len()),
             Command::RemoveRanges { ranges, .. } => format!("Cut out {} ranges", ranges.len()),
             Command::Batch { label, .. } => label.clone(),
@@ -163,7 +166,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
     let sid = seq.id.clone();
     let fps = p.settings.fps;
     match cmd {
-        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } => Err(Error::validation("batch is handled by the engine")),
         Command::RenameProject { name } => {
             if name.trim().is_empty() {
                 return Err(Error::validation("project name cannot be empty"));

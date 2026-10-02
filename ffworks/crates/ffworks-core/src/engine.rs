@@ -107,6 +107,17 @@ impl Engine {
                 }
                 Ok(())
             }
+            Command::AddFilterEffect { clip, filter, options } => {
+                use crate::filtergraph::{FilterGraph, GEdge, GNode, IN, OUT};
+                self.run(&Command::AddEffect { clip: clip.clone(), effect: crate::effects::GRAPH_EFFECT.into(), params: Default::default(), index: None }, fwd, inv)?;
+                let fx = self.project.active()?.find_clip(clip).and_then(|(_, c)| c.effects.last().map(|e| e.id.clone())).ok_or_else(|| Error::validation("internal: effect not added"))?;
+                let node = GNode { id: "n1".into(), filter: filter.clone(), options: options.clone(), x: 200.0, y: 0.0 };
+                let graph = FilterGraph {
+                    nodes: vec![GNode { id: IN.into(), ..Default::default() }, node, GNode { id: OUT.into(), x: 400.0, ..Default::default() }],
+                    edges: vec![GEdge { from: IN.into(), from_pad: 0, to: "n1".into(), to_pad: 0 }, GEdge { from: "n1".into(), from_pad: 0, to: OUT.into(), to_pad: 0 }],
+                };
+                self.run(&Command::SetEffectGraph { clip: clip.clone(), effect_id: fx, graph }, fwd, inv)
+            }
             Command::ImportCues { track, offset, cues } => {
                 if cues.is_empty() {
                     return Err(Error::validation("no subtitle cues to import"));

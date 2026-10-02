@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import { useUi } from "../state/stores";
+import { useProject, useUi } from "../state/stores";
 import type { FilterHelp, FilterInfo } from "../types";
 
 type Kind = "all" | "video" | "audio";
@@ -11,6 +11,15 @@ export function filterKind(io: string): "video" | "audio" | "other" {
   if (/^[V|N]+$/.test(chars) && chars.includes("V")) return "video";
   if (/^[A|N]+$/.test(chars) && chars.includes("A")) return "audio";
   return "other";
+}
+
+/** Put one filter on the clip selected on the timeline (one undo step). */
+function addToSelected(filter: string) {
+  const { view, dispatch, toast } = useProject.getState();
+  const sel = useUi.getState().selected;
+  const clip = view?.project.sequences.find((q) => q.id === view.project.active_sequence)?.tracks.flatMap((t) => t.clips).find((c) => c.id === sel);
+  if (!clip || clip.kind !== "video") return toast("error", "Select a video clip on the timeline first");
+  void dispatch({ type: "add_filter_effect", clip: clip.id, filter });
 }
 
 export function FilterBrowser() {
@@ -66,6 +75,9 @@ export function FilterBrowser() {
                 <h3>{help.name}</h3>
                 <p>{help.description}</p>
                 <p className="muted">Inputs: {help.inputs.join(", ") || "none"} · Outputs: {help.outputs.join(", ") || "none"}{help.timeline ? " · supports timeline (enable)" : ""}</p>
+                {help.inputs.length === 1 && help.outputs.length === 1 && filterKind(all?.find((f) => f.name === help.name)?.io ?? "") === "video" && (
+                  <p><button onClick={() => addToSelected(help.name)} title="Add this filter, with its default options, to the selected video clip as a custom-graph effect (edit its options in the graph editor)">Add to selected clip</button></p>
+                )}
                 <table className="filter-opts">
                   <thead><tr><th>Option</th><th>Type</th><th>Default</th><th>Range / choices</th></tr></thead>
                   <tbody>

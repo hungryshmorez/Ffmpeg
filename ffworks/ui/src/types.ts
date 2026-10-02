@@ -74,6 +74,7 @@ export type Command =
   | { type: "set_clip_fades"; clip: string; fade_in?: Rational | null; fade_out?: Rational | null }
   | { type: "add_track"; kind: TrackKind; name?: string | null }
   | { type: "remove_track"; track: string }
+  | { type: "add_filter_effect"; clip: string; filter: string; options?: [string, string][] }
   | { type: "add_effect"; clip: string; effect: string; params?: Record<string, number>; index?: number | null }
   | { type: "remove_effect"; clip: string; effect_id: string }
   | { type: "set_effect_param"; clip: string; effect_id: string; param: string; value: number }
