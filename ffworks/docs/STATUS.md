@@ -13,7 +13,7 @@ Effects (11, with parameter metadata registry) + opacity · processed preview (c
 * **Phase 5:** silence/black-frame/duplicate-frame/transient detection · audio auto-sync (cross-correlation). (beats, scenes, loudness done)
 * **Phase 6:** expressions (`fasteval`) · modulators · parameter linking · audio-reactive · custom effect builder · MIDI (`midir`).
 * **Phase 7:** glitch presets · temporal/feedback effects · variation generator + contact sheet (pixel sort: see REUSE.md).
-* **Phases 8–9:** real datamoshing/codec work · motion vectors · optical flow · motion transfer · corruption lab. **Next step planned: try FFglitch (GPL, separate tool) on a real clip before designing this.**
+* **Phases 8–9:** real datamoshing/codec work · motion vectors · optical flow · motion transfer · corruption lab. FFglitch trial done (below).
 * **Phase 10:** plugins (Extism) · user tools · headless polish · local API.
 * **Cross-cutting:** multiple sequences + snapshots · project packaging · smart rendering · export naming/versioning/manifest · SQLite index · disk-space checks · persistent job state across crashes · accessibility pass · colour management · queue should also carry previews/analysis.
 
@@ -33,3 +33,17 @@ Effects (11, with parameter metadata registry) + opacity · processed preview (c
 ## Process notes
 * User preference: reuse open source first ("pull as much as possible"), build what's missing. Be honest about what's tested vs not. Keep the user's usage low: fresh sessions with this file beat one endless conversation.
 * The user can't build installers locally; GitHub Actions is the build path.
+
+## FFglitch trial (Phases 8–9 design input)
+Tried FFglitch 0.10.2 (Linux x86_64 static build from ffglitch.org, GPL-2+) on real generated clips. Reproduce with `FFGLITCH_DIR=<unpacked dir> ffworks/scripts/ffglitch/trial.sh` (6 checks, all pass).
+* **What works (verified by decoding the output and comparing pixels):**
+  * *I-frame removal / classic datamosh* needs **no FFglitch**: stock FFmpeg `-c copy -bsf:v "noise=drop='key*gt(n,0)'"`. Frames before the cut are bit-identical, frames after smear the old picture along the new clip's motion (looked at the result: textbook mosh).
+  * *Motion-vector editing*: `ffedit -i in.avi -f mv -s script.js -o out.avi`; JS (QuickJS) `glitch_frame(frame)` mutates `frame.mv.forward[row][col] = [x,y]`. Amplifying vectors x4 decodes cleanly and the error compounds over P-frames.
+  * *Motion transfer*: export A's MVs (`-e a.json`), apply to B (`-a a.json`). Re-exporting the result gives exactly A's vectors on all 99 P-frames; the picture is B's pixels dragged by A's motion (B's residuals still apply on top, so it is smeary rather than clean).
+* **Limits / gotchas:**
+  * Supported codecs: MPEG-4 Part 2, MPEG-2, MJPEG, (see `ffedit -i file`). **H.264/H.265 are not supported** ("FFEdit does not support codec"). MP4, MKV and MPEG-PS containers are refused; AVI and raw `.m2v` work.
+  * Vectors have a per-stream range (`f_code`). Scaling beyond it writes a corrupt stream (ffedit only warns "outside of range"). Fix: make the intermediate with FFglitch's own encoder: `ffgac ... -c:v mpeg4 -mpv_flags +nopimb+forcemv -g 9999 -bf 0 -fcode 6` (stock FFmpeg has no `-fcode`). Also clamp in scripts.
+  * Source and target for transfer must have identical size/frame structure (same macroblock grid, same P-frame layout).
+  * Script arrays are indexable but **not iterable** (`for...of` throws); use index loops.
+  * Python scripting is mentioned in help but only JS was tried. Windows build not tried (ffglitch.org lists Windows builds; unverified).
+* **How to drive it from FFWORKS (design, not built yet):** a "codec lab" job: (1) transcode the clip range to a disposable MPEG-4 AVI intermediate with `ffgac` (fcode 6, all-P), (2) run `ffedit` with a parameterised script (generated from the command JSON; params passed via `-sp`), (3) transcode the result back to the project's delivery format and import it as new media. Originals are never touched; each job records tool version, script and seed. UI must say plainly: output is a *new file* made from a lossy intermediate, not an effect on the live timeline. Needs ffglitch as an optional separately-downloaded GPL tool (like FFmpeg, found via settings/bundled/PATH), never linked.

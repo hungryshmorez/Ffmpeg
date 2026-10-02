@@ -21,5 +21,5 @@ Rule: **search first, adopt if the license (MIT/BSD/Apache) and quality allow, b
 | Optical flow | [`iris-cv`](https://github.com/muhammad-fiaz/iris-cv) (MIT, v0.0.0 — immature) | Phase 9 candidate; evaluate against OpenCV bindings |
 | Custom shader transitions | [`gl-transitions`](https://github.com/gl-transitions/gl-transitions) (MIT, 125 GLSL files) | Phase 7+: needs a GPU compositor; not usable through plain FFmpeg |
 | Real-time native preview (decode pool, wgpu compositor, cpal audio) | [Clypra](https://github.com/AIEraDev/clypra) (MIT) | architecture reference for replacing webview playback if proxies prove insufficient |
-| Datamosh / codec bitstream editing | [FFglitch](https://ffglitch.org) (GPL-3, a separate FFmpeg fork) | Phases 8–9: drive as an external tool on disposable copies |
+| Datamosh / codec bitstream editing | [FFglitch](https://ffglitch.org) 0.10.2 (GPL-2+, separate FFmpeg fork; `ffedit` + `ffgac` + QuickJS scripts) | **Trialled (see STATUS.md "FFglitch trial")**: works for MPEG-4 Part 2 / MPEG-2 / MJPEG in AVI/M2V. Drive as an external tool on disposable AVI intermediates; I-frame removal needs only stock FFmpeg. `scripts/ffglitch/trial.sh` reproduces the findings |
 | Audio sync | SyncSink / audio-offset-finder (cross-correlation) | Phase 5: simple enough to implement directly |
