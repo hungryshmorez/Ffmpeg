@@ -17,6 +17,9 @@ Effects (11, with parameter metadata registry) + opacity · processed preview (c
 * **Phase 10:** plugins (Extism) · user tools · headless polish · local API.
 * **Cross-cutting:** multiple sequences + snapshots · project packaging · smart rendering · export naming/versioning/manifest · SQLite index · disk-space checks · persistent job state across crashes · accessibility pass · colour management · queue should also carry previews/analysis.
 
+## Filter browser (Phase 3, step 1 — done)
+Toolbar "Filters" opens a searchable list of every filter in the installed FFmpeg with options, defaults, ranges, enum choices and pad counts (parsed from `-filters` / `-h filter=NAME`; `filterdb.rs`, 3 real-FFmpeg tests + `filters.sh` 10 GUI checks). Read-only so far: adding a filter to a clip / raw graph nodes comes with the `@xyflow/react` graph editor (next).
+
 ## Requested additions (user, not started)
 * **GL Transitions library** (gl-transitions.com, MIT). Stock Windows FFmpeg has no `gl-transition` filter, so plan is to port shaders to `xfade` custom expressions (approach of the MIT `xfade-easing` project) — only shaders expressible that way; the rest are listed as unsupported, not faked.
 * **Transition demo mode**: button that cycles random transitions through the timeline continuously (preview/playback only, nothing written to the project unless "Keep").

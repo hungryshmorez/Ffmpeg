@@ -120,3 +120,11 @@ input[type=color] { width: 56px; height: 24px; padding: 0; border: 1px solid var
 
 .proxy-line { margin-top: 2px; font-size: 11px; } .proxy-ok { color: #3fbf71; }
 .decode-notice { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgba(20,24,34,.92); border: 1px solid #ff5a36; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display: flex; gap: 8px; align-items: center; z-index: 4; }
+
+.filter-browser { width: min(1000px, 96vw); }
+.filter-cols { display: grid; grid-template-columns: 300px 1fr; gap: 12px; margin-top: 8px; }
+.filter-list { list-style: none; margin: 0; padding: 0; max-height: 52vh; overflow: auto; border: 1px solid var(--line); }
+.filter-list button { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding: 4px 6px; font-size: 12px; }
+.filter-list button.active { background: var(--line); }
+.filter-detail { max-height: 52vh; overflow: auto; font-size: 12px; }
+.filter-opts { width: 100%; border-collapse: collapse; } .filter-opts td, .filter-opts th { border-bottom: 1px solid var(--line); padding: 3px 6px; text-align: left; vertical-align: top; }

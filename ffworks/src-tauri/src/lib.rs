@@ -332,6 +332,20 @@ fn clear_proxies(state: State<AppState>) -> Result<u64, String> {
     Ok(bytes)
 }
 
+/// Every filter in the installed FFmpeg, for the filter browser.
+#[tauri::command]
+fn list_filters(state: State<AppState>) -> Result<Vec<ffworks_core::filterdb::FilterInfo>, String> {
+    let tools = state.engine.lock().unwrap().tools.clone();
+    tools.list_filters().map_err(|e| e.to_string())
+}
+
+/// Options, pads and defaults of one filter, parsed from `ffmpeg -h filter=NAME`.
+#[tauri::command]
+fn filter_help(state: State<AppState>, name: String) -> Result<ffworks_core::filterdb::FilterHelp, String> {
+    let tools = state.engine.lock().unwrap().tools.clone();
+    tools.filter_help(&name).map_err(|e| e.to_string())
+}
+
 /// Bundled and installed fonts usable for titles.
 #[tauri::command]
 fn list_fonts() -> Vec<ffworks_core::fonts::FontEntry> {
@@ -507,12 +521,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

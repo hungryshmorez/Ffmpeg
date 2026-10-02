@@ -81,6 +81,8 @@ interface UiStore {
   selected: string | null;
   exportOpen: boolean;
   diagOpen: boolean;
+  filtersOpen: boolean;
+  setFiltersOpen: (o: boolean) => void;
   setZoom: (z: number) => void;
   select: (id: string | null) => void;
   setExportOpen: (o: boolean) => void;
@@ -97,6 +99,8 @@ export const useUi = create<UiStore>((set) => ({
   selected: null,
   exportOpen: false,
   diagOpen: false,
+  filtersOpen: false,
+  setFiltersOpen: (filtersOpen) => set({ filtersOpen }),
   setZoom: (z) => set({ pxPerSec: Math.min(2000, Math.max(4, z)) }),
   select: (selected) => set({ selected }),
   setExportOpen: (exportOpen) => set({ exportOpen }),

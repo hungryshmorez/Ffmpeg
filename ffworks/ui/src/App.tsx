@@ -7,6 +7,7 @@ import { APP_NAME } from "./brand";
 import { QueuePanel } from "./components/QueuePanel";
 import { RecoveryDialog } from "./components/RecoveryDialog";
 import { Diagnostics } from "./components/Diagnostics";
+import { FilterBrowser } from "./components/FilterBrowser";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -125,6 +126,7 @@ export default function App() {
       <Timeline />
       <ExportDialog />
       <Diagnostics />
+      <FilterBrowser />
       <QueuePanel />
       <RecoveryDialog />
       <Toasts />

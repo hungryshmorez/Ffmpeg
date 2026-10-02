@@ -113,3 +113,7 @@ export interface SceneAnalysis { cuts: number[]; scenes: [number, number][]; thr
 export interface Loudness { integrated_lufs: number | null; range_lu: number; true_peak_dbtp: number | null }
 
 export interface ProxyStatus { mediaId: string; eligible: boolean; ready: boolean; path: string | null; bytes: number | null }
+
+export interface FilterInfo { name: string; io: string; description: string; timeline: boolean }
+export interface FilterOption { name: string; kind: string; description: string; default: string | null; min: string | null; max: string | null; choices: [string, string][]; dynamic: boolean }
+export interface FilterHelp { name: string; description: string; inputs: string[]; outputs: string[]; options: FilterOption[]; timeline: boolean }
