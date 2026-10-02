@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -40,8 +40,13 @@ export const api = {
   listClipProps: () => invoke<ClipProps>("list_clip_props"),
   renderPreview: (start: string, end: string, scaleDiv: number) => invoke<PreviewInfo>("render_preview", { start, end, scaleDiv }),
   listExportPresets: () => invoke<ExportPreset[]>("list_export_presets"),
-  previewCommand: (preset: string, output: string) => invoke<string>("preview_command", { preset, output }),
-  startExport: (preset: string, output: string) => invoke<string>("start_export", { preset, output }),
+  previewCommand: (preset: string, output: string, engine?: string) => invoke<string>("preview_command", { preset, output, engine: engine ?? null }),
+  startExport: (preset: string, output: string, engine?: string) => invoke<string>("start_export", { preset, output, engine: engine ?? null }),
+  listEngines: () => invoke<{ engines: EngineInfo[]; active: string }>("list_engines"),
+  scanEngines: (dir: string) => invoke<FoundEngine[]>("scan_engines", { dir }),
+  addEngine: (name: string, ffmpegPath: string, ffprobePath?: string) => invoke<EngineInfo>("add_engine", { name, ffmpegPath, ffprobePath: ffprobePath ?? null }),
+  removeEngine: (id: string) => invoke<void>("remove_engine", { id }),
+  setActiveEngine: (id: string | null) => invoke<string>("set_active_engine", { id }),
   listJobs: () => invoke<JobEvent[]>("list_jobs"),
   getJobLog: (jobId: string) => invoke<JobLog | null>("get_job_log", { jobId }),
   clearFinishedJobs: () => invoke<void>("clear_finished_jobs"),

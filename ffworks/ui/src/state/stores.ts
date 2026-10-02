@@ -82,6 +82,8 @@ interface UiStore {
   exportOpen: boolean;
   diagOpen: boolean;
   filtersOpen: boolean;
+  enginesOpen: boolean;
+  setEnginesOpen: (o: boolean) => void;
   favsOpen: boolean;
   setFavsOpen: (o: boolean) => void;
   graphEdit: { clip: string; fx: string } | null;
@@ -104,6 +106,8 @@ export const useUi = create<UiStore>((set) => ({
   exportOpen: false,
   diagOpen: false,
   filtersOpen: false,
+  enginesOpen: false,
+  setEnginesOpen: (enginesOpen) => set({ enginesOpen }),
   favsOpen: false,
   setFavsOpen: (favsOpen) => set({ favsOpen }),
   graphEdit: null,

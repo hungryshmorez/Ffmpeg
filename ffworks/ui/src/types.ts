@@ -125,3 +125,6 @@ export interface FilterHelp { name: string; description: string; inputs: string[
 export interface FavGroup { effects: string[]; transitions: string[] }
 export interface Favourites { starred: FavGroup; groups: Record<string, FavGroup> }
 export interface RandomResult { state: StateView; seed: number; applied?: number; skipped?: string[] }
+
+export interface EngineInfo { id: string; name: string; ffmpeg_path: string; ffprobe_path: string; ok: boolean; error: string | null; version: string; license: string; filters: number; encoders: number; xfade_custom: boolean; hwaccels: string[]; notable: string[] }
+export interface FoundEngine { ffmpeg_path: string; ffprobe_path: string; suggested_name: string }

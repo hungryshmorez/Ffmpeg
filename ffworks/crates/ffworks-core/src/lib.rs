@@ -6,6 +6,7 @@ pub mod clipprops;
 pub mod commands;
 pub mod effects;
 pub mod engine;
+pub mod engines;
 pub mod error;
 pub mod ffmpeg;
 pub mod ffprobe;

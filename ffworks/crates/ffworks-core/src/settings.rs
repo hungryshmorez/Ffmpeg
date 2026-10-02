@@ -13,6 +13,12 @@ pub struct Settings {
     pub ffprobe_path: Option<String>,
     #[serde(default)]
     pub favourites: Favourites,
+    /// Registered FFmpeg builds (the user may install several: full/essentials, GPL/LGPL, a GPU-enabled one...).
+    #[serde(default)]
+    pub engines: Vec<crate::engines::EngineEntry>,
+    /// Id of the registered build used for everything unless an export names another; when unset, `ffmpeg_path` etc. apply.
+    #[serde(default)]
+    pub active_engine: Option<String>,
 }
 
 /// A set of favourite effects and transitions (ids as listed by the effect registry / FFmpeg's transition names).
@@ -94,6 +100,11 @@ impl Settings {
         std::fs::rename(&tmp, file).map_err(|e| Error::io(file, e))
     }
 
+    /// Tools of a registered engine (its ffprobe defaults to the one next to its ffmpeg).
+    pub fn engine_tools(&self, id: &str) -> Option<Tools> {
+        self.engines.iter().find(|e| e.id == id).map(|e| e.tools())
+    }
+
     pub fn tools(&self) -> Tools {
         self.tools_with_bundled(None)
     }
@@ -101,6 +112,9 @@ impl Settings {
     /// Like [`tools`](Self::tools), but falls back to FFmpeg/FFprobe shipped inside `bundled_dir` (when present)
     /// before looking at `PATH`.
     pub fn tools_with_bundled(&self, bundled_dir: Option<&Path>) -> Tools {
+        if let Some(t) = self.active_engine.as_deref().and_then(|id| self.engine_tools(id)) {
+            return t;
+        }
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let bundled = |n: &str| bundled_dir.map(|d| d.join(exe(n))).filter(|p| p.is_file());
         let blank = |s: &Option<String>| s.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(PathBuf::from);

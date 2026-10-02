@@ -225,8 +225,10 @@ fn get_settings(state: State<AppState>) -> ffworks_core::settings::Settings {
 /// Validate the chosen FFmpeg/FFprobe by running them, then persist and apply. Nothing is saved if validation fails.
 #[tauri::command]
 fn set_settings(state: State<AppState>, ffmpeg_path: Option<String>, ffprobe_path: Option<String>) -> Result<serde_json::Value, String> {
-    let favourites = ffworks_core::settings::Settings::load(&state.settings_file).favourites;
-    let new = ffworks_core::settings::Settings { ffmpeg_path, ffprobe_path, favourites };
+    let mut new = ffworks_core::settings::Settings::load(&state.settings_file);
+    new.ffmpeg_path = ffmpeg_path;
+    new.ffprobe_path = ffprobe_path;
+    new.active_engine = None;
     let tools = new.tools_with_bundled(state.bundled_dir.as_deref());
     let (ff, pr) = ffworks_core::settings::validate_tools(&tools).map_err(s)?;
     new.save(&state.settings_file).map_err(s)?;
@@ -360,6 +362,99 @@ fn filter_help(state: State<AppState>, name: String) -> Result<ffworks_core::fil
     tools.filter_help(&name).map_err(|e| e.to_string())
 }
 
+/// Every registered FFmpeg build with what it really supports, plus which one is active.
+#[tauri::command]
+async fn list_engines(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let st = ffworks_core::settings::Settings::load(&state.settings_file);
+    let active = st.active_engine.clone();
+    let current = state.engine.lock().unwrap().tools.clone();
+    let infos = tauri::async_runtime::spawn_blocking(move || {
+        let mut list: Vec<ffworks_core::engines::EngineInfo> = st.engines.iter().map(ffworks_core::engines::probe_engine).collect();
+        // the build in use when none of the registered ones is chosen (bundled copy, FFWORKS_FFMPEG or PATH)
+        if st.active_engine.as_deref().is_none_or(|a| !st.engines.iter().any(|e| e.id == a)) {
+            let entry = ffworks_core::engines::EngineEntry { id: "default".into(), name: "Default (bundled / PATH)".into(), ffmpeg_path: current.ffmpeg.display().to_string(), ffprobe_path: Some(current.ffprobe.display().to_string()) };
+            list.insert(0, ffworks_core::engines::probe_engine(&entry));
+        }
+        list
+    })
+    .await
+    .map_err(s)?;
+    Ok(serde_json::json!({ "engines": infos, "active": active.unwrap_or_else(|| "default".into()) }))
+}
+
+/// Find ffmpeg builds under a folder (for people who keep several installs side by side).
+#[tauri::command]
+async fn scan_engines(dir: String) -> Result<Vec<ffworks_core::engines::Found>, String> {
+    tauri::async_runtime::spawn_blocking(move || ffworks_core::engines::scan(std::path::Path::new(&dir), 5)).await.map_err(s)
+}
+
+/// Register a build after running it to prove it is FFmpeg; nothing is saved when that fails.
+#[tauri::command]
+async fn add_engine(state: State<'_, AppState>, name: String, ffmpeg_path: String, ffprobe_path: Option<String>) -> Result<ffworks_core::engines::EngineInfo, String> {
+    let entry = ffworks_core::engines::EngineEntry { id: ffworks_core::engines::new_id(), name: name.trim().to_string(), ffmpeg_path: ffmpeg_path.trim().to_string(), ffprobe_path: ffprobe_path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty()) };
+    if entry.name.is_empty() || entry.ffmpeg_path.is_empty() {
+        return Err("give the build a name and the path of its ffmpeg".into());
+    }
+    let file = state.settings_file.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let info = ffworks_core::engines::probe_engine(&entry);
+        if !info.ok {
+            return Err(info.error.unwrap_or_else(|| "this does not work as FFmpeg".into()));
+        }
+        let mut st = ffworks_core::settings::Settings::load(&file);
+        if st.engines.iter().any(|e| e.ffmpeg_path == entry.ffmpeg_path) {
+            return Err("that ffmpeg is already registered".into());
+        }
+        st.engines.push(entry);
+        st.save(&file).map_err(s)?;
+        Ok(info)
+    })
+    .await
+    .map_err(s)?
+}
+
+#[tauri::command]
+fn remove_engine(state: State<AppState>, id: String) -> Result<(), String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    st.engines.retain(|e| e.id != id);
+    let was_active = st.active_engine.as_deref() == Some(id.as_str());
+    if was_active {
+        st.active_engine = None;
+    }
+    st.save(&state.settings_file).map_err(s)?;
+    if was_active {
+        apply_tools(&state, &st)?;
+    }
+    Ok(())
+}
+
+/// Make a registered build the one used for everything (`None` = back to the default). It is run first; nothing changes on failure.
+#[tauri::command]
+fn set_active_engine(state: State<AppState>, id: Option<String>) -> Result<String, String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    if let Some(i) = id.as_deref().filter(|i| *i != "default") {
+        if !st.engines.iter().any(|e| e.id == i) {
+            return Err("that build is not registered".into());
+        }
+        st.active_engine = Some(i.to_string());
+    } else {
+        st.active_engine = None;
+    }
+    let version = apply_tools(&state, &st)?;
+    st.save(&state.settings_file).map_err(s)?;
+    Ok(version)
+}
+
+/// Resolve the settings' tools, prove they run, and switch the queue, engine and capability cache over to them.
+fn apply_tools(state: &AppState, st: &ffworks_core::settings::Settings) -> Result<String, String> {
+    let tools = st.tools_with_bundled(state.bundled_dir.as_deref());
+    let (ff, _) = ffworks_core::settings::validate_tools(&tools).map_err(s)?;
+    state.queue.set_tools(tools.clone());
+    state.engine.lock().unwrap().tools = tools;
+    *state.caps.lock().unwrap() = None;
+    Ok(ff)
+}
+
 /// Starred effects/transitions and named favourite groups.
 #[tauri::command]
 fn get_favourites(state: State<AppState>) -> ffworks_core::settings::Favourites {
@@ -455,31 +550,39 @@ fn caps(state: &AppState) -> Option<Capabilities> {
     c.clone()
 }
 
-fn build_job(state: &AppState, preset: &str, output: &str, range: Option<(String, String)>, scale_div: u32) -> Result<FfmpegJob, String> {
-    let (project, tools) = {
+fn build_job(state: &AppState, preset: &str, output: &str, range: Option<(String, String)>, scale_div: u32, engine: Option<&str>) -> Result<FfmpegJob, String> {
+    let (project, mut tools) = {
         let e = state.engine.lock().unwrap();
         (e.project.clone(), e.tools.clone())
+    };
+    // an export may name another registered build; its own capabilities decide what can be compiled
+    let other_caps = match engine.filter(|i| *i != "default") {
+        Some(id) => {
+            tools = ffworks_core::settings::Settings::load(&state.settings_file).engine_tools(id).ok_or("that build is not registered")?;
+            Some(Capabilities::discover(&tools).map_err(s)?)
+        }
+        None => None,
     };
     let range = match range {
         Some((a, b)) => Some((a.parse::<Rational>()?, b.parse::<Rational>()?)),
         None => None,
     };
     let g = render_graph::build(&project).map_err(s)?;
-    let mut job = compile(&g, &RenderOptions { output: PathBuf::from(output), settings: ExportSettings::find(preset).map_err(s)?, range, scale_div }, caps(state).as_ref()).map_err(s)?;
+    let mut job = compile(&g, &RenderOptions { output: PathBuf::from(output), settings: ExportSettings::find(preset).map_err(s)?, range, scale_div }, other_caps.or_else(|| caps(state)).as_ref()).map_err(s)?;
     job.program = tools.ffmpeg;
     Ok(job)
 }
 
 /// Command Inspector: show exactly what would run (spec §52).
 #[tauri::command]
-fn preview_command(state: State<AppState>, preset: String, output: String) -> Result<String, String> {
-    Ok(build_job(&state, &preset, &output, None, 1)?.display())
+fn preview_command(state: State<AppState>, preset: String, output: String, engine: Option<String>) -> Result<String, String> {
+    Ok(build_job(&state, &preset, &output, None, 1, engine.as_deref())?.display())
 }
 
 /// Queue an export. It runs in the background (one at a time by default); progress arrives as `job-state` events.
 #[tauri::command]
-fn start_export(state: State<AppState>, preset: String, output: String) -> Result<String, String> {
-    let job = build_job(&state, &preset, &output, None, 1)?;
+fn start_export(state: State<AppState>, preset: String, output: String, engine: Option<String>) -> Result<String, String> {
+    let job = build_job(&state, &preset, &output, None, 1, engine.as_deref())?;
     Ok(state.queue.submit(job, "export", PRIORITY_EXPORT))
 }
 
@@ -599,12 +702,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

@@ -142,3 +142,7 @@ input[type=color] { width: 56px; height: 24px; padding: 0; border: 1px solid var
 
 .random-bar .row { gap: 4px; margin: 2px 0; }
 .fav-dialog { width: min(900px, 96vw); } .fav-table-wrap { max-height: 50vh; overflow: auto; margin-top: 6px; }
+
+.engines-dialog { width: min(820px, 96vw); } .engine-list { list-style: none; margin: 4px 0; padding: 0; }
+.engine-list li { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 4px 0; font-size: 12px; } .engine-list li.active { border-color: #3aa05a; }
+.badge { font-size: 11px; padding: 1px 6px; border-radius: 8px; border: 1px solid var(--line); } .badge.ok { border-color: #3aa05a; } .badge.err { border-color: #c44; }

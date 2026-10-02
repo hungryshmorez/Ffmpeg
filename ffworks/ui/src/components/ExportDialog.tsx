@@ -2,7 +2,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useJobs, useProject, useUi } from "../state/stores";
-import type { ExportPreset, JobEvent } from "../types";
+import type { EngineInfo, ExportPreset, JobEvent } from "../types";
 
 export function ExportDialog() {
   const open = useUi((s) => s.exportOpen);
@@ -17,12 +17,15 @@ export function ExportDialog() {
   const [jobId, setJobId] = useState<string | null>(null);
   const job: JobEvent | null = useJobs((st) => (jobId ? st.jobs[jobId] ?? null : null));
   const [verify, setVerify] = useState<string | null>(null);
+  const [engines, setEngines] = useState<EngineInfo[]>([]);
+  const [engine, setEngine] = useState("default");
 
   useEffect(() => { void api.listExportPresets().then(setPresets); }, []);
+  useEffect(() => { if (open) void api.listEngines().then((r) => { setEngines(r.engines.filter((x) => x.ok)); setEngine((cur) => (r.engines.some((x) => x.id === cur) ? cur : r.active)); }); }, [open]);
   useEffect(() => {
     if (!open || !output) return setCommand("");
-    api.previewCommand(preset, output).then(setCommand).catch((e) => setCommand(`Cannot build command: ${e}`));
-  }, [open, preset, output, view.project]);
+    api.previewCommand(preset, output, engine).then(setCommand).catch((e) => setCommand(`Cannot build command: ${e}`));
+  }, [open, preset, output, engine, view.project]);
   useEffect(() => {
     if (job?.state === "completed") api.verifyOutput(job.output).then(setVerify).catch((e) => setVerify(`Verification failed: ${e}`));
   }, [job]);
@@ -37,7 +40,7 @@ export function ExportDialog() {
   };
   const start = async () => {
     setVerify(null);
-    try { setJobId(await api.startExport(preset, output)); } catch (e) { toast("error", String(e)); }
+    try { setJobId(await api.startExport(preset, output, engine)); } catch (e) { toast("error", String(e)); }
   };
 
   return (
@@ -50,6 +53,14 @@ export function ExportDialog() {
             {presets.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
         </div>
+        {engines.length > 1 && (
+          <div className="field">
+            <label htmlFor="engine">FFmpeg build</label>
+            <select id="engine" value={engine} onChange={(e2) => setEngine(e2.target.value)}>
+              {engines.map((x) => <option key={x.id} value={x.id}>{x.name} ({x.license})</option>)}
+            </select>
+          </div>
+        )}
         <div className="field">
           <label>Destination</label>
           <div className="row"><input readOnly value={output} placeholder="Choose a file…" aria-label="Destination" /><button onClick={() => void choose()}>Browse…</button></div>
