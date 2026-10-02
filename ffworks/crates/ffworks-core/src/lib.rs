@@ -37,6 +37,7 @@ pub mod recovery;
 pub mod relink;
 pub mod render_graph;
 pub mod scenes;
+pub mod scopes;
 pub mod settings;
 pub mod subtitles;
 pub mod time;

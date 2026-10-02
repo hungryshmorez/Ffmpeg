@@ -25,6 +25,7 @@ export const api = {
   getEffectPresets: () => invoke<Record<string, EffectPreset>>("get_effect_presets"),
   saveEffectPreset: (name: string, preset: EffectPreset) => invoke<Record<string, EffectPreset>>("save_effect_preset", { name, preset }),
   deleteEffectPreset: (name: string) => invoke<Record<string, EffectPreset>>("delete_effect_preset", { name }),
+  renderScope: (mediaId: string, time: number, scope: "waveform" | "vectorscope" | "histogram" | "spectrogram") => invoke<string>("render_scope", { mediaId, time, scope }),
   measureLoudness: (mediaId: string) => invoke<Loudness>("measure_loudness", { mediaId }),
   getBeats: (mediaId: string) => invoke<BeatAnalysis>("get_beats", { mediaId }),
   getSettings: () => invoke<AppSettings>("get_settings"),

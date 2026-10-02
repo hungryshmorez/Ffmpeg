@@ -1,7 +1,8 @@
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { api } from "../api";
 import { fromSec, toSec } from "../time";
-import { useProject } from "../state/stores";
+import { usePlayhead, useProject } from "../state/stores";
 import type { Clip, Command, DetectKind, Loudness, SceneAnalysis } from "../types";
 
 const TARGET_LUFS = -14;
@@ -53,6 +54,16 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
   };
 
   const view = useProject((s) => s.view);
+  const [scope, setScope] = useState<"waveform" | "vectorscope" | "histogram" | "spectrogram">("waveform");
+  const [scopeImg, setScopeImg] = useState<string | null>(null);
+  const showScope = async () => {
+    const c = scope === "spectrogram" ? audio ?? video : video ?? audio;
+    if (!c) return;
+    // source time under the playhead (clamped into the clip), ignoring speed changes
+    const t = usePlayhead.getState().t;
+    const src = Math.max(0, toSec(c.source_in) + Math.min(Math.max(t - toSec(c.start), 0), toSec(c.duration)) * toSec(c.speed));
+    setScopeImg(convertFileSrc(await api.renderScope(c.media, src, scope)));
+  };
   const [syncRef, setSyncRef] = useState("");
   const [sync, setSync] = useState<{ lag: number; confidence: number; start: number } | null>(null);
   const others = audio ? (view?.project.sequences[0]?.tracks.filter((t) => t.kind === "audio").flatMap((t) => t.clips).filter((c) => c.id !== audio.id) ?? []) : [];
@@ -107,6 +118,21 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
               <button onClick={cutRanges} title="Cut every range out of this clip and its linked clips and close the gaps (one undo step)">Cut ranges out</button>
             </>
           )}
+        </div>
+      )}
+      {(video || audio) && (
+        <div className="field" aria-label="Scopes">
+          <label>Scopes</label>
+          <div className="row">
+            <select aria-label="Scope type" value={scope} onChange={(e) => { setScope(e.target.value as typeof scope); setScopeImg(null); }}>
+              <option value="waveform">Waveform</option>
+              <option value="vectorscope">Vectorscope</option>
+              <option value="histogram">Histogram</option>
+              <option value="spectrogram">Audio spectrogram</option>
+            </select>
+            <button disabled={busy !== null} title="Draw it for the picture under the playhead (the spectrogram covers the whole file)" onClick={() => void run("scope", showScope)}>{busy === "scope" ? "Drawing…" : "Show"}</button>
+          </div>
+          {scopeImg && <img data-testid="scope-image" alt={`${scope} of the selected clip`} src={scopeImg} style={{ width: "100%", imageRendering: "auto", background: "#000" }} />}
         </div>
       )}
       {audio && others.length > 0 && (
