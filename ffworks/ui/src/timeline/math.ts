@@ -1,12 +1,13 @@
 import { toSec } from "../time";
 import type { Clip, Sequence, Track } from "../types";
 
-export interface ClipTimes { start: number; end: number; sourceIn: number; duration: number }
+export interface ClipTimes { start: number; end: number; sourceIn: number; duration: number; speed: number; /** Seconds of source media this clip consumes (0 when frozen). */ span: number }
 
 export function times(c: Clip): ClipTimes {
   const start = toSec(c.start);
   const duration = toSec(c.duration);
-  return { start, end: start + duration, sourceIn: toSec(c.source_in), duration };
+  const speed = toSec(c.speed);
+  return { start, end: start + duration, sourceIn: toSec(c.source_in), duration, speed, span: c.freeze ? 0 : duration * speed };
 }
 
 export function clipAt(track: Track, t: number): Clip | null {
@@ -28,10 +29,12 @@ export function visibleVideoAt(seq: Sequence, t: number): { clip: Clip; track: T
   return found;
 }
 
-/** Source media time corresponding to timeline time `t` inside `clip`. */
+/** Source media time corresponding to timeline time `t` inside `clip` (honours speed, reverse and freeze). */
 export function sourceTime(clip: Clip, t: number): number {
-  const { start, sourceIn } = times(clip);
-  return sourceIn + (t - start);
+  if (clip.freeze) return toSec(clip.freeze);
+  const { start, sourceIn, speed, duration } = times(clip);
+  const local = Math.min(Math.max(t - start, 0), duration);
+  return clip.reverse ? sourceIn + (duration - local) * speed : sourceIn + local * speed;
 }
 
 /** Candidate snap points: 0, playhead and every clip edge except those of `exclude`. */

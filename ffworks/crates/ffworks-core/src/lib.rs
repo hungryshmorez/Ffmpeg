@@ -2,6 +2,7 @@
 pub mod analysis;
 pub mod beats;
 pub mod brand;
+pub mod clipprops;
 pub mod commands;
 pub mod effects;
 pub mod engine;
@@ -9,6 +10,7 @@ pub mod error;
 pub mod ffmpeg;
 pub mod ffprobe;
 pub mod jobs;
+pub mod keyframes;
 pub mod migrate;
 pub mod patch;
 pub mod preview;

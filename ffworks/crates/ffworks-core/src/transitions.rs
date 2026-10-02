@@ -129,6 +129,14 @@ pub fn validate_track(p: &Project, track: &Track) -> Result<()> {
         if a.opacity < 1.0 || b.opacity < 1.0 {
             return Err(Error::validation("clips with a transition must have opacity 100%"));
         }
+        for c in [a, b] {
+            if !c.is_plain_timing() {
+                return Err(Error::validation(format!("'{}' has speed, reverse or freeze applied; transitions need normal playback (remove the transition or reset the clip's timing)", c.name)));
+            }
+            if !c.transform.is_identity() || c.blend != "normal" || !c.keyframes.is_empty() {
+                return Err(Error::validation(format!("'{}' has a transform, blend mode or keyframes; transitions cannot be combined with those yet", c.name)));
+            }
+        }
         let (ma, _mb) = (p.media(&a.media)?, p.media(&b.media)?);
         let eps = Rational::new(1, 1000);
         if a.source_in + a.duration + half > ma.info.duration + eps {

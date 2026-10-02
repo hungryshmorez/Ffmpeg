@@ -136,7 +136,7 @@ const ClipView = memo(
     const selected = useUi((s) => s.selected);
     const select = useUi((s) => s.select);
     const dispatch = useProject((s) => s.dispatch);
-    const { start, duration, sourceIn } = times(clip);
+    const { start, duration, sourceIn, speed } = times(clip);
     const [ghost, setGhost] = useState<{ start: number; duration: number; sourceIn: number } | null>(null);
     const group = linkedIds(seq, clip.id);
     const isSel = selected !== null && group.includes(selected);
@@ -178,7 +178,7 @@ const ClipView = memo(
         } else if (mode === "trim-start") {
           const s = snapToFrame(snap(Math.max(0, start + dx), pts, thr), fps);
           const delta = s - start;
-          current = { start: s, duration: duration - delta, sourceIn: sourceIn + delta };
+          current = { start: s, duration: duration - delta, sourceIn: clip.reverse || clip.freeze ? sourceIn : sourceIn + delta * speed };
         } else {
           const e2 = snapToFrame(snap(start + duration + dx, pts, thr), fps);
           current = { start, duration: e2 - start, sourceIn };
@@ -211,9 +211,9 @@ const ClipView = memo(
         onFocus={() => select(clip.id)}
         title={`${clip.name}\nstart ${timecode(g.start, fps)}  dur ${timecode(g.duration, fps)}`}
       >
-        {clip.kind === "video" ? <Filmstrip mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} /> : <WaveCanvas mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} gainDb={clip.gain_db + track.gain_db} height={height} />}
-        {clip.kind === "audio" && <BeatTicks mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} />}
-        <span className="clip-name">{clip.name}{clip.gain_db !== 0 ? `  ${clip.gain_db > 0 ? "+" : ""}${clip.gain_db.toFixed(1)} dB` : ""}</span>
+        {clip.kind === "video" ? <Filmstrip mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} freeze={clip.freeze ? toSec(clip.freeze) : null} /> : <WaveCanvas mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} gainDb={clip.gain_db + track.gain_db} height={height} />}
+        {clip.kind === "audio" && speed === 1 && !clip.reverse && <BeatTicks mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} />}
+        <span className="clip-name">{clip.name}{clip.gain_db !== 0 ? `  ${clip.gain_db > 0 ? "+" : ""}${clip.gain_db.toFixed(1)} dB` : ""}{badges(clip)}</span>
         <div className="handle left" onPointerDown={begin("trim-start")} />
         <div className="handle right" onPointerDown={begin("trim-end")} />
       </div>
@@ -227,23 +227,45 @@ function linkKey(seq: Sequence, c: Clip): string {
   return linkedIds(seq, c.id).join(",");
 }
 
-function Filmstrip({ mediaId, sourceIn, duration, px }: { mediaId: string; sourceIn: number; duration: number; px: number }) {
+/** Short status text appended to a clip's label: speed, reverse, freeze, keyframes, blend. */
+export function badges(c: Clip): string {
+  const out: string[] = [];
+  const sp = toSec(c.speed);
+  if (c.freeze) out.push("❄");
+  else {
+    if (sp !== 1) out.push(`×${Math.round(sp * 100) / 100}`);
+    if (c.reverse) out.push("◀");
+  }
+  if (Object.values(c.keyframes).some((k) => k.length)) out.push("◆");
+  if (c.blend !== "normal") out.push(c.blend);
+  return out.length ? `  ${out.join(" ")}` : "";
+}
+
+function Filmstrip({ mediaId, sourceIn, duration, px, speed, reverse, freeze }: { mediaId: string; sourceIn: number; duration: number; px: number; speed: number; reverse: boolean; freeze: number | null }) {
   const ensure = useAnalysis((s) => s.ensureThumbs);
   const thumbs = useAnalysis((s) => s.thumbs[mediaId]);
   useEffect(() => ensure(mediaId), [mediaId, ensure]);
   if (!Array.isArray(thumbs)) return null;
-  const first = Math.floor(sourceIn);
-  const last = Math.min(thumbs.length - 1, Math.ceil(sourceIn + duration));
-  const stride = Math.max(1, Math.ceil(80 / px)); // thin the strip when zoomed far out
+  const tile = Math.max(1, Math.ceil(80 / px)); // thin the strip when zoomed far out (in source seconds)
   const imgs = [];
-  for (let i = first; i <= last; i += stride) {
-    const src = thumbs[i];
-    if (src) imgs.push(<img key={i} src={src} alt="" draggable={false} style={{ left: (i - sourceIn) * px, width: px * stride }} />);
+  if (freeze !== null) {
+    // a held frame: repeat the same thumbnail across the clip
+    const src = thumbs[Math.min(thumbs.length - 1, Math.floor(freeze))];
+    const w = Math.max(40, px);
+    for (let x = 0; src && x < duration * px; x += w) imgs.push(<img key={x} src={src} alt="" draggable={false} style={{ left: x, width: w }} />);
+  } else {
+    const span = duration * speed;
+    const first = Math.floor(sourceIn);
+    const last = Math.min(thumbs.length - 1, Math.ceil(sourceIn + span));
+    for (let i = first; i <= last; i += tile) {
+      const src = thumbs[i];
+      if (src) imgs.push(<img key={i} src={src} alt="" draggable={false} style={{ left: ((i - sourceIn) / speed) * px, width: (px * tile) / speed }} />);
+    }
   }
-  return <div className="filmstrip" aria-hidden>{imgs}</div>;
+  return <div className="filmstrip" aria-hidden style={reverse ? { transform: "scaleX(-1)" } : undefined}>{imgs}</div>;
 }
 
-function WaveCanvas({ mediaId, sourceIn, duration, px, gainDb, height }: { mediaId: string; sourceIn: number; duration: number; px: number; gainDb: number; height: number }) {
+function WaveCanvas({ mediaId, sourceIn, duration, px, speed, reverse, gainDb, height }: { mediaId: string; sourceIn: number; duration: number; px: number; speed: number; reverse: boolean; gainDb: number; height: number }) {
   const ensure = useAnalysis((s) => s.ensureWave);
   const wave = useAnalysis((s) => s.waves[mediaId]);
   const ref = useRef<HTMLCanvasElement>(null);
@@ -260,8 +282,10 @@ function WaveCanvas({ mediaId, sourceIn, duration, px, gainDb, height }: { media
     const gain = dbToGain(gainDb);
     const mid = height / 2;
     for (let x = 0; x < w; x++) {
-      const t0 = sourceIn + (x / w) * duration;
-      const t1 = sourceIn + ((x + 1) / w) * duration;
+      const span = duration * speed;
+      const [f0, f1] = reverse ? [1 - (x + 1) / w, 1 - x / w] : [x / w, (x + 1) / w];
+      const t0 = sourceIn + f0 * span;
+      const t1 = sourceIn + f1 * span;
       const i0 = Math.floor(t0 * wave.bins_per_sec);
       const i1 = Math.max(i0 + 1, Math.ceil(t1 * wave.bins_per_sec));
       let m = 0;
@@ -269,7 +293,7 @@ function WaveCanvas({ mediaId, sourceIn, duration, px, gainDb, height }: { media
       const hh = Math.min(1, m * gain) * (height - 6);
       ctx.fillRect(x, mid - hh / 2, 1, Math.max(1, hh));
     }
-  }, [wave, sourceIn, duration, w, gainDb, height]);
+  }, [wave, sourceIn, duration, speed, reverse, w, gainDb, height]);
   if (typeof wave !== "object") return <div className="wave-pending">{wave === "failed" ? "no waveform" : "analyzing…"}</div>;
   return <canvas ref={ref} width={w} height={height} style={{ width: cssW, height }} aria-label="audio waveform" />;
 }

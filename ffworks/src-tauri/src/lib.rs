@@ -300,6 +300,16 @@ fn list_effects() -> Vec<ffworks_core::effects::EffectDef> {
     ffworks_core::effects::registry()
 }
 
+/// Clip-level parameters (transform/opacity), blend modes and keyframe interpolations for the Inspector.
+#[tauri::command]
+fn list_clip_props() -> serde_json::Value {
+    serde_json::json!({
+        "params": ffworks_core::clipprops::video_params(),
+        "blendModes": ffworks_core::clipprops::BLEND_MODES,
+        "interps": ffworks_core::keyframes::INTERPS.iter().map(|(i, n)| serde_json::json!({ "id": i, "name": n })).collect::<Vec<_>>(),
+    })
+}
+
 #[tauri::command]
 fn list_export_presets() -> Vec<ExportSettings> {
     ExportSettings::builtin()
@@ -458,12 +468,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

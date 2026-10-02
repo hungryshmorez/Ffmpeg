@@ -56,6 +56,19 @@ A registry of `EffectDef`s (id, category, required FFmpeg filters, `ParamDef`s w
 
 **Render-graph inputs:** every clip use (linked A/V share one) and every transition side gets its own `-i`. Sharing one input across branches with `split`/`asplit` starved branches that were consumed at very different times (the crossfade audio came out silent), so splitting is not used; a render needing more than 200 simultaneous inputs is refused with an explanation (OS file-handle limits).
 
+## Clip properties, keyframes and retiming (`clipprops.rs`, `keyframes.rs`, `effects.rs`, `ffmpeg.rs`)
+
+`Clip` carries `transform {x, y, scale, rotation}` (pixels / ×1 / degrees, pivot = frame centre), `opacity`, `blend`, `speed` (rational), `reverse`, `freeze` (source time of a held frame) and `keyframes: {param id → [Keyframe{t, v, interp}]}`. Param ids are `opacity | x | y | scale | rotation | fx:<effect id>:<param>`; key times are clip-relative **timeline** seconds snapped to the frame grid (so retiming never moves keys). Interpolations: linear, hold, ease in/out/in-out. `keyframes::eval` (Rust, mirrored in `ui/src/keyframes.ts`) and `keyframes::to_expr` (FFmpeg expression text) are the same curve; a test renders every interpolation in real FFmpeg and compares with `eval`.
+
+* **Commands:** `set_clip_param`, `set_clip_blend`, `set_keyframe` (upsert; snaps time), `remove_keyframe`, `clear_keyframes`, `set_clip_speed`, `set_clip_reverse`, `set_clip_freeze`. A static setter is refused while the parameter is animated (the UI auto-keys instead). Removing the last key keeps its value as the static value. Removing an effect removes its keyframes.
+* **Split/trim:** a split keeps the curve identical on both halves (`keyframes::window` keeps the keys inside plus the nearest outside); trimming the start shifts keys; a reversed clip's left piece takes the *later* source; speed makes source ranges `duration × speed`.
+* **Speed** changes the clip's timeline duration (source span fixed) for the whole link group and needs free track space. Audio uses `atempo` (chained for factors outside 0.5–2) and is padded/trimmed to the exact sample length. Slow motion repeats frames (no interpolation yet).
+* **Reverse** uses `reverse`/`areverse`, which buffer the clip in memory; compile refuses clips over ~2 GB of decoded frames at output size (previews at lower quality still work). **Freeze** keeps one frame (`trim=end_frame=1,tpad=clone`), has no source span so it can be lengthened freely, and detaches the linked audio.
+* **Transform** is one `perspective` pass on a frame padded with a 2 px transparent border (`perspective` replicates edge pixels; the border makes the outside transparent; odd pad offsets corrupt the alpha plane in `pad`, hence 2). Animated parameters make it `eval=frame`, with time derived from `perspective`'s 1-based `in` counter. Verified pixel-exact for position/scale/rotation.
+* **Opacity** static: `colorchannelmixer=aa`; keyframed: `geq` on the alpha plane (exact, slower). Effect parameters keyframe through the filter's own per-frame expressions (`eq`, `hue`, `vignette`); blur/sharpen/grain take fixed values in FFmpeg and are marked `animatable: false` in the registry (no fake keyframe button).
+* **Blend modes** (`normal` = overlay): the clip is placed on a full-length transparent canvas, both inputs are converted to planar RGB (`blend` multiplies raw planes: in YUV the result is wrong, a bug the first pixel test caught), blended, converted back and composited through the clip's own alpha. `crop` is an effect that clears alpha strips, so lower layers show through.
+* Transitions refuse clips with retiming, transform, blend or keyframes (handles/timing would be wrong); the reverse is refused too.
+
 ## Preview (`preview.rs`)
 
 `preview::render` compiles the same render graph with a `range` and `scale_div` into a cached `previews/<key>.mp4`. The key is a SHA-256 of the project JSON (minus the display name) + range + quality, so any edit yields a new key and the UI compares `renderHash` to decide whether a preview is current. Cached hits skip FFmpeg. Not yet done: per-range invalidation, background pre-render, frame cache.
@@ -94,7 +107,6 @@ Waveform peaks (100 bins/s, from an FFmpeg s16le pipe) and JPEG filmstrips are g
 ## Designed for, not yet built
 
 * **Automation DSL / blueprints / macros** (Phase 4): text DSL and graph both compile to `Vec<Command>`; dry-run = plan onto a cloned project and diff.
-* **Keyframes** (rest of Phase 2): will extend `EffectInstance.params` from constants to animated values.
 * **Datamosh / codec lab** (Phases 8–9): isolated jobs on disposable copies in a managed temp dir (`name.ffworks-partial` pattern + crash-safe job state), recorded seeds + tool versions for reproducibility; honest labelling of what is codec-level vs. filter-level.
 * **Plugins** (Phase 10): manifest-declared capabilities, out-of-process, no ambient access.
 * **Local automation API**: not started; no network listener exists.

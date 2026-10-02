@@ -1,9 +1,11 @@
 //! Render graph IR: the sequence flattened into resolved, renderer-independent segments.
 //! Both preview and final export compile from this one structure so they share edit semantics (spec §156).
 
+use crate::clipprops::Transform;
 use crate::error::Result;
+use crate::keyframes::Keyframe;
 use crate::project::{Clip, Project, TrackKind};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use crate::time::{Fps, Rational};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -32,6 +34,28 @@ pub struct VideoSegment {
     pub filters: Vec<String>,
     /// Filter names those effects need (capability check).
     pub requires: Vec<String>,
+    /// Playback speed (source span = duration × speed). 1 for transitioned clips.
+    pub speed: Rational,
+    pub reverse: bool,
+    /// Source time of the single frame held for the whole segment.
+    pub freeze: Option<Rational>,
+    pub transform: Transform,
+    /// FFmpeg blend mode; "normal" = plain overlay.
+    pub blend: String,
+    /// Animated clip parameters (`opacity`, `x`, `y`, `scale`, `rotation`) with their keyframes.
+    pub keyframes: BTreeMap<String, Vec<Keyframe>>,
+    /// An effect on this segment writes transparency (e.g. crop).
+    pub alpha_fx: bool,
+}
+
+impl VideoSegment {
+    pub fn animated(&self, param: &str) -> bool {
+        self.keyframes.get(param).is_some_and(|k| !k.is_empty())
+    }
+    /// Source media consumed.
+    pub fn source_span(&self) -> Rational {
+        if self.freeze.is_some() { Rational::ZERO } else { self.duration.mul(self.speed) }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -42,6 +66,8 @@ pub struct AudioSegment {
     pub duration: Rational,
     /// Clip gain + track gain.
     pub gain_db: f64,
+    pub speed: Rational,
+    pub reverse: bool,
 }
 
 /// One side of a video transition: a source range with the clip's effects applied.
@@ -96,15 +122,23 @@ pub struct RenderGraph {
     pub has_audio: bool,
 }
 
-fn effect_filters(c: &Clip) -> Result<(Vec<String>, Vec<String>)> {
-    let (mut filters, mut requires) = (vec![], vec![]);
+/// (filters, required FFmpeg filter names, whether any writes transparency)
+fn effect_filters(c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
+    let (mut filters, mut requires, mut alpha) = (vec![], vec![], false);
     for fx in &c.effects {
-        if let Some(f) = crate::effects::to_filter(fx)? {
+        if let Some(f) = crate::effects::to_filter(fx, &c.keyframes)? {
             filters.push(f);
-            requires.extend(crate::effects::find(&fx.effect)?.requires.iter().map(|r| r.to_string()));
+            let def = crate::effects::find(&fx.effect)?;
+            requires.extend(def.requires.iter().map(|r| r.to_string()));
+            alpha |= def.alpha;
         }
     }
-    Ok((filters, requires))
+    Ok((filters, requires, alpha))
+}
+
+/// The clip-level animated parameters (not effect parameters) of a clip.
+fn clip_keyframes(c: &Clip) -> BTreeMap<String, Vec<Keyframe>> {
+    c.keyframes.iter().filter(|(k, v)| !k.starts_with("fx:") && !v.is_empty()).map(|(k, v)| (k.clone(), v.clone())).collect()
 }
 
 /// Input key for the main segment of a clip: linked video/audio clips share one input (each stream is consumed once).
@@ -164,8 +198,8 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                 let half = tr.half();
                 trims.entry(a.id.clone()).or_default().1 = trims.get(&a.id).map(|x| x.1).unwrap_or(Rational::ZERO) + half;
                 trims.entry(b.id.clone()).or_default().0 = trims.get(&b.id).map(|x| x.0).unwrap_or(Rational::ZERO) + half;
-                let (fa, ra) = effect_filters(a)?;
-                let (fb, rb) = effect_filters(b)?;
+                let (fa, ra, _) = effect_filters(a)?;
+                let (fb, rb, _) = effect_filters(b)?;
                 let (ia, ib) = (input_index(&mut g, &a.media, &format!("tr:{}:a", tr.id))?, input_index(&mut g, &b.media, &format!("tr:{}:b", tr.id))?);
                 g.video_transitions.push(VideoTransition {
                     layer,
@@ -199,7 +233,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
     let trimmed = |c: &Clip| -> Option<(Rational, Rational, Rational)> {
         let (front, back) = trims.get(&c.id).copied().unwrap_or_default();
         let dur = c.duration - front - back;
-        (dur > Rational::ZERO).then_some((c.start + front, c.source_in + front, dur))
+        (dur > Rational::ZERO).then_some((c.start + front, c.source_in + front.mul(c.speed), dur))
     };
     let mut layer = 0;
     for t in &seq.tracks {
@@ -210,8 +244,24 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                     for c in &t.clips {
                         let Some((start, source_in, duration)) = trimmed(c) else { continue };
                         let input = input_index(&mut g, &c.media, &main_key(c))?;
-                        let (filters, requires) = effect_filters(c)?;
-                        g.video.push(VideoSegment { input, layer, start, source_in, duration, opacity: c.opacity, filters, requires });
+                        let (filters, requires, alpha_fx) = effect_filters(c)?;
+                        g.video.push(VideoSegment {
+                            input,
+                            layer,
+                            start,
+                            source_in,
+                            duration,
+                            opacity: c.opacity,
+                            filters,
+                            requires,
+                            speed: c.speed,
+                            reverse: c.reverse,
+                            freeze: c.freeze,
+                            transform: c.transform,
+                            blend: c.blend.clone(),
+                            keyframes: clip_keyframes(c),
+                            alpha_fx,
+                        });
                     }
                 }
                 layer += 1;
@@ -224,7 +274,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                     }
                     let Some((start, source_in, duration)) = trimmed(c) else { continue };
                     let input = input_index(&mut g, &c.media, &main_key(c))?;
-                    g.audio.push(AudioSegment { input, start, source_in, duration, gain_db: c.gain_db + t.gain_db });
+                    g.audio.push(AudioSegment { input, start, source_in, duration, gain_db: c.gain_db + t.gain_db, speed: c.speed, reverse: c.reverse });
                 }
             }
         }

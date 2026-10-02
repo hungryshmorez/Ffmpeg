@@ -108,9 +108,68 @@ fn secs(t: Rational) -> String {
     if s.is_empty() || s == "-" { "0".into() } else { s.to_string() }
 }
 
+/// Plain decimal (no exponent) usable inside an FFmpeg expression; negatives are parenthesised.
+fn dec(x: f64) -> String {
+    let s = format!("{x:.9}");
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    let s = if s.is_empty() || s == "-" || s == "-0" { "0" } else { s };
+    if s.starts_with('-') { format!("({s})") } else { s.to_string() }
+}
+
+/// A clip parameter as expression text: the keyframe curve in `var` when animated, else its static value.
+fn param_text(seg: &crate::render_graph::VideoSegment, id: &str, static_value: f64, var: &str) -> String {
+    if seg.animated(id) {
+        format!("({})", crate::keyframes::to_expr(&seg.keyframes[id], var))
+    } else {
+        dec(static_value)
+    }
+}
+
+/// Transform (position/scale/rotation about the frame centre) as one `perspective` pass on a transparently padded frame.
+/// `perspective` replicates edge pixels outside the source, so a 2px transparent border makes the outside transparent.
+/// Its frame counter `in` is 1-based, hence `(in-1)`. Returns None for an identity, non-animated transform.
+fn transform_filter(seg: &crate::render_graph::VideoSegment, w: u32, h: u32, fps: crate::time::Fps) -> Option<String> {
+    let animated = ["x", "y", "scale", "rotation"].iter().any(|p| seg.animated(p));
+    if seg.transform.is_identity() && !animated {
+        return None;
+    }
+    let t = format!("((in-1)*{}/{})", fps.den(), fps.num());
+    let (x, y) = (param_text(seg, "x", seg.transform.x, &t), param_text(seg, "y", seg.transform.y, &t));
+    let (sc, rot) = (param_text(seg, "scale", seg.transform.scale, &t), param_text(seg, "rotation", seg.transform.rotation, &t));
+    let rad = format!("({rot}*PI/180)");
+    let (wf, hf) = (w as f64, h as f64);
+    let mut coords = vec![];
+    for (i, (u, v)) in [(-2.0, -2.0), (wf + 2.0, -2.0), (-2.0, hf + 2.0), (wf + 2.0, hf + 2.0)].into_iter().enumerate() {
+        let (dx, dy) = (dec(u - wf / 2.0), dec(v - hf / 2.0));
+        coords.push(format!("x{i}='{}+{sc}*({dx}*cos({rad})-{dy}*sin({rad}))+{x}+2'", dec(wf / 2.0)));
+        coords.push(format!("y{i}='{}+{sc}*({dx}*sin({rad})+{dy}*cos({rad}))+{y}+2'", dec(hf / 2.0)));
+    }
+    let eval = if animated { ":eval=frame" } else { "" };
+    Some(format!("format=yuva420p,pad={}:{}:2:2:color=black@0,perspective={}:sense=destination:interpolation=linear{eval},crop={w}:{h}:2:2", w + 4, h + 4, coords.join(":")))
+}
+
+/// atempo accepts 0.5..2.0 per instance on older FFmpeg; chain instances for other factors.
+fn atempo_chain(speed: f64) -> String {
+    let mut parts = vec![];
+    let mut s = speed;
+    while s > 2.0 {
+        parts.push("atempo=2.0".to_string());
+        s /= 2.0;
+    }
+    while s < 0.5 {
+        parts.push("atempo=0.5".to_string());
+        s /= 0.5;
+    }
+    parts.push(format!("atempo={}", dec(s)));
+    parts.join(",")
+}
+
 fn fps_expr(g: &RenderGraph) -> String {
     format!("{}/{}", g.fps.num(), g.fps.den())
 }
+
+/// Reversing buffers the clip in memory; refuse above this (bytes of decoded frames at output size).
+const MAX_REVERSE_BYTES: f64 = 2.0e9;
 
 pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities>) -> Result<FfmpegJob> {
     let st = &opts.settings;
@@ -195,6 +254,7 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                 chain.push(',');
                 chain.push_str(fx);
             }
+            chain.push_str(",format=yuv420p");
             chain
         };
         enum Item<'a> {
@@ -207,18 +267,81 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
             match item {
                 Item::Seg(seg) => {
                     require(&seg.requires)?;
-                    let label = take(seg.input);
-                    let mut chain = vchain(&label, seg.input, seg.source_in, seg.duration, Some(seg.start), &seg.filters);
-                    let translucent = seg.opacity < 1.0;
-                    if translucent {
-                        chain.push_str(&format!(",format=yuva420p,colorchannelmixer=aa={}", seg.opacity));
-                    } else {
-                        chain.push_str(",format=yuv420p");
+                    let speed = seg.speed.as_f64();
+                    let span = seg.source_span();
+                    let mut chain = String::new();
+                    // source window (frozen: a single frame), restart timestamps, retime
+                    let (t0, t1) = match seg.freeze {
+                        // two frames of margin around the held time; `trim=end_frame=1` below keeps just the first
+                        Some(fz) => {
+                            let a = (fz - src_half(seg.input)).max(Rational::ZERO);
+                            (a, a + Rational::new(2, 1).div(g.fps))
+                        }
+                        None => ((seg.source_in - src_half(seg.input)).max(Rational::ZERO), seg.source_in + span - src_half(seg.input)),
+                    };
+                    chain.push_str(&format!("{}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS", take(seg.input), secs(t0), secs(t1)));
+                    if seg.freeze.is_none() && seg.speed != Rational::from_int(1) {
+                        chain.push_str(&format!(",setpts=PTS/{}", dec(speed)));
                     }
-                    chain.push_str(&format!("[vs{n}]"));
+                    chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"));
+                    if seg.freeze.is_some() {
+                        chain.push_str(&format!(",trim=end_frame=1,tpad=stop_mode=clone:stop_duration={d},trim=end={d},setpts=PTS-STARTPTS", d = secs(seg.duration)));
+                    } else {
+                        chain.push_str(&format!(",trim=end={},setpts=PTS-STARTPTS", secs(seg.duration)));
+                    }
+                    if seg.reverse && seg.freeze.is_none() {
+                        // `reverse` holds every frame in memory; refuse clips that would not fit
+                        let bytes = seg.duration.as_f64() * g.fps.as_f64() * (w as f64) * (h as f64) * 1.5;
+                        if bytes > MAX_REVERSE_BYTES {
+                            return Err(Error::validation(format!(
+                                "reversing {:.1}s at {w}x{h} needs about {:.1} GB of memory (limit {:.0} GB); reverse a shorter clip or render with a lower preview quality",
+                                seg.duration.as_f64(),
+                                bytes / 1e9,
+                                MAX_REVERSE_BYTES / 1e9
+                            )));
+                        }
+                        chain.push_str(",reverse,setpts=PTS-STARTPTS");
+                    }
+                    for fx in &seg.filters {
+                        chain.push(',');
+                        chain.push_str(fx);
+                    }
+                    let blended = seg.blend != "normal";
+                    let animated_opacity = seg.animated("opacity");
+                    let transform = transform_filter(seg, w, h, g.fps);
+                    let translucent = seg.opacity < 1.0 || animated_opacity || seg.alpha_fx || transform.is_some() || blended;
+                    if animated_opacity {
+                        // alpha plane × keyframed opacity, evaluated per frame (T = clip-relative seconds at this point of the chain)
+                        chain.push_str(&format!(",format=yuva420p,geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='alpha(X,Y)*({})'", crate::keyframes::to_expr(&seg.keyframes["opacity"], "T")));
+                    }
+                    if let Some(tf) = transform {
+                        chain.push(',');
+                        chain.push_str(&tf);
+                    }
+                    if !animated_opacity && seg.opacity < 1.0 {
+                        chain.push_str(&format!(",format=yuva420p,colorchannelmixer=aa={}", seg.opacity));
+                    }
+                    chain.push_str(if translucent { ",format=yuva420p" } else { ",format=yuv420p" });
+                    chain.push_str(&format!(",setpts=PTS+{}/TB[vs{n}]", secs(seg.start)));
                     f.push(chain);
                     let fmt = if translucent { ":format=auto" } else { "" };
-                    f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", n + 1));
+                    if !blended {
+                        f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", n + 1));
+                    } else {
+                        require(&["blend".to_string(), "alphamerge".to_string(), "alphaextract".to_string()])?;
+                        // Blend the layer with the picture beneath, then composite that result through the layer's own alpha.
+                        // The layer is first placed on a full-length transparent canvas so both blend inputs run in step.
+                        f.push(format!("color=c=black@0:s={w}x{h}:r={fps}:d={},format=yuva420p[bt{n}]", secs(g.duration)));
+                        f.push(format!("[bt{n}][vs{n}]overlay=eof_action=pass:repeatlast=0:format=auto,split[bla{n}][blb{n}]"));
+                        f.push(format!("[blb{n}]alphaextract[ba{n}]"));
+                        // `blend` operates on the raw planes of its pixel format, so convert to planar RGB first: multiplying YUV planes is not a colour multiply.
+                        f.push(format!("[bla{n}]format=gbrp[bly{n}]"));
+                        f.push(format!("[base{n}]split[bs1_{n}][bs2_{n}]"));
+                        f.push(format!("[bs1_{n}]format=gbrp[bsr{n}]"));
+                        f.push(format!("[bsr{n}][bly{n}]blend=all_mode={},format=yuv420p[bm{n}]", seg.blend));
+                        f.push(format!("[bm{n}][ba{n}]alphamerge[bmm{n}]"));
+                        f.push(format!("[bs2_{n}][bmm{n}]overlay=eof_action=pass:repeatlast=0:format=auto[base{}]", n + 1));
+                    }
                 }
                 Item::Tr(t) => {
                     require(&t.a.requires)?;
@@ -261,8 +384,25 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         for (k, seg) in g.audio.iter().enumerate() {
             let label = take(seg.input);
             let s0 = seg.source_in.round_units(rate);
-            let s1 = (seg.source_in + seg.duration).round_units(rate);
-            f.push(format!("{}{}[as{k}]", achain(&label, s0, s1, seg.gain_db), delay_of(seg.start)));
+            let span = seg.duration.mul(seg.speed);
+            let s1 = (seg.source_in + span).round_units(rate);
+            let mut chain = achain(&label, s0, s1, 0.0);
+            if seg.reverse {
+                chain.push_str(",areverse");
+            }
+            let retimed = seg.speed != Rational::from_int(1);
+            if retimed {
+                chain.push_str(&format!(",{}", atempo_chain(seg.speed.as_f64())));
+            }
+            if retimed {
+                // atempo output length is only approximately span/speed; make it exactly the clip's length
+                let n = seg.duration.round_units(rate);
+                chain.push_str(&format!(",apad=whole_len={n},atrim=end_sample={n},asetpts=PTS-STARTPTS"));
+            }
+            if seg.gain_db != 0.0 {
+                chain.push_str(&format!(",volume={:.4}dB", seg.gain_db));
+            }
+            f.push(format!("{chain}{}[as{k}]", delay_of(seg.start)));
             labels.push(format!("[as{k}]"));
         }
         for (k, t) in g.audio_transitions.iter().enumerate() {

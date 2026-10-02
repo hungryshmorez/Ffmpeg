@@ -6,6 +6,7 @@ import type { Clip, Sequence } from "../types";
 
 const clip = (id: string, start: string, dur: string, kind: "video" | "audio", link: string | null = null, sourceIn = "0"): Clip => ({
   id, media: "m", name: id, kind, start, source_in: sourceIn, duration: dur, link, gain_db: 0, opacity: 1, effects: [],
+  speed: "1", reverse: false, freeze: null, transform: { x: 0, y: 0, scale: 1, rotation: 0 }, blend: "normal", keyframes: {},
 });
 const seq: Sequence = {
   id: "s", name: "Main",
@@ -50,6 +51,15 @@ describe("timeline math", () => {
   });
   it("maps timeline time to source time", () => {
     expect(sourceTime(clip("x", "10", "5", "video", null, "3"), 12)).toBe(5);
+  });
+  it("maps timeline time to source time with speed, reverse and freeze", () => {
+    const base = clip("x", "10", "4", "video", null, "2");
+    expect(sourceTime({ ...base, speed: "2" }, 11)).toBe(4); // 1 s in at 2x = 2 s of source
+    expect(sourceTime({ ...base, speed: "1/2" }, 12)).toBe(3);
+    // reversed: the first timeline instant shows the END of the source range (2 + 4 = 6)
+    expect(sourceTime({ ...base, reverse: true }, 10)).toBe(6);
+    expect(sourceTime({ ...base, reverse: true }, 11)).toBe(5);
+    expect(sourceTime({ ...base, freeze: "7/2" }, 12)).toBe(3.5);
   });
   it("snaps within threshold only", () => {
     const pts = snapPoints(seq, 2.5, new Set(["top"]));

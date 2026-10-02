@@ -8,9 +8,20 @@ export interface MediaInfo { container: string; duration: Rational; bit_rate: nu
 export interface MediaAsset { id: string; name: string; path: string; info: MediaInfo; fingerprint: string | null }
 
 export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number> }
-export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string }
-export interface EffectDef { id: string; name: string; category: string; requires: string[]; params: ParamDef[] }
-export interface Clip { id: string; media: string; name: string; kind: TrackKind; start: Rational; source_in: Rational; duration: Rational; link: string | null; gain_db: number; opacity: number; effects: EffectInstance[] }
+export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string; animatable: boolean }
+export interface EffectDef { id: string; name: string; category: string; requires: string[]; params: ParamDef[]; alpha: boolean }
+export type Interp = "linear" | "hold" | "ease_in" | "ease_out" | "ease_in_out";
+/** One key; `interp` is the curve from this key to the next. `t` is clip-relative seconds. */
+export interface Keyframe { t: Rational; v: number; interp: Interp }
+export interface Transform { x: number; y: number; scale: number; rotation: number }
+export interface ClipParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string }
+export interface ClipProps { params: ClipParamDef[]; blendModes: [string, string][]; interps: { id: Interp; name: string }[] }
+export interface Clip {
+  id: string; media: string; name: string; kind: TrackKind; start: Rational; source_in: Rational; duration: Rational; link: string | null; gain_db: number; opacity: number; effects: EffectInstance[];
+  speed: Rational; reverse: boolean; freeze: Rational | null; transform: Transform; blend: string;
+  /** Keyed by parameter id: `opacity`, `x`, `y`, `scale`, `rotation` or `fx:<effect id>:<param>`. */
+  keyframes: Record<string, Keyframe[]>;
+}
 export interface Transition { id: string; clip_a: string; clip_b: string; kind: string; duration: Rational }
 export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; clips: Clip[]; transitions: Transition[] }
 export interface Sequence { id: string; name: string; tracks: Track[] }
@@ -49,6 +60,14 @@ export type Command =
   | { type: "set_effect_enabled"; clip: string; effect_id: string; enabled: boolean }
   | { type: "move_effect"; clip: string; effect_id: string; index: number }
   | { type: "set_clip_opacity"; clip: string; opacity: number }
+  | { type: "set_clip_param"; clip: string; param: string; value: number }
+  | { type: "set_clip_blend"; clip: string; blend: string }
+  | { type: "set_keyframe"; clip: string; param: string; time: Rational; value: number; interp?: Interp | null }
+  | { type: "remove_keyframe"; clip: string; param: string; time: Rational }
+  | { type: "clear_keyframes"; clip: string; param: string }
+  | { type: "set_clip_speed"; clip: string; speed: Rational }
+  | { type: "set_clip_reverse"; clip: string; reverse: boolean }
+  | { type: "set_clip_freeze"; clip: string; at: Rational | null }
   | { type: "add_transition"; clip_a: string; clip_b: string; kind: string; duration: Rational }
   | { type: "remove_transition"; transition: string }
   | { type: "set_transition"; transition: string; kind?: string | null; duration?: Rational | null }

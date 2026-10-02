@@ -1,13 +1,13 @@
 # Status (update this at the end of every working session)
 
-_Last updated: after the "reuse pass" commit (scene detection, loudness, 57 transitions). 91 Rust tests, 13 UI unit tests, 6 GUI scripts, clippy clean._
+_Last updated: Phase 2 video chunk (keyframes, transform, blend, speed/reverse/freeze). 119 Rust tests, 19 UI unit tests, 7 GUI scripts, clippy clean._
 
 ## Done (tested)
 Phase 0 architecture doc · Phase 1 editor (import/probe/metadata, thumbnails, waveforms, multitrack timeline: place/trim/split/move/ripple-delete/linked A/V/lock/mute/snap, volume, undo/redo, save/load, export H.264/VP9/WAV/MP3 with progress/cancel/verify, Command Inspector, headless CLI) ·
-Effects (11, with parameter metadata registry) + opacity · processed preview (cached by content hash, staleness shown) · autosave + crash recovery (verified with kill -9) · relinking · FFmpeg path settings · render queue (priority, cancel, logs) · transitions (all 57 xfade kinds from the installed FFmpeg, crossfaded linked audio, handle validation) · beat detection (ported from the browser app) + snap-to-beats · scene detection (`scenesdetect` crate) · loudness + normalize (`ebur128`) · bundled FFmpeg in the Windows installer (CI-built; installer artifact ~114 MB zipped).
+Effects (11, with parameter metadata registry) + opacity · processed preview (cached by content hash, staleness shown) · autosave + crash recovery (verified with kill -9) · relinking · FFmpeg path settings · render queue (priority, cancel, logs) · transitions (all 57 xfade kinds from the installed FFmpeg, crossfaded linked audio, handle validation) · beat detection (ported from the browser app) + snap-to-beats · scene detection (`scenesdetect` crate) · loudness + normalize (`ebur128`) · bundled FFmpeg in the Windows installer (CI-built; installer artifact ~114 MB zipped) · **keyframes** (opacity, position, scale, rotation, animatable effect params; linear/hold/ease) · transform · crop · 16 blend modes · speed/reverse/freeze (video+audio) — all through the command bus with undo, save/load and real-FFmpeg pixel tests.
 
 ## Left (by spec phase)
-* **Phase 2 remainder:** keyframes · proxies (also fixes webview not decoding some codecs) · transform (position/scale/rotate/crop/flip), speed/reverse/freeze, blend modes · audio mixer/meters/fades/pan + audio effects (EQ, compressor, limiter…) · titles/text · image/GIF/sequence/subtitle import · markers/labels/notes · quick export · copy/paste effects, multi-clip edit · remaining common effects.
+* **Phase 2 remainder:** proxies (also fixes webview not decoding some codecs) · audio mixer/meters/fades/pan + audio effects (EQ, compressor, limiter…) · titles/text · image/GIF/sequence/subtitle import · markers/labels/notes · quick export · copy/paste effects, multi-clip edit · remaining common effects. (Keyframes, transform, crop, blend, speed/reverse/freeze are done: see ARCHITECTURE.md.)
 * **Phase 3:** full filter browser · visual filter-graph editor + raw nodes (use `@xyflow/react`) · GPU detection/hw encoders · scopes · adjustment layers · nested sequences/compound clips · effect-chain presets · more exports (H.265, ProRes, DNxHR, GIF, image sequence) · docking/workspaces · command palette · shortcut editor.
 * **Phase 4:** DSL + JSON automation · script editor · recorder UI (engine `start_recording/stop_recording` exists) · macros · batch · watch folders · blueprints · dry run/diff · variables/loops/conditions · permissions.
 * **Phase 5:** silence/black-frame/duplicate-frame/transient detection · audio auto-sync (cross-correlation). (beats, scenes, loudness done)
@@ -18,6 +18,7 @@ Effects (11, with parameter metadata registry) + opacity · processed preview (c
 * **Cross-cutting:** multiple sequences + snapshots · project packaging · smart rendering · export naming/versioning/manifest · SQLite index · disk-space checks · persistent job state across crashes · accessibility pass · colour management · queue should also carry previews/analysis.
 
 ## Unverified / known gaps
+* Keyframed opacity uses `geq` (exact but slow at 1080p+); not benchmarked. Slow motion repeats frames (no optical-flow interpolation). Keyframes can't be dragged on the timeline yet (edited in the Inspector list). Transitions can't be combined with transform/blend/retiming/keyframes (refused with a message). Blur/sharpen/grain parameters can't be keyframed (FFmpeg filters take fixed values).
 * **Never installed or launched on Windows.** The installer builds in CI; nobody has run it. Preview picture playback unobserved (sandbox webview can't decode H.264).
 * Native open/save dialogs and the close-confirmation prompt aren't exercised by GUI tests (tests call the same backend commands).
 * Preview invalidation is whole-project, not per time range. Undo history isn't restored after crash recovery.

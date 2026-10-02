@@ -93,3 +93,9 @@ progress { width: 100%; height: 10px; accent-color: var(--accent); } .job { marg
 .job-row { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }
 .state-badge { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: var(--panel2); } .state-badge.rendering { background: var(--accent2); color: #fff; } .state-badge.completed { color: var(--good); } .state-badge.failed { color: var(--bad); }
 .transition-mark { position: absolute; top: 2px; bottom: 2px; z-index: 3; pointer-events: none; background: linear-gradient(90deg, rgba(255,90,54,.0), rgba(255,90,54,.55) 50%, rgba(58,160,255,.0)); border-top: 2px solid var(--accent); display: flex; align-items: flex-end; justify-content: center; } .transition-mark span { font-size: 9px; background: rgba(0,0,0,.55); padding: 0 3px; border-radius: 2px; }
+
+.kf-field { position: relative; } .kf-row { align-items: flex-end; padding-right: 8px; } .kf-row .grow { min-width: 0; }
+.kf-btn { color: var(--dim); } .kf-btn.has { color: #e8c35a; } .kf-btn.on { color: #fff; background: #d19a1e; }
+.kf-list { margin: 0 10px 6px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; gap: 4px; }
+.kf-item { display: flex; gap: 6px; align-items: center; } .kf-item .num { width: 70px; } .kf-item select { max-width: 110px; }
+.mono { font-family: ui-monospace, monospace; font-size: 11px; }

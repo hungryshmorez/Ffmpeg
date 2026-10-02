@@ -3,6 +3,7 @@ import { findClip, linkedIds, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
 import { useProject, useUi } from "../state/stores";
 import { CommitSlider } from "./CommitSlider";
+import { ClipPropsPanel } from "./ClipPropsPanel";
 import { EffectsPanel } from "./EffectsPanel";
 import { TransitionPanel } from "./TransitionPanel";
 import { AnalysisPanel } from "./AnalysisPanel";
@@ -50,6 +51,7 @@ export function Inspector() {
         <div><dt>End</dt><dd>{timecode(t.end, fps)}</dd></div>
         <div><dt>Duration</dt><dd>{timecode(t.duration, fps)}</dd></div>
         <div><dt>Source in</dt><dd>{timecode(t.sourceIn, fps)}</dd></div>
+        {(t.speed !== 1 || clip.reverse || clip.freeze) && <div><dt>Timing</dt><dd>{clip.freeze ? "frozen frame" : `${Math.round(t.speed * 1000) / 10}%${clip.reverse ? " reversed" : ""}`}</dd></div>}
         <div><dt>Linked</dt><dd>{clip.link ? `${linkedIds(seq, clip.id).length} clips` : "no"}</dd></div>
       </dl>
       <div className="field">
@@ -80,6 +82,7 @@ export function Inspector() {
       )}
       <AnalysisPanel video={videoClip} audio={audio} />
       {videoClip && <TransitionPanel clip={videoClip} track={findClip(seq, videoClip.id)!.track} seq={seq} />}
+      {videoClip && <ClipPropsPanel clip={videoClip} />}
       {videoClip && <EffectsPanel clip={videoClip} />}
     </div>
   );

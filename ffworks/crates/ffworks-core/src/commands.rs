@@ -7,7 +7,9 @@ use crate::patch::Patch;
 use crate::project::{new_id, Clip, Id, MediaAsset, Project, ProjectSettings, Track, TrackKind};
 use crate::time::{snap_to_frame, Rational};
 use crate::transitions::{self, Transition};
+use crate::clipprops;
 use crate::effects::{self, EffectInstance};
+use crate::keyframes::{self, Interp, Keyframe};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -55,6 +57,19 @@ pub enum Command {
     SetEffectEnabled { clip: Id, effect_id: Id, enabled: bool },
     MoveEffect { clip: Id, effect_id: Id, index: usize },
     SetClipOpacity { clip: Id, opacity: f64 },
+    /// Set a static clip parameter (`x`, `y`, `scale`, `rotation`, `opacity`) or `fx:<effect id>:<param>`. Refused while the parameter is animated.
+    SetClipParam { clip: Id, param: String, value: f64 },
+    SetClipBlend { clip: Id, blend: String },
+    /// Insert or update the keyframe of `param` at clip-relative `time` (snapped to the frame grid). `interp` keeps the existing curve shape when omitted.
+    SetKeyframe { clip: Id, param: String, time: Rational, value: f64, #[serde(default)] interp: Option<Interp> },
+    RemoveKeyframe { clip: Id, param: String, time: Rational },
+    /// Remove all keyframes of `param`; the static value becomes the first key's value.
+    ClearKeyframes { clip: Id, param: String },
+    /// Change speed (1 = normal) for the clip and its linked clips; the timeline duration follows (source span stays the same).
+    SetClipSpeed { clip: Id, speed: Rational },
+    SetClipReverse { clip: Id, reverse: bool },
+    /// Hold the source frame at `at` for the whole video clip; `None` returns to normal playback.
+    SetClipFreeze { clip: Id, at: Option<Rational> },
     /// Blend two adjacent clips on a video track (`kind` is an xfade name; see `transitions::KINDS`).
     AddTransition { clip_a: Id, clip_b: Id, kind: String, duration: Rational },
     RemoveTransition { transition: Id },
@@ -91,6 +106,14 @@ impl Command {
             Command::SetEffectEnabled { .. } => "Toggle effect".into(),
             Command::MoveEffect { .. } => "Reorder effect".into(),
             Command::SetClipOpacity { .. } => "Clip opacity".into(),
+            Command::SetClipParam { param, .. } => format!("Set {param}"),
+            Command::SetClipBlend { blend, .. } => format!("Blend mode {blend}"),
+            Command::SetKeyframe { param, .. } => format!("Keyframe {param}"),
+            Command::RemoveKeyframe { param, .. } => format!("Remove keyframe {param}"),
+            Command::ClearKeyframes { param, .. } => format!("Clear keyframes {param}"),
+            Command::SetClipSpeed { .. } => "Clip speed".into(),
+            Command::SetClipReverse { .. } => "Reverse clip".into(),
+            Command::SetClipFreeze { .. } => "Freeze frame".into(),
             Command::AddTransition { kind, .. } => format!("Add {kind} transition"),
             Command::RemoveTransition { .. } => "Remove transition".into(),
             Command::SetTransition { .. } => "Edit transition".into(),
@@ -198,7 +221,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             let mut out = vec![Patch::PutClip {
                 seq: sid.clone(),
                 track: t.id.clone(),
-                clip: Clip { id: new_id("clp"), media: media.clone(), name: m.name.clone(), kind: t.kind, start, source_in: s_in, duration: dur, link: link.clone(), gain_db: 0.0, opacity: 1.0, effects: vec![] },
+                clip: Clip::new(new_id("clp"), media.clone(), m.name.clone(), t.kind, start, s_in, dur, link.clone()),
             }];
             if link.is_some() {
                 let at = match audio_track {
@@ -217,7 +240,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 out.push(Patch::PutClip {
                     seq: sid,
                     track: at.id.clone(),
-                    clip: Clip { id: new_id("clp"), media: media.clone(), name: m.name.clone(), kind: TrackKind::Audio, start, source_in: s_in, duration: dur, link, gain_db: 0.0, opacity: 1.0, effects: vec![] },
+                    clip: Clip::new(new_id("clp"), media.clone(), m.name.clone(), TrackKind::Audio, start, s_in, dur, link),
                 });
             }
             Ok(out)
@@ -278,13 +301,28 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 let (gt, gc) = seq.find_clip(gid).expect("member");
                 ensure_unlocked(gt)?;
                 let mut c = gc.clone();
+                // The source moves with the *timeline* edge unless the clip plays backwards (then the opposite end of the source).
+                let src_delta = if gc.freeze.is_some() { Rational::ZERO } else { delta.mul(gc.speed) };
                 match edge {
                     Edge::Start => {
                         c.start = gc.start + delta;
-                        c.source_in = gc.source_in + delta;
+                        if !gc.reverse {
+                            c.source_in = gc.source_in + src_delta;
+                        }
                         c.duration = gc.duration - delta;
+                        // keyframes are clip-relative: keep them on the same picture
+                        for kfs in c.keyframes.values_mut() {
+                            for k in kfs.iter_mut() {
+                                k.t = k.t - delta;
+                            }
+                        }
                     }
-                    Edge::End => c.duration = gc.duration + delta,
+                    Edge::End => {
+                        c.duration = gc.duration + delta;
+                        if gc.reverse {
+                            c.source_in = gc.source_in - src_delta;
+                        }
+                    }
                 }
                 let m = p.media(&c.media)?;
                 if c.duration < Rational::from_int(1).div(fps) {
@@ -293,7 +331,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 if c.source_in < Rational::ZERO {
                     return Err(Error::validation(format!("cannot extend '{}' before the start of its source media", c.name)));
                 }
-                if c.source_in + c.duration > m.info.duration + Rational::new(1, 1000) {
+                if c.source_in + c.source_span() > m.info.duration + Rational::new(1, 1000) {
                     return Err(Error::validation(format!("cannot extend '{}' past the end of its source media", c.name)));
                 }
                 if c.start < Rational::ZERO {
@@ -325,9 +363,21 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 let mut right = gc.clone();
                 right.id = new_id("clp");
                 right.start = at;
-                right.source_in = gc.source_in + (at - gc.start);
                 right.duration = gc.end() - at;
                 right.link = right_link.clone();
+                // source ranges (a reversed clip plays its source end first, so the left piece takes the later source)
+                let cut = at - gc.start;
+                if gc.freeze.is_none() {
+                    if gc.reverse {
+                        left.source_in = gc.source_in + (gc.duration - cut).mul(gc.speed);
+                    } else {
+                        right.source_in = gc.source_in + cut.mul(gc.speed);
+                    }
+                }
+                for (param, kfs) in &gc.keyframes {
+                    left.keyframes.insert(param.clone(), keyframes::window(kfs, Rational::ZERO, cut, Rational::ZERO));
+                    right.keyframes.insert(param.clone(), keyframes::window(kfs, cut, gc.duration, cut));
+                }
                 out.push(Patch::PutClip { seq: sid.clone(), track: gt.id.clone(), clip: left });
                 out.push(Patch::PutClip { seq: sid.clone(), track: gt.id.clone(), clip: right });
             }
@@ -356,18 +406,19 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(out)
         }
-        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } => {
+        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetKeyframe { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
             let clip_id = match cmd {
-                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } => clip,
+                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetKeyframe { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
                 _ => unreachable!(),
             };
             let (t, c) = seq.find_clip(clip_id).ok_or_else(|| Error::NotFound(format!("clip {clip_id}")))?;
             ensure_unlocked(t)?;
             if c.kind != TrackKind::Video {
-                return Err(Error::validation("effects and opacity apply to video clips; select the video clip"));
+                return Err(Error::validation("effects, transform, blend and opacity apply to video clips; select the video clip"));
             }
             let mut c2 = c.clone();
             let find_fx = |c: &Clip, id: &str| c.effects.iter().position(|e| e.id == id).ok_or_else(|| Error::NotFound(format!("effect {id}")));
+            let animated = |c: &Clip, param: &str| c.keyframes.get(param).is_some_and(|k| !k.is_empty());
             match cmd {
                 Command::AddEffect { effect, params, index, .. } => {
                     let inst = EffectInstance::new(new_id("fx"), effect, params)?;
@@ -377,10 +428,16 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 Command::RemoveEffect { effect_id, .. } => {
                     let i = find_fx(&c2, effect_id)?;
                     c2.effects.remove(i);
+                    // its keyframes go with it
+                    let prefix = format!("fx:{effect_id}:");
+                    c2.keyframes.retain(|k, _| !k.starts_with(&prefix));
                 }
                 Command::SetEffectParam { effect_id, param, value, .. } => {
                     let i = find_fx(&c2, effect_id)?;
                     effects::check_param(&effects::find(&c2.effects[i].effect)?, param, *value)?;
+                    if animated(&c2, &format!("fx:{effect_id}:{param}")) {
+                        return Err(Error::validation("this parameter is animated; edit its keyframes instead"));
+                    }
                     c2.effects[i].params.insert(param.clone(), *value);
                 }
                 Command::SetEffectEnabled { effect_id, enabled, .. } => {
@@ -396,11 +453,133 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                     if !(0.0..=1.0).contains(opacity) {
                         return Err(Error::validation(format!("opacity {opacity} must be between 0 and 1")));
                     }
+                    if animated(&c2, "opacity") {
+                        return Err(Error::validation("opacity is animated; edit its keyframes instead"));
+                    }
                     c2.opacity = *opacity;
+                }
+                Command::SetClipParam { param, value, .. } => {
+                    clipprops::check_value(&c2, param, *value, false)?;
+                    if animated(&c2, param) {
+                        return Err(Error::validation(format!("'{param}' is animated; edit its keyframes instead")));
+                    }
+                    match param.strip_prefix("fx:").and_then(|r| r.split_once(':')) {
+                        Some((fx, name)) => {
+                            let i = find_fx(&c2, fx)?;
+                            c2.effects[i].params.insert(name.to_string(), *value);
+                        }
+                        None => c2.set_static_param(param, *value),
+                    }
+                }
+                Command::SetClipBlend { blend, .. } => {
+                    clipprops::check_blend(blend)?;
+                    c2.blend = blend.clone();
+                }
+                Command::SetKeyframe { param, time, value, interp, .. } => {
+                    clipprops::check_value(&c2, param, *value, true)?;
+                    let tt = snap_to_frame(*time, fps);
+                    if tt < Rational::ZERO || tt > c2.duration {
+                        return Err(Error::validation(format!("keyframe time {}s is outside the clip (0..{}s)", tt.as_f64(), c2.duration.as_f64())));
+                    }
+                    let list = c2.keyframes.entry(param.clone()).or_default();
+                    let keep = list.iter().find(|k| k.t == tt).map(|k| k.interp).unwrap_or_default();
+                    keyframes::upsert(list, Keyframe { t: tt, v: *value, interp: interp.unwrap_or(keep) });
+                }
+                Command::RemoveKeyframe { param, time, .. } => {
+                    let tt = snap_to_frame(*time, fps);
+                    let list = c2.keyframes.get_mut(param).ok_or_else(|| Error::validation(format!("'{param}' has no keyframes")))?;
+                    let i = list.iter().position(|k| k.t == tt).ok_or_else(|| Error::validation(format!("no keyframe at {}s", tt.as_f64())))?;
+                    let removed = list.remove(i);
+                    if list.is_empty() {
+                        c2.keyframes.remove(param);
+                        set_param_value(&mut c2, param, removed.v)?;
+                    }
+                }
+                Command::ClearKeyframes { param, .. } => {
+                    let list = c2.keyframes.remove(param).ok_or_else(|| Error::validation(format!("'{param}' has no keyframes")))?;
+                    if let Some(first) = list.first() {
+                        set_param_value(&mut c2, param, first.v)?;
+                    }
                 }
                 _ => unreachable!(),
             }
             Ok(vec![Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 }])
+        }
+        Command::SetClipSpeed { clip, speed } => {
+            if *speed < Rational::new(1, 10) || *speed > Rational::from_int(10) {
+                return Err(Error::validation("speed must be between 10% and 1000%"));
+            }
+            let group = seq.linked_group(clip);
+            if group.is_empty() {
+                return Err(Error::NotFound(format!("clip {clip}")));
+            }
+            // one timeline duration for the whole group, floored to frames so the source range can't overrun
+            let (_, anchor) = seq.find_clip(clip).expect("checked");
+            if anchor.freeze.is_some() {
+                return Err(Error::validation("a frozen clip has no speed; unfreeze it first"));
+            }
+            let new_dur = Rational::new(anchor.source_span().div(*speed).floor_units(fps).max(1), 1).div(fps);
+            let mut out = vec![];
+            for gid in &group {
+                let (gt, gc) = seq.find_clip(gid).expect("member");
+                ensure_unlocked(gt)?;
+                let mut c = gc.clone();
+                c.speed = *speed;
+                c.duration = new_dur;
+                let m = p.media(&c.media)?;
+                if c.source_in + c.source_span() > m.info.duration + Rational::new(1, 1000) {
+                    return Err(Error::validation(format!("'{}' does not have enough source media for that speed", c.name)));
+                }
+                check_free(gt, c.start, c.end(), &group)?;
+                out.push(Patch::PutClip { seq: sid.clone(), track: gt.id.clone(), clip: c });
+            }
+            Ok(out)
+        }
+        Command::SetClipReverse { clip, reverse } => {
+            let group = seq.linked_group(clip);
+            if group.is_empty() {
+                return Err(Error::NotFound(format!("clip {clip}")));
+            }
+            let mut out = vec![];
+            for gid in &group {
+                let (gt, gc) = seq.find_clip(gid).expect("member");
+                ensure_unlocked(gt)?;
+                let mut c = gc.clone();
+                c.reverse = *reverse;
+                out.push(Patch::PutClip { seq: sid.clone(), track: gt.id.clone(), clip: c });
+            }
+            Ok(out)
+        }
+        Command::SetClipFreeze { clip, at } => {
+            let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+            ensure_unlocked(t)?;
+            if c.kind != TrackKind::Video {
+                return Err(Error::validation("only video clips can be frozen"));
+            }
+            let mut c2 = c.clone();
+            let mut out = vec![];
+            match at {
+                Some(a) => {
+                    if *a < Rational::ZERO || *a >= p.media(&c.media)?.info.duration {
+                        return Err(Error::validation("freeze time is outside the source media"));
+                    }
+                    c2.freeze = Some(*a);
+                    // A held picture has no matching sound: detach the linked audio so the frame can be lengthened on its own.
+                    if c.link.is_some() {
+                        for gid in seq.linked_group(clip).into_iter().filter(|g| g != clip) {
+                            let (gt, gc) = seq.find_clip(&gid).expect("member");
+                            ensure_unlocked(gt)?;
+                            let mut other = gc.clone();
+                            other.link = None;
+                            out.push(Patch::PutClip { seq: sid.clone(), track: gt.id.clone(), clip: other });
+                        }
+                        c2.link = None;
+                    }
+                }
+                None => c2.freeze = None,
+            }
+            out.push(Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 });
+            Ok(out)
         }
         Command::AddTransition { clip_a, clip_b, kind, duration } => {
             transitions::check_kind(kind)?;
@@ -450,6 +629,18 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             Ok(vec![Patch::PutClip { seq: sid, track: tt.id.clone(), clip: c2 }])
         }
     }
+}
+
+/// Store `value` as the static value of a clip or effect parameter (used when its keyframes are removed).
+fn set_param_value(c: &mut Clip, param: &str, value: f64) -> Result<()> {
+    match param.strip_prefix("fx:").and_then(|r| r.split_once(':')) {
+        Some((fx, name)) => {
+            let i = c.effects.iter().position(|e| e.id == fx).ok_or_else(|| Error::NotFound(format!("effect {fx}")))?;
+            c.effects[i].params.insert(name.to_string(), value);
+        }
+        None => c.set_static_param(param, value),
+    }
+    Ok(())
 }
 
 fn ensure_unlocked(t: &Track) -> Result<()> {

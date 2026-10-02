@@ -1,8 +1,11 @@
 //! Authoritative, serialisable project model (spec §5). One model backs the UI, scripts,
 //! macros and the renderer. Only persistent state lives here; transient UI state does not.
 
+use crate::clipprops::Transform;
 use crate::error::{Error, Result};
 use crate::effects::EffectInstance;
+use crate::keyframes::Keyframe;
+use std::collections::BTreeMap;
 use crate::ffprobe::MediaInfo;
 use crate::time::{Fps, Rational};
 use crate::transitions::Transition;
@@ -78,7 +81,7 @@ pub struct Clip {
     pub start: Rational,
     /// Offset into the source media where this clip begins.
     pub source_in: Rational,
-    /// Length on the timeline (speed is 1.0 until retiming exists).
+    /// Length on the timeline. The source span consumed is `duration × speed` (see [`Clip::source_span`]).
     pub duration: Rational,
     /// Clips sharing a link id move/trim/split/delete together (e.g. a video clip and its audio).
     #[serde(default)]
@@ -91,15 +94,54 @@ pub struct Clip {
     /// Ordered effect stack (video clips).
     #[serde(default)]
     pub effects: Vec<EffectInstance>,
+    /// Playback speed (1 = normal). Linked clips share it. Ignored while `freeze` is set.
+    #[serde(default = "one_rational")]
+    pub speed: Rational,
+    /// Play the source range backwards. Video reverse buffers the whole clip in memory at render time.
+    #[serde(default)]
+    pub reverse: bool,
+    /// Hold the single source frame at this time for the whole clip (video clips).
+    #[serde(default)]
+    pub freeze: Option<Rational>,
+    #[serde(default)]
+    pub transform: Transform,
+    /// FFmpeg `blend` mode name, "normal" for plain compositing.
+    #[serde(default = "normal_blend")]
+    pub blend: String,
+    /// Animated parameters, keyed by parameter id (see `clipprops::param_range`). Times are clip-relative.
+    #[serde(default)]
+    pub keyframes: BTreeMap<String, Vec<Keyframe>>,
 }
 
 fn one() -> f64 {
     1.0
 }
+fn one_rational() -> Rational {
+    Rational::from_int(1)
+}
+fn normal_blend() -> String {
+    "normal".into()
+}
 
 impl Clip {
+    /// A plain clip: speed 1, no effects, identity transform.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(id: Id, media: Id, name: String, kind: TrackKind, start: Rational, source_in: Rational, duration: Rational, link: Option<Id>) -> Clip {
+        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), blend: normal_blend(), keyframes: BTreeMap::new() }
+    }
+
     pub fn end(&self) -> Rational {
         self.start + self.duration
+    }
+
+    /// Length of source media this clip consumes (0 for a frozen frame).
+    pub fn source_span(&self) -> Rational {
+        if self.freeze.is_some() { Rational::ZERO } else { self.duration.mul(self.speed) }
+    }
+
+    /// True when the clip plays the source unchanged in time (required for transitions).
+    pub fn is_plain_timing(&self) -> bool {
+        self.speed == one_rational() && !self.reverse && self.freeze.is_none()
     }
 }
 
@@ -199,8 +241,23 @@ impl Project {
                     if c.start < Rational::ZERO || c.source_in < Rational::ZERO {
                         return Err(Error::validation(format!("clip '{}' has a negative time", c.name)));
                     }
-                    if c.source_in + c.duration > m.info.duration + Rational::new(1, 1000) {
+                    if c.speed <= Rational::ZERO {
+                        return Err(Error::validation(format!("clip '{}' has a non-positive speed", c.name)));
+                    }
+                    if c.source_in + c.source_span() > m.info.duration + Rational::new(1, 1000) {
                         return Err(Error::validation(format!("clip '{}' extends past the end of '{}'", c.name, m.name)));
+                    }
+                    if let Some(f) = c.freeze {
+                        if c.kind != TrackKind::Video || f < Rational::ZERO || f >= m.info.duration {
+                            return Err(Error::validation(format!("clip '{}' has an invalid freeze frame", c.name)));
+                        }
+                    }
+                    crate::clipprops::check_blend(&c.blend)?;
+                    for (param, kfs) in &c.keyframes {
+                        crate::keyframes::validate(param, kfs)?;
+                        for k in kfs {
+                            crate::clipprops::check_value(c, param, k.v, true)?;
+                        }
                     }
                     if let Some(pe) = prev_end {
                         if c.start < pe {
