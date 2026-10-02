@@ -32,7 +32,13 @@ Toolbar "Filters" opens a searchable list of every filter in the installed FFmpe
 * Tests: 5 real-FFmpeg tests (determinism, pools, one-undo, real renders of 5 random stacks, transition skipping with reasons), favourites unit tests, UI unit tests, `random.sh` 17 GUI checks (real clicks, persisted settings, export + saved project verified independently).
 * Honest limits: a "transition stack" means consecutive cuts, not several layered on one cut (FFmpeg path allows one per cut); cuts without media handles or on retimed clips are skipped and reported; random effect values are moderate, not guaranteed pretty; custom graph effects are never picked or starred.
 
-## Requested additions (still to do: GL transitions, demo mode)
+## GL transitions (done, with a speed caveat)
+* 48 gl-transitions shaders appear as "GL …" in the transition list (also in random picks, favourites, saved projects) when the installed FFmpeg's `xfade` supports custom expressions (`Capabilities.xfade_custom`; true for the Linux 6.1 test build and the pinned Windows 7.1.1 build in CI).
+* Verified: `tests/glx.rs` runs every one through real FFmpeg (starts on A, ends on B, differs from both during the transition; a hang fails after 60 s) and three go through project → export → save/load.
+* **Slow:** they are evaluated per pixel by FFmpeg's expression engine. Measured on this 4-core sandbox at 1080p: about 2.3 s/frame (gl_angular) to 5.5 s/frame (gl_crosswarp); at 960x540 about 0.6–1.4 s/frame; gl_linearblur is ~4× slower still. A 1 s transition at 25 fps therefore costs roughly 1–2.5 minutes of export at 1080p. Use the preview scale while editing. The UI does not yet warn about this; native transitions stay instant.
+* Not available: ~75 other gl-transitions shaders (textures, loops, multi-pass), 14 of which xfade-easing only supports in its patched FFmpeg. Not faked.
+
+## Requested additions (still to do: demo mode)
 * **GL Transitions library** (gl-transitions.com, MIT). Stock Windows FFmpeg has no `gl-transition` filter, so plan is to port shaders to `xfade` custom expressions (approach of the MIT `xfade-easing` project) — only shaders expressible that way; the rest are listed as unsupported, not faked.
 * **Transition demo mode**: button that cycles random transitions through the timeline continuously (preview/playback only, nothing written to the project unless "Keep").
 * **Effects demo mode**: same for effects; two separate boards (transitions / effects) that can run combined.
