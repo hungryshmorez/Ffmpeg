@@ -4,7 +4,8 @@ Honest status. "Done" = tested with real FFmpeg and/or the GUI scripts. Unverifi
 
 ## A. Plugins in the installer
 * DONE (config + CI): the Windows job downloads the gyan **full** FFmpeg build and the official frei0r Win64 plugins; the app adds `<resources>/frei0r` to `FREI0R_PATH`. On CI both downloads succeeded.
-* TODO (read the next CI summary): does the full build list `frei0r` / `ladspa` / `lv2` / `libplacebo` / `zscale`? was `glitch0r.dll` found? Then pin both SHA-256 values in the workflow (they are logged; the GitHub release has no checksum file to compare).
+* DONE: CI shows the bundled build has frei0r, LADSPA, libplacebo, zscale (no LV2); frei0r v3.6.0 Win64 (158 DLLs, glitch0r included) is bundled; both downloads are checksum-pinned; the plugin parameter tables are read from the bundled DLLs at build time.
+* TODO: confirm the CI-read table (it is printed between BEGIN/END markers in the Windows job log) and commit it, so Linux/dev builds know the 3.x plugins too.
 * DONE: the Windows installer job (tests + `tauri build` + size check with the full FFmpeg and plugins bundled) is green on CI since the palette commit.
 * NOT POSSIBLE: VST / Audacity-style plugins (FFmpeg cannot load them). LADSPA/LV2 only if the bundled build has them.
 * TODO: FFglitch (separate `ffedit`/`ffgac` tools) as its own engine slot; Windows CI never renders with plugins, so only Linux proves frei0r.

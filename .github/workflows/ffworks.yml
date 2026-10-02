@@ -39,9 +39,8 @@ jobs:
           Invoke-WebRequest "$base/ffmpeg-7.1.1-full_build.zip" -OutFile ffmpeg.zip
           $got = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
           "ffmpeg full_build sha256: $got" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
-          # The GitHub release carries no checksum file, so there is nothing to compare against yet: the hash above is
-          # logged so it can be pinned here (set $pinned) once a run has been reviewed.
-          $pinned = ""
+          # The GitHub release carries no checksum file; this hash was read from a reviewed CI run (2026-10-02) and pinned.
+          $pinned = "d760e1b3574402ed18b4865851f87d87e73965a982e6453212df8621fed1c508"
           if ($pinned -ne "" -and $got -ne $pinned) { throw "FFmpeg download checksum mismatch: $got" }
           if ($pinned -eq "") { Write-Warning "FFmpeg full build is not checksum-pinned yet" }
           Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-extract
@@ -64,11 +63,13 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force src-tauri/frei0r-bin | Out-Null
           try {
-            $rel = Invoke-RestMethod "https://api.github.com/repos/dyne/frei0r/releases/latest" -Headers @{ "User-Agent" = "ffworks-ci" }
-            $asset = $rel.assets | Where-Object { $_.name -match "win64" } | Select-Object -First 1
-            if (-not $asset) { throw "no win64 asset in release $($rel.tag_name)" }
+            # pinned release (read from a reviewed CI run); bump both lines together
+            $rel = @{ tag_name = "v3.6.0" }
+            $asset = @{ name = "frei0r-3.6.0_win64.zip"; browser_download_url = "https://github.com/dyne/frei0r/releases/download/v3.6.0/frei0r-3.6.0_win64.zip" }
             Invoke-WebRequest $asset.browser_download_url -OutFile frei0r.zip
-            "frei0r $($rel.tag_name) $($asset.name) sha256: $((Get-FileHash frei0r.zip -Algorithm SHA256).Hash.ToLower())"
+            $fsha = (Get-FileHash frei0r.zip -Algorithm SHA256).Hash.ToLower()
+            "frei0r $($rel.tag_name) $($asset.name) sha256: $fsha"
+            if ($fsha -ne "f1f3fdea0b98f855df35c67d3a62d03cf41ea549ceb4aaa9ce7b21b8dfd15728") { throw "frei0r download checksum mismatch: $fsha" }
             Expand-Archive frei0r.zip -DestinationPath frei0r-extract
             $dlls = Get-ChildItem frei0r-extract -Recurse -Filter *.dll
             $dlls | Copy-Item -Destination src-tauri/frei0r-bin/
@@ -76,9 +77,27 @@ jobs:
             Write-Host "::notice title=frei0r bundle::$($dlls.Count) dlls, release $($rel.tag_name), asset $($asset.name)"
             "frei0r plugins bundled: $($dlls.Count); glitch0r present: $([bool]($dlls | Where-Object Name -eq 'glitch0r.dll'))" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
           } catch {
+            # a wrong checksum is never shipped; a download hiccup only warns (the installer then has no plugins)
+            if ("$_" -match "checksum") { throw }
             Write-Warning "frei0r plugins NOT bundled: $_"
           }
           "frei0r plugins are GPL-2.0-or-later; source: https://github.com/dyne/frei0r" | Set-Content src-tauri/frei0r-bin/NOTICE.txt
+      - name: Read the bundled frei0r plugins' parameter tables (so every shipped plugin is offered)
+        shell: pwsh
+        run: |
+          if (-not (Get-ChildItem src-tauri/frei0r-bin -Filter *.dll -ErrorAction SilentlyContinue)) { Write-Warning "no plugins to read"; exit 0 }
+          Copy-Item crates/ffworks-core/assets/frei0r/plugins.json plugins.committed.json
+          python scripts/frei0r/dump.py src-tauri/frei0r-bin
+          $n = (Get-Content crates/ffworks-core/assets/frei0r/plugins.json -Raw | ConvertFrom-Json).plugins.Count
+          if ($n -lt 100) {
+            Write-Warning "only $n plugin tables could be read; keeping the committed table"
+            Copy-Item plugins.committed.json crates/ffworks-core/assets/frei0r/plugins.json
+          } else {
+            Write-Host "::notice title=frei0r tables::$n plugin parameter tables read from the bundled DLLs"
+          }
+          "----- BEGIN plugins.json -----"
+          Get-Content crates/ffworks-core/assets/frei0r/plugins.json -Raw
+          "----- END plugins.json -----"
       - run: npm ci --prefix ui
       - run: cargo test -p ffworks-core
       - run: npx --prefix ui tauri build
