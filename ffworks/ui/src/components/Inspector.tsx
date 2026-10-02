@@ -1,6 +1,8 @@
 import { fpsOf, timecode, toSec } from "../time";
 import { findClip, linkedIds, times } from "../timeline/math";
 import { useProject, useUi } from "../state/stores";
+import { CommitSlider } from "./CommitSlider";
+import { EffectsPanel } from "./EffectsPanel";
 
 export function Inspector() {
   const view = useProject((s) => s.view)!;
@@ -32,6 +34,7 @@ export function Inspector() {
   const gain = audio?.gain_db ?? 0;
   const set = (db: number, relative = false) => audio && dispatch({ type: "set_clip_gain", clip: audio.id, gain_db: db, relative });
 
+  const videoClip = clip.kind === "video" ? clip : linkedIds(seq, clip.id).map((id) => findClip(seq, id)?.clip).find((c) => c?.kind === "video");
   return (
     <div className="panel inspector" aria-label="Inspector">
       <div className="panel-title">Inspector</div>
@@ -45,13 +48,10 @@ export function Inspector() {
         <div><dt>Linked</dt><dd>{clip.link ? `${linkedIds(seq, clip.id).length} clips` : "no"}</dd></div>
       </dl>
       <div className="field">
-        <label htmlFor="gain">Volume (dB){clip.kind === "video" ? " — linked audio" : ""}</label>
+        <label>{clip.kind === "video" ? "Audio (linked clip)" : "Audio"}</label>
         {audio ? (
           <>
-            <div className="row">
-              <input id="gain" type="range" min={-60} max={12} step={0.5} value={gain} onChange={(e) => set(Number(e.target.value))} />
-              <input aria-label="Volume in dB" className="num" type="number" min={-96} max={24} step={0.5} value={gain} onChange={(e) => !Number.isNaN(e.target.valueAsNumber) && set(e.target.valueAsNumber)} />
-            </div>
+            <CommitSlider label="Volume" unit="dB" value={gain} min={-60} max={12} step={0.5} onCommit={(v) => set(v)} />
             <div className="row">
               <button className="small" onClick={() => set(-1, true)}>−1 dB</button>
               <button className="small" onClick={() => set(1, true)}>+1 dB</button>
@@ -62,6 +62,7 @@ export function Inspector() {
           <p className="muted">This clip has no audio.</p>
         )}
       </div>
+      {videoClip && <EffectsPanel clip={videoClip} />}
     </div>
   );
 }

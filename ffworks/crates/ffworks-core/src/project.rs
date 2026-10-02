@@ -2,6 +2,7 @@
 //! macros and the renderer. Only persistent state lives here; transient UI state does not.
 
 use crate::error::{Error, Result};
+use crate::effects::EffectInstance;
 use crate::ffprobe::MediaInfo;
 use crate::time::{Fps, Rational};
 use serde::{Deserialize, Serialize};
@@ -80,6 +81,16 @@ pub struct Clip {
     pub link: Option<Id>,
     #[serde(default)]
     pub gain_db: f64,
+    /// Video clips: 0..1 compositing opacity.
+    #[serde(default = "one")]
+    pub opacity: f64,
+    /// Ordered effect stack (video clips).
+    #[serde(default)]
+    pub effects: Vec<EffectInstance>,
+}
+
+fn one() -> f64 {
+    1.0
 }
 
 impl Clip {

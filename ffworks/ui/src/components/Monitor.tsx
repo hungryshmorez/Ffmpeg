@@ -99,7 +99,8 @@ export function Monitor() {
       <div className="monitor-screen" style={{ aspectRatio: `${width} / ${height}` }}>
         <video ref={videoRef} muted playsInline preload="auto" style={{ visibility: vis ? "visible" : "hidden" }} />
         {!vis && <div className="gap-label">{seq.tracks.some((x) => x.clips.length) ? "no video at playhead" : "Import media and add it to the timeline"}</div>}
-        <div className="monitor-note">Source preview — edit decisions only (cuts, gaps, volume, mute). No effects exist in this build; export is the authoritative render.</div>
+        {vis && (vis.clip.opacity < 1 || vis.clip.effects.some((e) => e.enabled)) && <div className="bypass-badge" role="status">Effects bypassed in preview — export to see them</div>}
+        <div className="monitor-note">Source preview — edit decisions only (cuts, gaps, volume, mute). Effects and opacity are not rendered here; export is the authoritative render.</div>
       </div>
       {audioTracks.map((tr) => <AudioLane key={tr.id} track={tr} seq={seq} t={t} playing={playing} />)}
       <div className="transport" role="toolbar" aria-label="Transport">

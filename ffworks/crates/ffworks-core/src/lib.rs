@@ -2,6 +2,7 @@
 pub mod analysis;
 pub mod brand;
 pub mod commands;
+pub mod effects;
 pub mod engine;
 pub mod error;
 pub mod ffmpeg;

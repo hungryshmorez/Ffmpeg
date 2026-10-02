@@ -240,3 +240,51 @@ fn save_load_roundtrip_preserves_project() {
     let loaded = Engine::load(&p, Tools { ffmpeg: "ffmpeg".into(), ffprobe: "ffprobe".into() }).unwrap();
     assert_eq!(loaded.project, e.project);
 }
+
+#[test]
+fn effects_stack_commands_undo_and_validation() {
+    let (mut e, m, v, _) = engine();
+    place(&mut e, &m, &v, secs(0));
+    let vid = e.project.active().unwrap().tracks[0].clips[0].id.clone();
+    let aud = e.project.active().unwrap().tracks.iter().find(|t| t.kind == TrackKind::Audio).unwrap().clips[0].id.clone();
+    let add = |fx: &str, c: &str| Command::AddEffect { clip: c.into(), effect: fx.into(), params: Default::default(), index: None };
+    assert!(e.dispatch(add("blur", &aud)).is_err(), "effects are video-only");
+    assert!(e.dispatch(add("nope", &vid)).is_err());
+    e.dispatch(add("blur", &vid)).unwrap();
+    e.dispatch(add("saturation", &vid)).unwrap();
+    let ids: Vec<String> = e.project.active().unwrap().tracks[0].clips[0].effects.iter().map(|x| x.id.clone()).collect();
+    assert_eq!(ids.len(), 2);
+    e.dispatch(Command::MoveEffect { clip: vid.clone(), effect_id: ids[1].clone(), index: 0 }).unwrap();
+    assert_eq!(e.project.active().unwrap().tracks[0].clips[0].effects[0].effect, "saturation");
+    assert!(e.dispatch(Command::SetEffectParam { clip: vid.clone(), effect_id: ids[0].clone(), param: "sigma".into(), value: 999.0 }).is_err());
+    e.dispatch(Command::SetEffectParam { clip: vid.clone(), effect_id: ids[0].clone(), param: "sigma".into(), value: 9.0 }).unwrap();
+    e.dispatch(Command::SetEffectEnabled { clip: vid.clone(), effect_id: ids[0].clone(), enabled: false }).unwrap();
+    assert!(e.dispatch(Command::SetClipOpacity { clip: vid.clone(), opacity: 1.5 }).is_err());
+    e.dispatch(Command::SetClipOpacity { clip: vid.clone(), opacity: 0.5 }).unwrap();
+    // graph only contains enabled effects
+    let g = ffworks_core::render_graph::build(&e.project).unwrap();
+    assert_eq!(g.video[0].filters, vec!["eq=saturation=1"]);
+    assert_eq!(g.video[0].opacity, 0.5);
+    // full undo returns to a clean clip
+    for _ in 0..6 {
+        e.undo().unwrap();
+    }
+    let c = &e.project.active().unwrap().tracks[0].clips[0];
+    assert!(c.effects.is_empty() && c.opacity == 1.0);
+    // save/load keeps effects
+    e.redo().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("fx.ffworks");
+    e.save(&p).unwrap();
+    let l = Engine::load(&p, Tools { ffmpeg: "ffmpeg".into(), ffprobe: "ffprobe".into() }).unwrap();
+    assert_eq!(l.project, e.project);
+}
+
+#[test]
+fn old_projects_without_effect_fields_still_load() {
+    // schema-1 clip JSON written before effects/opacity existed
+    let j = r#"{"id":"c","media":"m","name":"n","kind":"video","start":"0","source_in":"0","duration":"1"}"#;
+    let c: ffworks_core::project::Clip = serde_json::from_str(j).unwrap();
+    assert_eq!(c.opacity, 1.0);
+    assert!(c.effects.is_empty());
+}

@@ -121,22 +121,17 @@ impl Capabilities {
     }
 }
 
-/// Parse `ffmpeg -filters/-encoders/-decoders`: rows after the `------` separator, flags column then name.
+/// Parse `ffmpeg -filters/-encoders/-decoders`. Rows are `<flags> <name> ...`; legend lines look like
+/// `A = Audio input/output` and headers have one token. (`-filters` has no `------` separator, `-encoders` does.)
 fn parse_table(out: &str, _unused: usize) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
-    let mut seen_sep = false;
     for line in out.lines() {
-        if line.trim_start().starts_with("---") {
-            seen_sep = true;
-            continue;
-        }
-        if !seen_sep {
-            continue;
-        }
         let mut parts = line.split_whitespace();
-        if let (Some(_flags), Some(name)) = (parts.next(), parts.next()) {
-            set.insert(name.to_string());
+        let (Some(flags), Some(name)) = (parts.next(), parts.next()) else { continue };
+        if name == "=" || !flags.chars().all(|c| ".TSCVAFXDEIBN|".contains(c)) {
+            continue;
         }
+        set.insert(name.to_string());
     }
     set
 }
@@ -151,6 +146,13 @@ mod tests {
         let s = parse_table(t, 2);
         assert!(s.contains("libx264") && s.contains("aac"));
         assert_eq!(s.len(), 2);
+    }
+
+    #[test]
+    fn parses_filter_table_without_separator() {
+        let t = "Filters:\n  T.. = Timeline support\n  A = Audio input/output\n  | = Source or sink filter\n ... abench            A->A       Benchmark.\n T.C eq                V->V       Adjust.\n ... anoisesrc         |->A       Generate.\n";
+        let s = parse_table(t, 3);
+        assert_eq!(s.iter().cloned().collect::<Vec<_>>(), vec!["abench", "anoisesrc", "eq"]);
     }
 
     #[test]

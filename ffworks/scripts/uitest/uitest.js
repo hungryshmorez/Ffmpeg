@@ -64,7 +64,7 @@
     // gain on A through the Inspector
     vclips()[0].dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, button: 0, clientX: center(vclips()[0])[0], clientY: center(vclips()[0])[1] }));
     ptr(vclips()[0], "pointerup", 0, 0); await sleep(150);
-    const g = await waitFor(() => $("input[aria-label='Volume in dB']"));
+    const g = await waitFor(() => $("input[aria-label='Volume']"));
     step("inspector exposes volume for the selected clip", !!g);
     setNum(g, -6); await sleep(300);
     step("volume −6 dB is applied to the linked audio clip", /-6\.0 dB/.test(aclips()[0].textContent), aclips()[0].textContent);
@@ -74,6 +74,21 @@
     const afterUndo = !/-6\.0 dB/.test(aclips()[0].textContent);
     clickBtn("Redo"); await sleep(250);
     step("undo reverts the volume change and redo restores it", afterUndo && /-6\.0 dB/.test(aclips()[0].textContent));
+
+    // effects: add Saturation through the Inspector, set Amount to 0 (grey), exercise opacity
+    {
+      const addBtn = $$(".effects button").find((b) => b.textContent.trim() === "Add");
+      step("inspector shows the Effects panel for the selected clip", !!addBtn && !!$("select[aria-label='Effect to add']"));
+      addBtn.click(); await sleep(300);
+      const fx = await waitFor(() => $(".fx[data-effect='saturation']"));
+      step("Add puts a Saturation effect on the clip", !!fx);
+      setNum(fx.querySelector("input[aria-label='Amount']"), 0); await sleep(300);
+      const clipA = view().project.sequences[0].tracks[0].clips[0];
+      step("effect parameter edit reaches the engine", clipA.effects.length === 1 && clipA.effects[0].params.amount === 0, JSON.stringify(clipA.effects));
+      setNum($("input[aria-label='Opacity']"), 0.8); await sleep(250);
+      step("opacity edit reaches the engine", view().project.sequences[0].tracks[0].clips[0].opacity === 0.8);
+      setNum($("input[aria-label='Opacity']"), 1); await sleep(250);
+    }
 
     // playback
     window.__ffworks.usePlayhead.getState().setT(0.2);

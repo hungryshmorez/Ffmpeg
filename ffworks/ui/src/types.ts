@@ -7,7 +7,10 @@ export interface AudioStream { index: number; codec: string; sample_rate: number
 export interface MediaInfo { container: string; duration: Rational; bit_rate: number | null; size_bytes: number | null; video: VideoStream[]; audio: AudioStream[]; tags: [string, string][] }
 export interface MediaAsset { id: string; name: string; path: string; info: MediaInfo; fingerprint: string | null }
 
-export interface Clip { id: string; media: string; name: string; kind: TrackKind; start: Rational; source_in: Rational; duration: Rational; link: string | null; gain_db: number }
+export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number> }
+export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string }
+export interface EffectDef { id: string; name: string; category: string; requires: string[]; params: ParamDef[] }
+export interface Clip { id: string; media: string; name: string; kind: TrackKind; start: Rational; source_in: Rational; duration: Rational; link: string | null; gain_db: number; opacity: number; effects: EffectInstance[] }
 export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; clips: Clip[] }
 export interface Sequence { id: string; name: string; tracks: Track[] }
 export interface ProjectSettings { width: number; height: number; fps: Rational; sample_rate: number }
@@ -36,6 +39,12 @@ export type Command =
   | { type: "set_track"; track: string; name?: string | null; muted?: boolean | null; locked?: boolean | null; gain_db?: number | null }
   | { type: "add_track"; kind: TrackKind; name?: string | null }
   | { type: "remove_track"; track: string }
+  | { type: "add_effect"; clip: string; effect: string; params?: Record<string, number>; index?: number | null }
+  | { type: "remove_effect"; clip: string; effect_id: string }
+  | { type: "set_effect_param"; clip: string; effect_id: string; param: string; value: number }
+  | { type: "set_effect_enabled"; clip: string; effect_id: string; enabled: boolean }
+  | { type: "move_effect"; clip: string; effect_id: string; index: number }
+  | { type: "set_clip_opacity"; clip: string; opacity: number }
   | { type: "rename_project"; name: string };
 
 export interface Waveform { bins_per_sec: number; peaks: number[] }

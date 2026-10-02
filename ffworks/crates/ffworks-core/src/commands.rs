@@ -6,7 +6,9 @@ use crate::error::{Error, Result};
 use crate::patch::Patch;
 use crate::project::{new_id, Clip, Id, MediaAsset, Project, ProjectSettings, Track, TrackKind};
 use crate::time::{snap_to_frame, Rational};
+use crate::effects::{self, EffectInstance};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -43,6 +45,13 @@ pub enum Command {
     DeleteClip { clip: Id, ripple: bool },
     /// Absolute or relative (`relative: true`) gain change in dB (spec §140).
     SetClipGain { clip: Id, gain_db: f64, relative: bool },
+    /// Add an effect (defaults overridden by `params`) at `index` (end if omitted). Video clips only.
+    AddEffect { clip: Id, effect: String, #[serde(default)] params: BTreeMap<String, f64>, index: Option<usize> },
+    RemoveEffect { clip: Id, effect_id: Id },
+    SetEffectParam { clip: Id, effect_id: Id, param: String, value: f64 },
+    SetEffectEnabled { clip: Id, effect_id: Id, enabled: bool },
+    MoveEffect { clip: Id, effect_id: Id, index: usize },
+    SetClipOpacity { clip: Id, opacity: f64 },
     /// Several commands applied as one undo step (spec §112).
     Batch { label: String, commands: Vec<Command> },
 }
@@ -68,6 +77,12 @@ impl Command {
             Command::SplitClip { .. } => "Split clip".into(),
             Command::DeleteClip { ripple, .. } => if *ripple { "Ripple delete".into() } else { "Delete clip".into() },
             Command::SetClipGain { .. } => "Clip volume".into(),
+            Command::AddEffect { effect, .. } => format!("Add effect {effect}"),
+            Command::RemoveEffect { .. } => "Remove effect".into(),
+            Command::SetEffectParam { .. } => "Effect parameter".into(),
+            Command::SetEffectEnabled { .. } => "Toggle effect".into(),
+            Command::MoveEffect { .. } => "Reorder effect".into(),
+            Command::SetClipOpacity { .. } => "Clip opacity".into(),
             Command::Batch { label, .. } => label.clone(),
         }
     }
@@ -165,7 +180,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             let mut out = vec![Patch::PutClip {
                 seq: sid.clone(),
                 track: t.id.clone(),
-                clip: Clip { id: new_id("clp"), media: media.clone(), name: m.name.clone(), kind: t.kind, start, source_in: s_in, duration: dur, link: link.clone(), gain_db: 0.0 },
+                clip: Clip { id: new_id("clp"), media: media.clone(), name: m.name.clone(), kind: t.kind, start, source_in: s_in, duration: dur, link: link.clone(), gain_db: 0.0, opacity: 1.0, effects: vec![] },
             }];
             if link.is_some() {
                 let at = match audio_track {
@@ -184,7 +199,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 out.push(Patch::PutClip {
                     seq: sid,
                     track: at.id.clone(),
-                    clip: Clip { id: new_id("clp"), media: media.clone(), name: m.name.clone(), kind: TrackKind::Audio, start, source_in: s_in, duration: dur, link, gain_db: 0.0 },
+                    clip: Clip { id: new_id("clp"), media: media.clone(), name: m.name.clone(), kind: TrackKind::Audio, start, source_in: s_in, duration: dur, link, gain_db: 0.0, opacity: 1.0, effects: vec![] },
                 });
             }
             Ok(out)
@@ -319,6 +334,52 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 }
             }
             Ok(out)
+        }
+        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } => {
+            let clip_id = match cmd {
+                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } => clip,
+                _ => unreachable!(),
+            };
+            let (t, c) = seq.find_clip(clip_id).ok_or_else(|| Error::NotFound(format!("clip {clip_id}")))?;
+            ensure_unlocked(t)?;
+            if c.kind != TrackKind::Video {
+                return Err(Error::validation("effects and opacity apply to video clips; select the video clip"));
+            }
+            let mut c2 = c.clone();
+            let find_fx = |c: &Clip, id: &str| c.effects.iter().position(|e| e.id == id).ok_or_else(|| Error::NotFound(format!("effect {id}")));
+            match cmd {
+                Command::AddEffect { effect, params, index, .. } => {
+                    let inst = EffectInstance::new(new_id("fx"), effect, params)?;
+                    let at = index.unwrap_or(c2.effects.len()).min(c2.effects.len());
+                    c2.effects.insert(at, inst);
+                }
+                Command::RemoveEffect { effect_id, .. } => {
+                    let i = find_fx(&c2, effect_id)?;
+                    c2.effects.remove(i);
+                }
+                Command::SetEffectParam { effect_id, param, value, .. } => {
+                    let i = find_fx(&c2, effect_id)?;
+                    effects::check_param(&effects::find(&c2.effects[i].effect)?, param, *value)?;
+                    c2.effects[i].params.insert(param.clone(), *value);
+                }
+                Command::SetEffectEnabled { effect_id, enabled, .. } => {
+                    let i = find_fx(&c2, effect_id)?;
+                    c2.effects[i].enabled = *enabled;
+                }
+                Command::MoveEffect { effect_id, index, .. } => {
+                    let i = find_fx(&c2, effect_id)?;
+                    let e = c2.effects.remove(i);
+                    c2.effects.insert((*index).min(c2.effects.len()), e);
+                }
+                Command::SetClipOpacity { opacity, .. } => {
+                    if !(0.0..=1.0).contains(opacity) {
+                        return Err(Error::validation(format!("opacity {opacity} must be between 0 and 1")));
+                    }
+                    c2.opacity = *opacity;
+                }
+                _ => unreachable!(),
+            }
+            Ok(vec![Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 }])
         }
         Command::SetClipGain { clip, gain_db, relative } => {
             let (_, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;

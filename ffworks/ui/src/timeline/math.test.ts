@@ -4,7 +4,7 @@ import { fromSec, snapToFrame, timecode, toSec } from "../time";
 import type { Clip, Sequence } from "../types";
 
 const clip = (id: string, start: string, dur: string, kind: "video" | "audio", link: string | null = null, sourceIn = "0"): Clip => ({
-  id, media: "m", name: id, kind, start, source_in: sourceIn, duration: dur, link, gain_db: 0,
+  id, media: "m", name: id, kind, start, source_in: sourceIn, duration: dur, link, gain_db: 0, opacity: 1, effects: [],
 });
 const seq: Sequence = {
   id: "s", name: "Main",

@@ -25,6 +25,7 @@ echo "== independent verification of exported file =="
 ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate,duration -of compact "$W/out.mp4"
 px() { ffmpeg -v error -ss "$1" -i "$W/out.mp4" -frames:v 1 -vf scale=1:1 -f rawvideo -pix_fmt rgb24 - | od -An -tu1 | tr -s ' '; }
 for t in 1 3.5 5 6.5 8 11; do echo "t=$t rgb:$(px $t)"; done
+echo "(t=1 is clip A with Saturation 0 and should be grey: r≈g≈b)"
 echo "workdir: $W"
 python3 - "$W/report.json" <<'PY'
 import json,sys

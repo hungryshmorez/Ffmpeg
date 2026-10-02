@@ -161,6 +161,11 @@ async fn get_thumbnails(app: AppHandle, state: State<'_, AppState>, media_id: St
 }
 
 #[tauri::command]
+fn list_effects() -> Vec<ffworks_core::effects::EffectDef> {
+    ffworks_core::effects::registry()
+}
+
+#[tauri::command]
 fn list_export_presets() -> Vec<ExportSettings> {
     ExportSettings::builtin()
 }
@@ -309,12 +314,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
+            list_effects, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
+            list_effects, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

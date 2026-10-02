@@ -173,13 +173,34 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
             let half = g.inputs[seg.input].src_fps.map(|f| Rational::new(1, 2).div(f)).unwrap_or_else(|| Rational::new(1, 2).div(g.fps));
             let t0 = (seg.source_in - half).max(Rational::ZERO);
             let t1 = seg.source_in + seg.duration - half;
-            f.push(format!(
-                "{label}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS+{}/TB,fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p[vs{layer_idx}]",
+            if let Some(caps) = caps {
+                for r in &seg.requires {
+                    if !caps.has_filter(r) {
+                        return Err(Error::validation(format!("FFmpeg filter '{r}' needed by an effect is not available in this build")));
+                    }
+                }
+            }
+            // Effects run after scaling so their parameters are relative to the output frame.
+            let mut chain = format!(
+                "{label}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS+{}/TB,fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p",
                 secs(t0),
                 secs(t1),
                 secs(seg.start),
-            ));
-            f.push(format!("[base{layer_idx}][vs{layer_idx}]overlay=eof_action=pass:repeatlast=0[base{}]", layer_idx + 1));
+            );
+            for fx in &seg.filters {
+                chain.push(',');
+                chain.push_str(fx);
+            }
+            let translucent = seg.opacity < 1.0;
+            if translucent {
+                chain.push_str(&format!(",format=yuva420p,colorchannelmixer=aa={}", seg.opacity));
+            } else {
+                chain.push_str(",format=yuv420p");
+            }
+            chain.push_str(&format!("[vs{layer_idx}]"));
+            f.push(chain);
+            let fmt = if translucent { ":format=auto" } else { "" };
+            f.push(format!("[base{layer_idx}][vs{layer_idx}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", layer_idx + 1));
             layer_idx += 1;
         }
         f.push(format!("[base{layer_idx}]null[vout]"));

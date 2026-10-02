@@ -23,6 +23,11 @@ pub struct VideoSegment {
     pub start: Rational,
     pub source_in: Rational,
     pub duration: Rational,
+    pub opacity: f64,
+    /// Serialised FFmpeg filters of the enabled effects, in stack order.
+    pub filters: Vec<String>,
+    /// Filter names those effects need (capability check).
+    pub requires: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -85,7 +90,15 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                 if !t.muted {
                     for c in &t.clips {
                         let input = input_index(&mut g, &c.media)?;
-                        g.video.push(VideoSegment { input, layer, start: c.start, source_in: c.source_in, duration: c.duration });
+                        let mut filters = vec![];
+                        let mut requires = vec![];
+                        for fx in &c.effects {
+                            if let Some(f) = crate::effects::to_filter(fx)? {
+                                filters.push(f);
+                                requires.extend(crate::effects::find(&fx.effect)?.requires.iter().map(|r| r.to_string()));
+                            }
+                        }
+                        g.video.push(VideoSegment { input, layer, start: c.start, source_in: c.source_in, duration: c.duration, opacity: c.opacity, filters, requires });
                     }
                 }
                 layer += 1;

@@ -34,6 +34,10 @@ All timeline/source times are exact `Rational` seconds (normalised `i64/i64`, `i
 * `Command::Batch` = one undo step (transactions). Linked clips (video + its audio) share a `link` id and move/trim/split/delete together.
 * The same JSON is the automation representation: `Engine::start_recording/stop_recording` returns the replayable command list. UI, tests, scripts and (later) macros all use this one path.
 
+## Effects (`effects.rs`)
+
+A registry of `EffectDef`s (id, category, required FFmpeg filters, `ParamDef`s with min/max/default/step/unit). `EffectInstance` (id, effect, enabled, params) lives in `Clip.effects`; commands `add_effect / remove_effect / set_effect_param / set_effect_enabled / move_effect / set_clip_opacity` validate against the registry and, like everything else, undo through patches. `to_filter` is the single serialisation point; the compiler inserts enabled effects after scaling, applies opacity via `colorchannelmixer=aa` + `overlay format=auto`, and refuses to render if a required filter is missing from the discovered capabilities. Grain takes an explicit seed so renders are reproducible. Old projects without these fields load via `serde(default)`.
+
 ## Render graph and FFmpeg compiler (`render_graph.rs`, `ffmpeg.rs`)
 
 `render_graph::build` flattens the active sequence into inputs, ordered video layer segments and audio segments (clip gain + track gain). `ffmpeg::compile` turns it into an `FfmpegJob { pre, filter_graph, post }` — **argv vectors, never shell strings**:
@@ -64,7 +68,7 @@ Waveform peaks (100 bins/s, from an FFmpeg s16le pipe) and JPEG filmstrips are g
 ## Designed for, not yet built
 
 * **Automation DSL / blueprints / macros** (Phase 4): text DSL and graph both compile to `Vec<Command>`; dry-run = plan onto a cloned project and diff.
-* **Effects & keyframes** (Phase 2): parameter metadata (id, range, default, animatable, FFmpeg serialisation rule) attached to `Effect` entries on clips; compiled by `ffmpeg.rs` per clip.
+* **Keyframes** (rest of Phase 2): will extend `EffectInstance.params` from constants to animated values.
 * **Datamosh / codec lab** (Phases 8–9): isolated jobs on disposable copies in a managed temp dir (`name.ffworks-partial` pattern + crash-safe job state), recorded seeds + tool versions for reproducibility; honest labelling of what is codec-level vs. filter-level.
 * **Plugins** (Phase 10): manifest-declared capabilities, out-of-process, no ambient access.
 * **Local automation API**: not started; no network listener exists.

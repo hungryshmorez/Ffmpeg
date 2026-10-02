@@ -287,3 +287,84 @@ fn corrupt_media_is_reported_not_fatal() {
     assert!(eng.import_media(&dir.path().join("missing.mp4")).is_err());
     assert!(eng.project.media.is_empty());
 }
+
+fn single_clip_project(dir: &Path, color: &str) -> (Engine, String) {
+    let src = fixture(dir, "src.mp4", color, "320x240", "25", 440, 2);
+    let mut eng = Engine::new("fx", ProjectSettings { width: 320, height: 240, fps: secs(25), sample_rate: 48000 }, tools());
+    let m = eng.import_media(&src).unwrap();
+    let v = eng.project.active().unwrap().tracks[0].id.clone();
+    eng.dispatch(Command::PlaceClip { media: m, track: v, start: secs(0), source_in: None, duration: None, with_audio: true, audio_track: None }).unwrap();
+    let clip = eng.project.active().unwrap().tracks[0].clips[0].id.clone();
+    (eng, clip)
+}
+
+#[test]
+fn effects_and_opacity_change_the_rendered_pixels() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut eng, clip) = single_clip_project(dir.path(), "red");
+    let plain = dir.path().join("plain.mp4");
+    export(&eng, &plain, "h264_mp4");
+    let p0 = pixel_at(&plain, 1.0);
+    assert!(p0.0 > 180 && p0.1 < 60, "baseline red {p0:?}");
+
+    // saturation 0 -> grey (r≈g≈b)
+    let mut o = std::collections::BTreeMap::new();
+    o.insert("amount".to_string(), 0.0);
+    eng.dispatch(Command::AddEffect { clip: clip.clone(), effect: "saturation".into(), params: o, index: None }).unwrap();
+    let grey = dir.path().join("grey.mp4");
+    export(&eng, &grey, "h264_mp4");
+    let g = pixel_at(&grey, 1.0);
+    assert!((g.0 as i32 - g.1 as i32).abs() < 25 && (g.1 as i32 - g.2 as i32).abs() < 25, "expected grey, got {g:?}");
+
+    // disabling the effect restores red (stack toggle is honoured)
+    let fx = eng.project.active().unwrap().tracks[0].clips[0].effects[0].id.clone();
+    eng.dispatch(Command::SetEffectEnabled { clip: clip.clone(), effect_id: fx, enabled: false }).unwrap();
+    let back = dir.path().join("back.mp4");
+    export(&eng, &back, "h264_mp4");
+    assert!(pixel_at(&back, 1.0).0 > 180);
+
+    // opacity 0.5 over the black canvas halves the brightness
+    eng.dispatch(Command::SetClipOpacity { clip: clip.clone(), opacity: 0.5 }).unwrap();
+    let half = dir.path().join("half.mp4");
+    export(&eng, &half, "h264_mp4");
+    let h = pixel_at(&half, 1.0);
+    assert!(h.0 > 60 && h.0 < 170 && h.1 < 40, "expected dim red, got {h:?}");
+}
+
+#[test]
+fn brightness_minus_one_darkens_white_to_black() {
+    // eq=brightness only moves luma, so use a chroma-neutral source for an exact black.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut eng, clip) = single_clip_project(dir.path(), "white");
+    let mut o = std::collections::BTreeMap::new();
+    o.insert("amount".to_string(), -1.0);
+    eng.dispatch(Command::AddEffect { clip, effect: "brightness".into(), params: o, index: None }).unwrap();
+    let out = dir.path().join("dark.mp4");
+    export(&eng, &out, "h264_mp4");
+    let d = pixel_at(&out, 1.0);
+    assert!(d.0 < 40 && d.1 < 40 && d.2 < 40, "expected black, got {d:?}");
+}
+
+#[test]
+fn every_registered_effect_renders_in_real_ffmpeg() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut eng, clip) = single_clip_project(dir.path(), "green");
+    for def in ffworks_core::effects::registry() {
+        eng.dispatch(Command::AddEffect { clip: clip.clone(), effect: def.id.into(), params: Default::default(), index: None }).unwrap();
+    }
+    let out = dir.path().join("all.mp4");
+    export(&eng, &out, "h264_mp4"); // panics with FFmpeg's message if any filter string is rejected
+    assert!(probe(&tools(), &out).unwrap().video[0].width == 320);
+}
+
+#[test]
+fn missing_filter_is_reported_before_running() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut eng, clip) = single_clip_project(dir.path(), "red");
+    eng.dispatch(Command::AddEffect { clip, effect: "blur".into(), params: Default::default(), index: None }).unwrap();
+    let mut caps = Capabilities::discover(&tools()).unwrap();
+    caps.filters.remove("gblur");
+    let g = render_graph::build(&eng.project).unwrap();
+    let r = compile(&g, &RenderOptions { output: dir.path().join("o.mp4"), settings: ExportSettings::find("h264_mp4").unwrap(), range: None, scale_div: 1 }, Some(&caps));
+    assert!(matches!(r, Err(Error::Validation(m)) if m.contains("gblur")));
+}
