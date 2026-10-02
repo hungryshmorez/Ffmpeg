@@ -1,0 +1,14 @@
+[package]
+name = "ffworks-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Headless FFWORKS: probe, inspect and render .ffworks projects without the GUI."
+
+[[bin]]
+name = "ffworks"
+path = "src/main.rs"
+
+[dependencies]
+ffworks-core = { path = "../ffworks-core" }
+serde_json.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "ffworks-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "FFWORKS engine: project model, command bus, render graph, FFmpeg compiler, jobs. No GUI dependencies."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"
