@@ -43,6 +43,11 @@ fn every_available_preset_renders_with_the_right_codec() {
             done.push(st.id);
             continue;
         }
+        if st.id == "datamosh_mp4" {
+            let o = Proc::new(tools().ffprobe).args(["-v", "error", "-skip_frame", "nokey", "-select_streams", "v", "-show_entries", "frame=pts_time", "-of", "csv"]).arg(&out).output().unwrap();
+            let keyframes = String::from_utf8_lossy(&o.stdout).lines().filter(|l| !l.trim().is_empty()).count();
+            assert_eq!(keyframes, 1, "only the first keyframe survives");
+        }
         let info = probe(&tools(), &out).unwrap();
         if let Some(vc) = &st.video_codec {
             let want = match vc.as_str() { "libx264" => "h264", "libx265" => "hevc", "libvpx-vp9" => "vp9", "libsvtav1" => "av1", "prores_ks" => "prores", "dnxhd" => "dnxhd", other => other };
