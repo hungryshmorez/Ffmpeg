@@ -17,6 +17,13 @@ Effects (11, with parameter metadata registry) + opacity · processed preview (c
 * **Phase 10:** plugins (Extism) · user tools · headless polish · local API.
 * **Cross-cutting:** multiple sequences + snapshots · project packaging · smart rendering · export naming/versioning/manifest · SQLite index · disk-space checks · persistent job state across crashes · accessibility pass · colour management · queue should also carry previews/analysis.
 
+## Requested additions (user, not started)
+* **GL Transitions library** (gl-transitions.com, MIT). Stock Windows FFmpeg has no `gl-transition` filter, so plan is to port shaders to `xfade` custom expressions (approach of the MIT `xfade-easing` project) — only shaders expressible that way; the rest are listed as unsupported, not faked.
+* **Transition demo mode**: button that cycles random transitions through the timeline continuously (preview/playback only, nothing written to the project unless "Keep").
+* **Effects demo mode**: same for effects; two separate boards (transitions / effects) that can run combined.
+* **Random transition** and **Random effect** buttons; **stacking**: choose N (e.g. 1 or 3) and apply that many random effects (or chained transitions) in one undoable command.
+* Ordering: after the filter-graph editor (needs the same effect/preset registry); random picks are seeded so a result can be reproduced.
+
 ## Unverified / known gaps
 * Proxies: the file properties are verified (960x540 H.264/AAC), but whether a proxy plays in a webview that cannot decode the original (e.g. ProRes on Windows WebView2) is unverified: this sandbox webview cannot decode H.264 at all, so only the "original fails → offer proxy → proxy created" path was exercised. Markers aren't exported as chapters yet.
 * Research notes: OpenShot (libopenshot LGPL-3) and Audacity (GPLv3) are reference only; do not copy their code into FFWORKS. Candidate FFmpeg-filter effects inspired by them: chroma key, mask, deinterlace, pixelate, phaser/chorus/flanger, gate, de-click.
