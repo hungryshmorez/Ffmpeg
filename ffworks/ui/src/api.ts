@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, RelinkResult, StateView, Waveform } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -18,6 +18,7 @@ export const api = {
   recoverProject: () => invoke<StateView>("recover_project"),
   discardRecovery: () => invoke<void>("discard_recovery"),
   detectScenes: (mediaId: string, threshold: number) => invoke<SceneAnalysis>("detect_scenes", { mediaId, threshold }),
+  detectRanges: (mediaId: string, kind: DetectKind, threshold: number, minLen: number) => invoke<[number, number][]>("detect_ranges", { mediaId, kind, threshold, minLen }),
   measureLoudness: (mediaId: string) => invoke<Loudness>("measure_loudness", { mediaId }),
   getBeats: (mediaId: string) => invoke<BeatAnalysis>("get_beats", { mediaId }),
   getSettings: () => invoke<AppSettings>("get_settings"),

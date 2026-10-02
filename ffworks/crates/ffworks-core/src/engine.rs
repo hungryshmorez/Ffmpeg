@@ -1,6 +1,7 @@
 //! `Engine` owns the open project, the undo/redo history and the tool configuration.
 //! It has no GUI dependency, so the same engine drives the desktop app, tests and a future headless CLI (spec §154).
 
+use crate::time::Rational;
 use crate::commands::{plan, Command};
 use crate::error::{Error, Result};
 use crate::ffprobe::probe;
@@ -105,6 +106,7 @@ impl Engine {
                 }
                 Ok(())
             }
+            Command::RemoveRanges { clip, ranges } => self.remove_ranges(clip, ranges, fwd, inv),
             other => {
                 for patch in plan(&self.project, other)? {
                     let undo_patch = apply(&mut self.project, &patch)?;
@@ -114,6 +116,55 @@ impl Engine {
                 Ok(())
             }
         }
+    }
+
+    /// Cut `ranges` (timeline time) out of `clip`'s linked group, latest range first so earlier ones keep their positions.
+    fn remove_ranges(&mut self, clip: &str, ranges: &[(Rational, Rational)], fwd: &mut Vec<Patch>, inv: &mut Vec<Patch>) -> Result<()> {
+        let fps = self.project.settings.fps;
+        let frame = Rational::from_int(1).div(fps);
+        let (cs, ce) = {
+            let (_, c) = self.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+            (c.start, c.end())
+        };
+        // clamp to the clip, snap to frames, drop empties, sort and merge overlaps
+        let mut rs: Vec<(Rational, Rational)> = ranges
+            .iter()
+            .map(|(a, b)| (crate::time::snap_to_frame(*a, fps).max(cs), crate::time::snap_to_frame(*b, fps).min(ce)))
+            .filter(|(a, b)| a < b)
+            .collect();
+        rs.sort_by(|x, y| x.0.cmp(&y.0));
+        let mut merged: Vec<(Rational, Rational)> = vec![];
+        for r in rs {
+            match merged.last_mut() {
+                Some(l) if r.0 <= l.1 => l.1 = l.1.max(r.1),
+                _ => merged.push(r),
+            }
+        }
+        if merged.is_empty() {
+            return Err(Error::validation("nothing to cut: no range overlaps the clip"));
+        }
+        for (mut a, mut b) in merged.into_iter().rev() {
+            // the clip's current extent (earlier cuts do not move it; later ones were already removed)
+            let (start, end) = {
+                let (_, c) = self.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+                (c.start, c.end())
+            };
+            if b > end - frame { b = end; }
+            if a < start + frame { a = start; }
+            if a >= b { continue; }
+            if b < end {
+                self.run(&Command::SplitClip { clip: clip.to_string(), at: b }, fwd, inv)?;
+            }
+            let victim = if a > start {
+                self.run(&Command::SplitClip { clip: clip.to_string(), at: a }, fwd, inv)?;
+                let (t, _) = self.project.active()?.find_clip(clip).expect("left piece keeps its id");
+                t.clips.iter().find(|c| c.start == a && c.id != clip).map(|c| c.id.clone()).ok_or_else(|| Error::validation("internal: cut piece not found"))?
+            } else {
+                clip.to_string()
+            };
+            self.run(&Command::DeleteClip { clip: victim, ripple: true }, fwd, inv)?;
+        }
+        Ok(())
     }
 
     /// `inv` is in application order; undo it newest-first.

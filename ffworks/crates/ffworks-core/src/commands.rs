@@ -92,6 +92,9 @@ pub enum Command {
     AddMarker { time: Rational, name: String, color: Option<String>, note: Option<String> },
     SetMarker { marker: Id, time: Option<Rational>, name: Option<String>, color: Option<String>, note: Option<String> },
     RemoveMarker { marker: Id },
+    /// Cut the given timeline time ranges out of `clip` and everything linked to it, closing each gap (ripple on those
+    /// tracks only). Used for "remove silences". Ranges are clamped to the clip, merged when they overlap, and one undo step.
+    RemoveRanges { clip: Id, ranges: Vec<(Rational, Rational)> },
     /// Several commands applied as one undo step (spec §112).
     Batch { label: String, commands: Vec<Command> },
 }
@@ -144,6 +147,7 @@ impl Command {
             Command::AddTransition { kind, .. } => format!("Add {kind} transition"),
             Command::RemoveTransition { .. } => "Remove transition".into(),
             Command::SetTransition { .. } => "Edit transition".into(),
+            Command::RemoveRanges { ranges, .. } => format!("Cut out {} ranges", ranges.len()),
             Command::Batch { label, .. } => label.clone(),
         }
     }
@@ -155,7 +159,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
     let sid = seq.id.clone();
     let fps = p.settings.fps;
     match cmd {
-        Command::Batch { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::Batch { .. } | Command::RemoveRanges { .. } => Err(Error::validation("batch is handled by the engine")),
         Command::RenameProject { name } => {
             if name.trim().is_empty() {
                 return Err(Error::validation("project name cannot be empty"));

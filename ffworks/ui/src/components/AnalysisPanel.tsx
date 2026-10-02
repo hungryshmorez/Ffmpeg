@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { fromSec, toSec } from "../time";
 import { useProject } from "../state/stores";
-import type { Clip, Command, Loudness, SceneAnalysis } from "../types";
+import type { Clip, Command, DetectKind, Loudness, SceneAnalysis } from "../types";
 
 const TARGET_LUFS = -14;
 
@@ -12,6 +12,21 @@ export function cutsInsideClip(clip: Clip, cuts: readonly number[], minGap = 0.1
   return cuts.map((c) => start + (c - sourceIn)).filter((t) => t > start + minGap && t < start + dur - minGap).sort((a, b) => b - a);
 }
 
+/** Detected source ranges mapped onto the timeline for `clip` (clamped to the clip), earliest first. */
+export function rangesOnTimeline(clip: Clip, ranges: readonly (readonly [number, number])[]): [number, number][] {
+  const start = toSec(clip.start), sourceIn = toSec(clip.source_in), end = start + toSec(clip.duration);
+  return ranges
+    .map(([a, b]) => [Math.max(start, start + (a - sourceIn)), Math.min(end, start + (b - sourceIn))] as [number, number])
+    .filter(([a, b]) => b - a > 0.01)
+    .sort((x, y) => x[0] - y[0]);
+}
+
+const DETECTORS: Record<DetectKind, { label: string; unit: string; value: number; min: number; max: number; step: number }> = {
+  silence: { label: "silence", unit: "dB", value: -35, min: -90, max: -5, step: 1 },
+  black: { label: "black frames", unit: "pixel level", value: 0.1, min: 0, max: 0.5, step: 0.01 },
+  freeze: { label: "frozen frames", unit: "dB", value: -60, min: -90, max: -20, step: 1 },
+};
+
 /** Scene detection and loudness for the selected clip: analysis results turn into undoable commands. */
 export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) {
   const dispatch = useProject((s) => s.dispatch);
@@ -20,6 +35,10 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
   const [loud, setLoud] = useState<Loudness | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [threshold, setThreshold] = useState(27);
+  const [kind, setKind] = useState<DetectKind>("silence");
+  const [level, setLevel] = useState<Record<DetectKind, number>>({ silence: -35, black: 0.1, freeze: -60 });
+  const [minLen, setMinLen] = useState(0.5);
+  const [found, setFound] = useState<{ kind: DetectKind; ranges: [number, number][] } | null>(null);
 
   const run = async (what: string, fn: () => Promise<void>) => {
     setBusy(what);
@@ -31,6 +50,21 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
     if (!times.length) return toast("info", "No scene cuts inside this clip");
     const commands: Command[] = times.map((t) => ({ type: "split_clip", clip: video.id, at: fromSec(t) }));
     void dispatch({ type: "batch", label: `Split at ${times.length} scene cuts`, commands });
+  };
+
+  const target = kind === "silence" ? audio ?? video : video ?? audio;
+  const markRanges = () => {
+    if (!target || !found) return;
+    const onTl = rangesOnTimeline(target, found.ranges);
+    if (!onTl.length) return toast("info", "Nothing found inside this clip");
+    const commands: Command[] = onTl.map(([a, b]) => ({ type: "add_marker", time: fromSec(a), name: `${found.kind} ${(b - a).toFixed(1)}s`, color: null, note: null }));
+    void dispatch({ type: "batch", label: `Mark ${onTl.length} ${found.kind} ranges`, commands });
+  };
+  const cutRanges = () => {
+    if (!target || !found) return;
+    const onTl = rangesOnTimeline(target, found.ranges);
+    if (!onTl.length) return toast("info", "Nothing found inside this clip");
+    void dispatch({ type: "remove_ranges", clip: target.id, ranges: onTl.map(([a, b]) => [fromSec(a), fromSec(b)] as [ReturnType<typeof fromSec>, ReturnType<typeof fromSec>]) });
   };
 
   return (
@@ -47,6 +81,26 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
             <>
               <p className="muted" data-testid="scene-summary">{scenes.scenes.length} scenes · cuts at {scenes.cuts.map((c) => c.toFixed(2)).join(", ") || "—"} s</p>
               <button onClick={splitAtScenes} title="Split this clip at the detected cuts (one undo step)">Split clip at scene cuts</button>
+            </>
+          )}
+        </div>
+      )}
+      {(video || audio) && (
+        <div className="field" aria-label="Find silence, black or frozen frames">
+          <label>Find</label>
+          <div className="row">
+            <select aria-label="Detector" value={kind} onChange={(e) => { setKind(e.target.value as DetectKind); setFound(null); }}>
+              {(Object.keys(DETECTORS) as DetectKind[]).map((k) => <option key={k} value={k}>{DETECTORS[k].label}</option>)}
+            </select>
+            <input aria-label="Detection level" className="num" type="number" min={DETECTORS[kind].min} max={DETECTORS[kind].max} step={DETECTORS[kind].step} value={level[kind]} onChange={(e) => setLevel({ ...level, [kind]: Number(e.target.value) })} title={`Level (${DETECTORS[kind].unit})`} />
+            <input aria-label="Minimum length" className="num" type="number" min={0.1} max={60} step={0.1} value={minLen} onChange={(e) => setMinLen(Number(e.target.value))} title="Shortest range to report (seconds)" />
+          </div>
+          <button disabled={busy !== null || !target} onClick={() => target && void run("find", async () => setFound({ kind, ranges: await api.detectRanges(target.media, kind, level[kind], minLen) }))}>{busy === "find" ? "Searching…" : `Find ${DETECTORS[kind].label}`}</button>
+          {found && (
+            <>
+              <p className="muted" data-testid="range-summary">{found.ranges.length} ranges · {found.ranges.slice(0, 6).map(([a, b]) => `${a.toFixed(1)}–${b.toFixed(1)}`).join(", ")}{found.ranges.length > 6 ? "…" : ""} s</p>
+              <button onClick={markRanges} title="Put a marker at the start of every range (one undo step)">Mark ranges</button>
+              <button onClick={cutRanges} title="Cut every range out of this clip and its linked clips and close the gaps (one undo step)">Cut ranges out</button>
             </>
           )}
         </div>

@@ -72,6 +72,31 @@ fn builtin_registry() -> Vec<EffectDef> {
         au("denoise", "Noise reduction (FFT)", "Restoration", &["afftdn"], vec![p("amount", "Reduction", 0.0, 40.0, 12.0, 0.5, "dB")]),
         au("normalizer", "Dynamic normalizer", "Dynamics", &["dynaudnorm"], vec![]),
         au("mono", "Mono downmix", "Channels", &["pan"], vec![]),
+        e("pixelate", "Pixelate", "Stylize", &["pixelize"], vec![p("size", "Block size", 2.0, 200.0, 16.0, 1.0, "px")]),
+        e("grayscale", "Black & white", "Color", &["hue"], vec![]),
+        e("sepia", "Sepia", "Color", &["colorchannelmixer"], vec![]),
+        e("negate", "Invert colours", "Color", &["negate"], vec![]),
+        e("posterize", "Posterize", "Stylize", &["lutrgb"], vec![p("bits", "Bits per channel", 1.0, 7.0, 3.0, 1.0, "")]),
+        e("edges", "Edge detect", "Stylize", &["edgedetect"], vec![]),
+        e("rgb_split", "RGB split (glitch)", "Glitch", &["rgbashift"], vec![p("amount", "Shift", 0.0, 60.0, 8.0, 1.0, "px")]),
+        e("trails", "Motion trails", "Glitch", &["tmix"], vec![p("frames", "Frames mixed", 2.0, 30.0, 6.0, 1.0, "")]),
+        e("ghost", "Ghosting (slow update)", "Glitch", &["lagfun"], vec![p("decay", "Decay", 0.5, 0.99, 0.95, 0.01, "")]),
+        e("deband", "Remove banding", "Restoration", &["deband"], vec![]),
+        e("deinterlace", "Deinterlace", "Restoration", &["yadif"], vec![]),
+        EffectDef { id: "chroma_key", name: "Chroma key", kind: "video", category: "Keying", requires: &["chromakey"], params: vec![p("colour", "Key colour (0 green, 1 blue, 2 red)", 0.0, 2.0, 0.0, 1.0, ""), p("similarity", "Similarity", 0.01, 0.6, 0.15, 0.01, ""), p("blend", "Edge blend", 0.0, 0.5, 0.05, 0.01, "")], alpha: true },
+        au("phaser", "Phaser", "Modulation", &["aphaser"], vec![p("speed", "Speed", 0.1, 2.0, 0.5, 0.05, "Hz"), p("decay", "Decay", 0.1, 0.9, 0.4, 0.05, "")]),
+        au("chorus", "Chorus", "Modulation", &["chorus"], vec![p("speed", "Speed", 0.1, 5.0, 0.5, 0.1, "Hz"), p("depth", "Depth", 0.1, 5.0, 2.0, 0.1, "ms")]),
+        au("flanger", "Flanger", "Modulation", &["flanger"], vec![p("delay", "Delay", 0.0, 30.0, 3.0, 0.5, "ms"), p("speed", "Speed", 0.1, 10.0, 0.5, 0.1, "Hz")]),
+        au("tremolo", "Tremolo", "Modulation", &["tremolo"], vec![p("freq", "Rate", 0.1, 20.0, 5.0, 0.1, "Hz"), p("depth", "Depth", 0.0, 1.0, 0.5, 0.05, "")]),
+        au("vibrato", "Vibrato", "Modulation", &["vibrato"], vec![p("freq", "Rate", 0.1, 20.0, 5.0, 0.1, "Hz"), p("depth", "Depth", 0.0, 1.0, 0.5, 0.05, "")]),
+        au("gate", "Noise gate", "Dynamics", &["agate"], vec![p("threshold", "Threshold", -80.0, 0.0, -40.0, 0.5, "dB"), p("ratio", "Ratio", 1.0, 20.0, 4.0, 0.5, ":1")]),
+        au("declick", "De-click", "Restoration", &["adeclick"], vec![]),
+        au("declip", "De-clip", "Restoration", &["adeclip"], vec![]),
+        au("bandpass", "Band-pass filter", "EQ", &["bandpass"], vec![p("freq", "Centre", 100.0, 10000.0, 1000.0, 10.0, "Hz"), p("width", "Width", 20.0, 5000.0, 500.0, 10.0, "Hz")]),
+        au("volume", "Volume", "Dynamics", &["volume"], vec![p("gain", "Gain", -60.0, 24.0, 0.0, 0.5, "dB")]),
+        au("bitcrush", "Bit crusher", "Glitch", &["acrusher"], vec![p("bits", "Bits", 1.0, 16.0, 8.0, 1.0, ""), p("samples", "Sample hold", 1.0, 100.0, 4.0, 1.0, "")]),
+        au("softclip", "Soft clip (saturation)", "Dynamics", &["asoftclip"], vec![]),
+        au("widen", "Stereo widen", "Channels", &["stereowiden"], vec![p("delay", "Delay", 1.0, 100.0, 20.0, 1.0, "ms")]),
         EffectDef { id: GRAPH_EFFECT, name: "Custom filter graph", kind: "video", category: "Custom", requires: &[], params: vec![], alpha: false },
         EffectDef {
             id: "crop",
@@ -235,6 +260,46 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
         }
         "normalizer" => "dynaudnorm=f=150:g=15".into(),
         "mono" => "pan=stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1".into(),
+        "pixelate" => format!("pixelize=w={0}:h={0}:mode=avg", g("size")?.round() as i64),
+        "grayscale" => "hue=s=0".into(),
+        "sepia" => "colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131:0:0:0:0:1".into(),
+        "negate" => "negate".into(),
+        // keep the top N bits of each colour channel; the quotes protect the commas inside the expression
+        "posterize" => {
+            let mask = 256 - (1i64 << (8 - g("bits")?.round() as i64));
+            format!("lutrgb=r='bitand(val,{mask})':g='bitand(val,{mask})':b='bitand(val,{mask})'")
+        }
+        "edges" => "edgedetect=mode=wires:high=0.2:low=0.08".into(),
+        "rgb_split" => {
+            let a = g("amount")?.round() as i64;
+            if a == 0 { return Ok(None); }
+            format!("rgbashift=rh={a}:bh=-{a}:edge=smear")
+        }
+        "trails" => format!("tmix=frames={}", g("frames")?.round() as i64),
+        "ghost" => format!("lagfun=decay={}", g("decay")?),
+        "deband" => "deband".into(),
+        "deinterlace" => "yadif".into(),
+        "chroma_key" => {
+            let colour = ["0x00ff00", "0x0000ff", "0xff0000"][g("colour")?.round() as usize];
+            format!("chromakey=color={colour}:similarity={}:blend={}", g("similarity")?, g("blend")?)
+        }
+        "phaser" => format!("aphaser=speed={}:decay={}", g("speed")?, g("decay")?),
+        "chorus" => format!("chorus=0.6:0.9:40:0.4:{}:{}", g("speed")?, g("depth")?),
+        "flanger" => format!("flanger=delay={}:speed={}", g("delay")?, g("speed")?),
+        "tremolo" => format!("tremolo=f={}:d={}", g("freq")?, g("depth")?),
+        "vibrato" => format!("vibrato=f={}:d={}", g("freq")?, g("depth")?),
+        "gate" => format!("agate=threshold={:.6}:ratio={}", db_to_lin(g("threshold")?), g("ratio")?),
+        "declick" => "adeclick".into(),
+        "declip" => "adeclip".into(),
+        "bandpass" => format!("bandpass=f={}:width_type=h:w={}", g("freq")?, g("width")?),
+        "volume" => {
+            let v = g("gain")?;
+            if v == 0.0 { return Ok(None); }
+            format!("volume={v}dB")
+        }
+        "bitcrush" => format!("acrusher=bits={}:samples={}:mix=1:mode=lin", g("bits")?.round() as i64, g("samples")?.round() as i64),
+        "softclip" => "asoftclip=type=tanh".into(),
+        "widen" => format!("stereowiden=delay={}", g("delay")?),
         other => return Err(Error::validation(format!("effect '{other}' has no FFmpeg mapping"))),
     }))
 }
@@ -279,8 +344,8 @@ mod tests {
     fn every_registered_effect_serialises_with_defaults() {
         for d in registry() {
             let e = EffectInstance::new("x".into(), d.id, &BTreeMap::new()).unwrap();
-            // crop and eq at their defaults are deliberate no-ops
-            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph"].contains(&d.id), "{}", d.id);
+            // crop, eq and volume at their defaults are deliberate no-ops
+            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume"].contains(&d.id), "{}", d.id);
         }
     }
 

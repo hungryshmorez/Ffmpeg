@@ -5,6 +5,7 @@ pub mod brand;
 pub mod clipprops;
 pub mod commands;
 pub mod demo;
+pub mod detect;
 pub mod effects;
 pub mod engine;
 pub mod engines;

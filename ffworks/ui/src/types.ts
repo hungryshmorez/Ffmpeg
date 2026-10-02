@@ -92,6 +92,7 @@ export type Command =
   | { type: "add_transition"; clip_a: string; clip_b: string; kind: string; duration: Rational }
   | { type: "remove_transition"; transition: string }
   | { type: "set_transition"; transition: string; kind?: string | null; duration?: Rational | null }
+  | { type: "remove_ranges"; clip: string; ranges: [Rational, Rational][] }
   | { type: "batch"; label: string; commands: Command[] }
   | { type: "rename_project"; name: string };
 
@@ -114,6 +115,7 @@ export interface AppSettings { ffmpeg_path: string | null; ffprobe_path: string 
 export interface RelinkResult { state: StateView; relinked: string[]; unresolved: { mediaId: string; candidates: { path: string; exact: boolean; reason: string }[] }[] }
 export interface BeatAnalysis { beats: number[]; bpm: number; duration: number }
 export interface SceneAnalysis { cuts: number[]; scenes: [number, number][]; threshold: number }
+export type DetectKind = "silence" | "black" | "freeze";
 export interface Loudness { integrated_lufs: number | null; range_lu: number; true_peak_dbtp: number | null }
 
 export interface ProxyStatus { mediaId: string; eligible: boolean; ready: boolean; path: string | null; bytes: number | null }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cutsInsideClip } from "../components/AnalysisPanel";
+import { cutsInsideClip, rangesOnTimeline } from "../components/AnalysisPanel";
 import { beatPoints, dbToGain, linkedIds, neighbourMarkers, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
 import { fromSec, snapToFrame, timecode, toSec } from "../time";
 import type { Clip, Sequence } from "../types";
@@ -88,5 +88,12 @@ describe("scene cuts", () => {
     const c = { ...clip("v", "10", "6", "video", null, "2"), media: "m" }; // timeline 10..16 from source 2..8
     // source cuts at 1 (before), 2.05 (too close to start), 4, 7, 7.95 (too close to end), 9 (after)
     expect(cutsInsideClip(c, [1, 2.05, 4, 7, 7.95, 9])).toEqual([15, 12]);
+  });
+});
+
+describe("detected ranges", () => {
+  it("maps source ranges onto the timeline, clamps to the clip, drops outside ones", () => {
+    const c = { ...clip("v", "10", "6", "video", null, "2"), media: "m" }; // timeline 10..16 from source 2..8
+    expect(rangesOnTimeline(c, [[0, 1], [1, 3], [5, 6], [7, 12]])).toEqual([[10, 11], [13, 14], [15, 16]]);
   });
 });
