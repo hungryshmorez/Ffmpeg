@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { api } from "../api";
 import type { Command, JobEvent, PreviewInfo, StateView } from "../types";
+import { parseOverrides, type Overrides } from "./keymap";
+
+const KEYMAP_KEY = "ffworks.keymap";
+function loadKeymap(): Overrides {
+  try { return parseOverrides(localStorage.getItem(KEYMAP_KEY)); } catch { return {}; }
+}
 
 /** Persistent project state mirrored from the Rust engine (serialisable; the engine is the source of truth). */
 interface ProjectStore {
@@ -89,6 +95,11 @@ interface UiStore {
   setVariationsClip: (c: string | null) => void;
   snapshotsOpen: boolean;
   setSnapshotsOpen: (o: boolean) => void;
+  shortcutsOpen: boolean;
+  setShortcutsOpen: (o: boolean) => void;
+  /** The user's keyboard shortcut changes (see state/keymap.ts), kept in this browser profile's local storage. */
+  keymap: Overrides;
+  setKeymap: (k: Overrides) => void;
   recording: boolean;
   setRecording: (r: boolean) => void;
   /** Clips added to the selection with Shift/Ctrl+click (besides `selected`). */
@@ -126,6 +137,13 @@ export const useUi = create<UiStore>((set) => ({
   setVariationsClip: (variationsClip) => set({ variationsClip }),
   snapshotsOpen: false,
   setSnapshotsOpen: (snapshotsOpen) => set({ snapshotsOpen }),
+  shortcutsOpen: false,
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  keymap: loadKeymap(),
+  setKeymap: (keymap) => {
+    try { localStorage.setItem(KEYMAP_KEY, JSON.stringify(keymap)); } catch { /* storage unavailable: the change lasts this session */ }
+    set({ keymap });
+  },
   recording: false,
   setRecording: (recording) => set({ recording }),
   extra: [],

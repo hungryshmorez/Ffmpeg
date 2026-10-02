@@ -5,6 +5,7 @@ import { addMarkerAtPlayhead } from "./MarkerPanel";
 import { importSubtitlesViaDialog, importViaDialog } from "./MediaBrowser";
 import { filterActions, type PaletteAction } from "./palette";
 import { deleteSelected, newProject, openProject, saveProject, splitAtPlayhead } from "./Toolbar";
+import { hintFor } from "../state/keymap";
 import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
 
 /** Everything the toolbar and shortcuts can do, searchable from the keyboard (Ctrl+K). */
@@ -15,8 +16,8 @@ function buildActions(): PaletteAction[] {
   const seq = v?.project.sequences.find((s) => s.id === v.project.active_sequence);
   const list: PaletteAction[] = [
     { id: "new", label: "New project", run: () => void newProject() },
-    { id: "open", label: "Open project…", hint: "Ctrl+O", run: () => void openProject() },
-    { id: "save", label: "Save project", hint: "Ctrl+S", run: () => void saveProject() },
+    { id: "open", label: "Open project…", run: () => void openProject() },
+    { id: "save", label: "Save project", run: () => void saveProject() },
     { id: "package", label: "Package project and media into a folder…", keywords: "collect archive copy move", run: () => void (async () => {
       const dir = await open({ directory: true, title: "Folder to collect the project and its media into" });
       if (typeof dir !== "string") return;
@@ -34,17 +35,17 @@ function buildActions(): PaletteAction[] {
       try { proj.setView(await api.runMacro(p, ui.selected)); proj.toast("info", "Macro applied (one undo step)"); } catch (e) { proj.toast("error", String(e)); }
     })() },
     { id: "snapshots", label: "Snapshots (save and restore the timeline)…", keywords: "version backup history", run: () => ui.setSnapshotsOpen(true) },
-    { id: "saveas", label: "Save project as…", hint: "Ctrl+Shift+S", run: () => void saveProject(true) },
+    { id: "saveas", label: "Save project as…", run: () => void saveProject(true) },
     { id: "import", label: "Import media…", run: () => void importViaDialog() },
     { id: "subs", label: "Import subtitles…", keywords: "srt vtt captions", run: () => void importSubtitlesViaDialog() },
-    { id: "undo", label: "Undo", hint: "Ctrl+Z", run: () => v?.undoLabel && void proj.run(api.undo) },
-    { id: "redo", label: "Redo", hint: "Ctrl+Y", run: () => v?.redoLabel && void proj.run(api.redo) },
-    { id: "split", label: "Split clip at playhead", hint: "S", keywords: "cut razor", run: splitAtPlayhead },
-    { id: "delete", label: "Delete selected clip", hint: "Del", run: () => deleteSelected(false) },
-    { id: "ripple", label: "Ripple delete selected clip", hint: "Shift+Del", run: () => deleteSelected(true) },
-    { id: "marker", label: "Add marker at playhead", hint: "M", run: () => seq && void addMarkerAtPlayhead(seq) },
-    { id: "play", label: "Play / pause", hint: "Space", run: () => usePlayhead.getState().setPlaying(!usePlayhead.getState().playing) },
-    { id: "start", label: "Go to start", hint: "Home", run: () => usePlayhead.getState().setT(0) },
+    { id: "undo", label: "Undo", run: () => v?.undoLabel && void proj.run(api.undo) },
+    { id: "redo", label: "Redo", run: () => v?.redoLabel && void proj.run(api.redo) },
+    { id: "split", label: "Split clip at playhead", keywords: "cut razor", run: splitAtPlayhead },
+    { id: "delete", label: "Delete selected clip", run: () => deleteSelected(false) },
+    { id: "ripple", label: "Ripple delete selected clip", run: () => deleteSelected(true) },
+    { id: "marker", label: "Add marker at playhead", run: () => seq && void addMarkerAtPlayhead(seq) },
+    { id: "play", label: "Play / pause", run: () => usePlayhead.getState().setPlaying(!usePlayhead.getState().playing) },
+    { id: "start", label: "Go to start", run: () => usePlayhead.getState().setT(0) },
     { id: "export", label: "Export…", keywords: "render save video", run: () => ui.setExportOpen(true) },
     { id: "queue", label: "Show render queue", run: () => useJobs.getState().setQueueOpen(true) },
     { id: "demo", label: "Demo mode (cycle random transitions and effects)", keywords: "random", run: () => ui.setDemoOpen(true) },
@@ -52,8 +53,10 @@ function buildActions(): PaletteAction[] {
     { id: "favs", label: "Favourites and groups", keywords: "star", run: () => ui.setFavsOpen(true) },
     { id: "builds", label: "FFmpeg builds and frei0r plugins", keywords: "engine glitch0r", run: () => ui.setEnginesOpen(true) },
     { id: "diag", label: "Diagnostics", run: () => ui.setDiagOpen(true) },
+    { id: "shortcuts", label: "Keyboard shortcuts…", keywords: "keys keymap bindings hotkeys", run: () => ui.setShortcutsOpen(true) },
   ];
-  return list;
+  // the shortcut shown next to an action is whatever it is bound to now
+  return list.map((a) => ({ ...a, hint: hintFor(ui.keymap, a.id) ?? a.hint }));
 }
 
 export function CommandPalette() {

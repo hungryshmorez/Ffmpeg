@@ -35,7 +35,7 @@ pub fn parse(text: &str) -> Result<Vec<Cue>> {
         let Some(ti) = lines.iter().position(|l| l.contains("-->")) else { continue };
         let (a, b) = lines[ti].split_once("-->").expect("checked");
         // WebVTT may append cue settings after the end time
-        let b = b.trim().split_whitespace().next().unwrap_or("");
+        let b = b.split_whitespace().next().unwrap_or("");
         let (Some(start), Some(end)) = (stamp(a), stamp(b)) else { continue };
         let body = lines[ti + 1..].join("\n");
         let mut clean = String::new();
@@ -57,7 +57,7 @@ pub fn parse(text: &str) -> Result<Vec<Cue>> {
     if cues.is_empty() {
         return Err(Error::validation("no subtitle cues found (expected SubRip .srt or WebVTT .vtt)"));
     }
-    cues.sort_by(|x, y| x.start.cmp(&y.start));
+    cues.sort_by_key(|x| x.start);
     for i in 0..cues.len() - 1 {
         if cues[i].end > cues[i + 1].start {
             cues[i].end = cues[i + 1].start;

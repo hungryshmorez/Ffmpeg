@@ -1,5 +1,5 @@
 {
- "source": "frei0r-plugins (GPL-2+) parameter tables read through the frei0r C API",
+ "source": "frei0r-plugins (GPL-2+) parameter tables read through the frei0r C API; plus plugins only in frei0r v3.6.0 (Win64), read from the bundled DLLs by CI",
  "plugins": [
   {
    "id": "3dflippo",
@@ -73,6 +73,57 @@
      "type": "bool",
      "explanation": "If true, pixels that are not transposed are black, otherwise, they are copied with the original",
      "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "3dperspective",
+   "name": "3D Perspective",
+   "author": "Harveyes",
+   "kind": "filter",
+   "explanation": "Simulated 3D plane rotation (yaw/pitch/roll) with adjustable perspective and position, like a fake-3D camera transform.",
+   "params": [
+    {
+     "name": "yaw",
+     "type": "double",
+     "explanation": "Rotation around vertical axis (left/right turn). Normalized 0..1 maps to -180..180 degrees (0.5 = 0 deg)",
+     "default": 0.5
+    },
+    {
+     "name": "pitch",
+     "type": "double",
+     "explanation": "Rotation around horizontal axis (tilt up/down). Normalized 0..1 maps to -90..90 degrees (0.5 = 0 deg)",
+     "default": 0.5
+    },
+    {
+     "name": "roll",
+     "type": "double",
+     "explanation": "In-plane spin. Normalized 0..1 maps to -180..180 degrees (0.5 = 0 deg)",
+     "default": 0.5
+    },
+    {
+     "name": "perspective",
+     "type": "double",
+     "explanation": "Strength of 3D perspective distortion (%)",
+     "default": 0.7
+    },
+    {
+     "name": "zoom",
+     "type": "double",
+     "explanation": "Zoom compensation. Normalized 0..1 maps to 0.1x..4.0x scale",
+     "default": 0.25
+    },
+    {
+     "name": "x",
+     "type": "double",
+     "explanation": "Horizontal position, 0..1 (0.5 = centered, no shift)",
+     "default": 0.5
+    },
+    {
+     "name": "y",
+     "type": "double",
+     "explanation": "Vertical position, 0..1 (0.5 = centered, no shift)",
+     "default": 0.5
     }
    ]
   },
@@ -242,6 +293,165 @@
    ]
   },
   {
+   "id": "alpha0ps_alpha0ps",
+   "name": "alpha0ps",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Display and manipulation of the alpha channel",
+   "params": [
+    {
+     "name": "Display",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Display input alpha",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Operation",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Threshold",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Shrink/Grow/Blur amount",
+     "type": "double",
+     "explanation": "",
+     "default": 0.200004
+    },
+    {
+     "name": "Invert",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "alpha0ps_alphagrad",
+   "name": "alphagrad",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Fills alpha channel with a gradient",
+   "params": [
+    {
+     "name": "Position",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Transition width",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Min",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Max",
+     "type": "double",
+     "explanation": "",
+     "default": 1.0
+    },
+    {
+     "name": "Operation",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "alpha0ps_alphaspot",
+   "name": "alphaspot",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Draws simple shapes into the alpha channel",
+   "params": [
+    {
+     "name": "Shape",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Position X",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Position Y",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Size X",
+     "type": "double",
+     "explanation": "",
+     "default": 0.1
+    },
+    {
+     "name": "Size Y",
+     "type": "double",
+     "explanation": "",
+     "default": 0.1
+    },
+    {
+     "name": "Tilt",
+     "type": "double",
+     "explanation": "",
+     "default": 0.5
+    },
+    {
+     "name": "Transition width",
+     "type": "double",
+     "explanation": "",
+     "default": 0.2
+    },
+    {
+     "name": "Min",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Max",
+     "type": "double",
+     "explanation": "",
+     "default": 1.0
+    },
+    {
+     "name": "Operation",
+     "type": "double",
+     "explanation": "",
+     "default": 0.0
+    }
+   ]
+  },
+  {
    "id": "alphaatop",
    "name": "alphaatop",
    "author": "Jean-Sebastien Senecal",
@@ -402,6 +612,21 @@
    "kind": "mixer2",
    "explanation": "the alpha XOR operation",
    "params": []
+  },
+  {
+   "id": "autothresh0ld",
+   "name": "autothreshold",
+   "author": "Cynthia",
+   "kind": "filter",
+   "explanation": "Automatically threshold moving pictures",
+   "params": [
+    {
+     "name": "Slope",
+     "type": "double",
+     "explanation": "Slope of sigmoidal transfer",
+     "default": 0.571429
+    }
+   ]
   },
   {
    "id": "balanc0r",
@@ -929,6 +1154,39 @@
    ]
   },
   {
+   "id": "colorenhance",
+   "name": "colorenhance",
+   "author": "Cynthia",
+   "kind": "filter",
+   "explanation": "Enhances the color contrast in OkLab with sigmoidal transfers",
+   "params": [
+    {
+     "name": "a_base",
+     "type": "double",
+     "explanation": "Midpoint of sigmoidal curve for A channel",
+     "default": 0.55
+    },
+    {
+     "name": "b_base",
+     "type": "double",
+     "explanation": "Midpoint of sigmoidal curve for B channel",
+     "default": 0.5
+    },
+    {
+     "name": "a_slope",
+     "type": "double",
+     "explanation": "Steepness of the sigmoidal curve for A channel",
+     "default": 0.4
+    },
+    {
+     "name": "b_slope",
+     "type": "double",
+     "explanation": "Steepness of the sigmoidal curve for B channel",
+     "default": 0.4
+    }
+   ]
+  },
+  {
    "id": "colorhalftone",
    "name": "colorhalftone",
    "author": "Janne Liljeblad",
@@ -1053,7 +1311,7 @@
     {
      "name": "Curve point number",
      "type": "double",
-     "explanation": "Number of points to use to build curve (/10 to fit [0,1] parameter range). Minimum 2 (0.2), Maximum 5 (0.5). Not relevant for B\u00e9zier spline.",
+     "explanation": "Number of points to use to build curve (/10 to fit [0,1] parameter range). Minimum 2 (0.2), Maximum 5 (0.5). Not relevant for Bézier spline.",
      "default": 0.2
     },
     {
@@ -1063,9 +1321,9 @@
      "default": 1.0
     },
     {
-     "name": "B\u00e9zier spline",
+     "name": "Bézier spline",
      "type": "string",
-     "explanation": "Use cubic B\u00e9zier spline. Has to be a sorted list of points in the format \"handle1x;handle1y#pointx;pointy#handle2x;handle2y\"(pointx = in, pointy = out). Points are separated by a \"|\".The values can have \"double\" precision. x, y for points should be in the range 0-1. x,y for handles might also be out of this range."
+     "explanation": "Use cubic Bézier spline. Has to be a sorted list of points in the format \"handle1x;handle1y#pointx;pointy#handle2x;handle2y\"(pointx = in, pointy = out). Points are separated by a \"|\".The values can have \"double\" precision. x, y for points should be in the range 0-1. x,y for handles might also be out of this range."
     },
     {
      "name": "Point 1 input value",
@@ -1224,6 +1482,27 @@
    "kind": "filter",
    "explanation": "delayed frame blitting mapped on a time bitmap",
    "params": []
+  },
+  {
+   "id": "denoise_hqdn3d",
+   "name": "hqdn3d",
+   "author": "Marko Cebokli, Daniel Moreno",
+   "kind": "filter",
+   "explanation": "High quality 3D denoiser from Mplayer",
+   "params": [
+    {
+     "name": "Spatial",
+     "type": "double",
+     "explanation": "Amount of spatial filtering",
+     "default": 0.04
+    },
+    {
+     "name": "Temporal",
+     "type": "double",
+     "explanation": "Amount of temporal filtering",
+     "default": 0.06
+    }
+   ]
   },
   {
    "id": "difference",
@@ -1399,6 +1678,20 @@
    "params": []
   },
   {
+   "id": "euclid_eraser",
+   "name": "euclid_eraser",
+   "author": "Erik H. Beck",
+   "kind": "mixer2",
+   "explanation": "Erasing backgrounds with euclidean distance",
+   "params": [
+    {
+     "name": "threshold",
+     "type": "double",
+     "explanation": "Matching Threshold"
+    }
+   ]
+  },
+  {
    "id": "facebl0r",
    "name": "FaceBl0r",
    "author": "ZioKernel, Biilly, Jilt, Jaromil, ddennedy",
@@ -1554,6 +1847,57 @@
    ]
   },
   {
+   "id": "filmgrain",
+   "name": "Film Grain",
+   "author": "esmane",
+   "kind": "filter",
+   "explanation": "Adds film-like grain and softens the picture.",
+   "params": [
+    {
+     "name": "Grain Amount",
+     "type": "double",
+     "explanation": "The intensity of the grain.",
+     "default": 0.5
+    },
+    {
+     "name": "Red Grain",
+     "type": "double",
+     "explanation": "The percentage of grain applied to the red channel.",
+     "default": 0.75
+    },
+    {
+     "name": "Green Grain",
+     "type": "double",
+     "explanation": "The percentage of grain applied to the green channel.",
+     "default": 1.0
+    },
+    {
+     "name": "Blue Grain",
+     "type": "double",
+     "explanation": "The percentage of grain applied to the blue channel.",
+     "default": 0.5
+    },
+    {
+     "name": "Blur Amount",
+     "type": "double",
+     "explanation": "The intensity of the blur.",
+     "default": 0.5
+    },
+    {
+     "name": "Dust Amount",
+     "type": "double",
+     "explanation": "The amount of dust particles on the image.",
+     "default": 0.2
+    },
+    {
+     "name": "Flicker",
+     "type": "double",
+     "explanation": "The amount of variation in brightness between frames.",
+     "default": 0.5
+    }
+   ]
+  },
+  {
    "id": "flippo",
    "name": "Flippo",
    "author": "Carlo Emilio, Jean-Sebastien Senecal",
@@ -1586,6 +1930,33 @@
      "type": "double",
      "explanation": "The gamma value",
      "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "gateweave",
+   "name": "Gate Weave",
+   "author": "esmane",
+   "kind": "filter",
+   "explanation": "Randomly moves frame around to simulate film gate weave.",
+   "params": [
+    {
+     "name": "Interval",
+     "type": "double",
+     "explanation": "The amount of time before the position is randomized again. The larger the number the slower the picture will move.",
+     "default": 0.6
+    },
+    {
+     "name": "Maximum Horizontal Movement",
+     "type": "double",
+     "explanation": "The maximum distance the picture could move left or right. The larger the number the more the picture moves and the less subtle the effect.",
+     "default": 0.2
+    },
+    {
+     "name": "Maximum Vertical Movement",
+     "type": "double",
+     "explanation": "The maximum distance the picture could move up or down. The larger the number the more the picture moves and the less subtle the effect.",
+     "default": 0.2
     }
    ]
   },
@@ -1660,6 +2031,36 @@
    "kind": "mixer2",
    "explanation": "Perform an RGB[A] hardlight operation between the pixel sources",
    "params": []
+  },
+  {
+   "id": "heatmap0r",
+   "name": "heatmap0r",
+   "author": "Cynthia",
+   "kind": "filter",
+   "explanation": "Performs a continuous trichromatic tinting",
+   "params": [
+    {
+     "name": "Map black to",
+     "type": "color",
+     "explanation": "The color to map source color with zero luminance"
+    },
+    {
+     "name": "Map grey to",
+     "type": "color",
+     "explanation": "The color to map source color with mid luminance"
+    },
+    {
+     "name": "Map white to",
+     "type": "color",
+     "explanation": "The color to map source color with full luminance"
+    },
+    {
+     "name": "Grey point",
+     "type": "double",
+     "explanation": "Point in the luminance axis grey color is located",
+     "default": 0.5
+    }
+   ]
   },
   {
    "id": "hqdn3d",
@@ -1737,6 +2138,98 @@
      "type": "double",
      "explanation": "Spontaneous Growth",
      "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "kaleid0sc0pe",
+   "name": "Kaleid0sc0pe",
+   "author": "Brendan Hack",
+   "kind": "filter",
+   "explanation": "Applies a kaleid0sc0pe effect",
+   "params": [
+    {
+     "name": "origin_x",
+     "type": "double",
+     "explanation": "origin of the kaleid0sc0pe in x. default 0.5",
+     "default": 0.5
+    },
+    {
+     "name": "origin_y",
+     "type": "double",
+     "explanation": "origin of the kaleid0sc0pe in y. default 0.5",
+     "default": 0.5
+    },
+    {
+     "name": "segmentation",
+     "type": "double",
+     "explanation": "kaleid0sc0pe segmentation / 128, segmentations of 1, 2 or multiples of 4 work best. default 16/128",
+     "default": 0.125
+    },
+    {
+     "name": "specify_source",
+     "type": "bool",
+     "explanation": "if true then source angle is read from source_segment, otherwise auto-calculated",
+     "default": 0.0
+    },
+    {
+     "name": "source_segment",
+     "type": "double",
+     "explanation": "centre of source segment if specify_source is true. 0 is in +x and rotates counter clockwise",
+     "default": 0.0
+    },
+    {
+     "name": "segmentation_direction",
+     "type": "double",
+     "explanation": "segmentation direction, < 1/3 is none, < 2/3 is counter clockwise, otherwise clockwise",
+     "default": 1.0
+    },
+    {
+     "name": "reflect_edges",
+     "type": "bool",
+     "explanation": "if true then reflections that end up outside the source reflect back into it, otherwise the specified background colour is used.",
+     "default": 1.0
+    },
+    {
+     "name": "edge_threshold",
+     "type": "double",
+     "explanation": "edge threshold / 4, reflections outside the image but within this distance clamp to the edge. default 0",
+     "default": 0.0
+    },
+    {
+     "name": "preferred_corner",
+     "type": "double",
+     "explanation": "preferred corner, 0 is top right, 0.25 top left, 0.5 bottom left, 0.75 bottom right",
+     "default": 0.0
+    },
+    {
+     "name": "corner_search",
+     "type": "bool",
+     "explanation": "if true search clockwise for furthest corner, otherwise counter clockwise",
+     "default": 1.0
+    },
+    {
+     "name": "bg_color",
+     "type": "color",
+     "explanation": "colour to use if reflection lies outside of source image and not reflecting back in. default 1,0,1"
+    },
+    {
+     "name": "bg_alpha",
+     "type": "double",
+     "explanation": "alpha to use if reflection lies outside of source image and not reflecting back in. default 1",
+     "default": 1.0
+    },
+    {
+     "name": "multithreaded",
+     "type": "bool",
+     "explanation": "set to true to enable multithreaded calculation. default true",
+     "default": 1.0
+    },
+    {
+     "name": "n_threads",
+     "type": "double",
+     "explanation": "the number of threads to use, if 0 then autocalculate otherwise value * 32. default 0",
+     "default": 0.0
     }
    ]
   },
@@ -2127,6 +2620,198 @@
    ]
   },
   {
+   "id": "measure_pr0be",
+   "name": "pr0be",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "Measure video values",
+   "params": [
+    {
+     "name": "Measurement",
+     "type": "double",
+     "explanation": "What measurement to display",
+     "default": 0.0
+    },
+    {
+     "name": "X",
+     "type": "double",
+     "explanation": "X position of probe",
+     "default": 0.5
+    },
+    {
+     "name": "Y",
+     "type": "double",
+     "explanation": "Y position of probe",
+     "default": 0.5
+    },
+    {
+     "name": "X size",
+     "type": "double",
+     "explanation": "X size of probe",
+     "default": 0.25
+    },
+    {
+     "name": "Y size",
+     "type": "double",
+     "explanation": "Y size of probe",
+     "default": 0.25
+    },
+    {
+     "name": "256 scale",
+     "type": "bool",
+     "explanation": "use 0-255 instead of 0.0-1.0",
+     "default": 0.0
+    },
+    {
+     "name": "Show alpha",
+     "type": "bool",
+     "explanation": "Display alpha value too",
+     "default": 0.0
+    },
+    {
+     "name": "Big window",
+     "type": "bool",
+     "explanation": "Display more data",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "measure_pr0file",
+   "name": "pr0file",
+   "author": "Marko Cebokli",
+   "kind": "filter",
+   "explanation": "2D video oscilloscope",
+   "params": [
+    {
+     "name": "X",
+     "type": "double",
+     "explanation": "X position of profile",
+     "default": 0.5
+    },
+    {
+     "name": "Y",
+     "type": "double",
+     "explanation": "Y position of profile",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt",
+     "type": "double",
+     "explanation": "Tilt of profile",
+     "default": 0.5
+    },
+    {
+     "name": "Length",
+     "type": "double",
+     "explanation": "Length of profile",
+     "default": 0.397109
+    },
+    {
+     "name": "Channel",
+     "type": "double",
+     "explanation": "Channel to numerically display",
+     "default": 0.375005
+    },
+    {
+     "name": "Marker 1",
+     "type": "double",
+     "explanation": "Position of marker 1",
+     "default": 0.166667
+    },
+    {
+     "name": "Marker 2",
+     "type": "double",
+     "explanation": "Position of marker 2",
+     "default": 0.166667
+    },
+    {
+     "name": "R trace",
+     "type": "bool",
+     "explanation": "Show R trace on scope",
+     "default": 1.0
+    },
+    {
+     "name": "G trace",
+     "type": "bool",
+     "explanation": "Show G trace on scope",
+     "default": 1.0
+    },
+    {
+     "name": "B trace",
+     "type": "bool",
+     "explanation": "Show B trace on scope",
+     "default": 1.0
+    },
+    {
+     "name": "Y trace",
+     "type": "bool",
+     "explanation": "Show Y' trace on scope",
+     "default": 0.0
+    },
+    {
+     "name": "Pr trace",
+     "type": "bool",
+     "explanation": "Show Pr trace on scope",
+     "default": 0.0
+    },
+    {
+     "name": "Pb trace",
+     "type": "bool",
+     "explanation": "Show Pb trace on scope",
+     "default": 0.0
+    },
+    {
+     "name": "Alpha trace",
+     "type": "bool",
+     "explanation": "Show Alpha trace on scope",
+     "default": 0.0
+    },
+    {
+     "name": "Display average",
+     "type": "bool",
+     "explanation": "e",
+     "default": 1.0
+    },
+    {
+     "name": "Display RMS",
+     "type": "bool",
+     "explanation": "",
+     "default": 1.0
+    },
+    {
+     "name": "Display minimum",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "Display maximum",
+     "type": "bool",
+     "explanation": "",
+     "default": 0.0
+    },
+    {
+     "name": "256 scale",
+     "type": "bool",
+     "explanation": "use 0-255 instead of 0.0-1.0",
+     "default": 0.0
+    },
+    {
+     "name": "Color",
+     "type": "double",
+     "explanation": "rec 601 or rec 709",
+     "default": 0.0
+    },
+    {
+     "name": "Crosshair color",
+     "type": "double",
+     "explanation": "Color of the profile marker",
+     "default": 0.0
+    }
+   ]
+  },
+  {
    "id": "medians",
    "name": "Medians",
    "author": "Marko Cebokli",
@@ -2287,6 +2972,33 @@
    ]
   },
   {
+   "id": "ntsc",
+   "name": "NTSC",
+   "author": "EMMIR, esmane",
+   "kind": "filter",
+   "explanation": "Simulates NTSC analog video.",
+   "params": [
+    {
+     "name": "Signal Noise",
+     "type": "double",
+     "explanation": "Amount of noise introduced into the NTSC signal.",
+     "default": 0.0
+    },
+    {
+     "name": "Progressive Scan",
+     "type": "bool",
+     "explanation": "Toggles progressive scan (Interlaced if off).",
+     "default": 0.0
+    },
+    {
+     "name": "Scanlines",
+     "type": "bool",
+     "explanation": "Draw borders between scanlines.",
+     "default": 0.0
+    }
+   ]
+  },
+  {
    "id": "onecol0r",
    "name": "onecol0r",
    "author": "Martin Bayer",
@@ -2376,6 +3088,72 @@
      "type": "double",
      "explanation": "Vertical size of one \"pixel\"",
      "default": 0.21875
+    }
+   ]
+  },
+  {
+   "id": "pixels0rt",
+   "name": "pixels0rt",
+   "author": "Asterleen",
+   "kind": "filter",
+   "explanation": "Pixel sorting effect",
+   "params": [
+    {
+     "name": "Threshold",
+     "type": "double",
+     "explanation": "Relative size of the line that will be sorted",
+     "default": 0.3
+    },
+    {
+     "name": "Direction",
+     "type": "double",
+     "explanation": "Sorting direction",
+     "default": 0.0
+    },
+    {
+     "name": "Reversed",
+     "type": "bool",
+     "explanation": "Should be pixels sorted in reversed order",
+     "default": 0.0
+    },
+    {
+     "name": "Transparency threshold",
+     "type": "double",
+     "explanation": "What transparency level should be bypassed by the filter. 0 processes all pixels, 1 ignores all transparent pixels",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "pixs0r",
+   "name": "pixs0r",
+   "author": "xsbee",
+   "kind": "filter",
+   "explanation": "Glitch image shifting rows to and fro",
+   "params": [
+    {
+     "name": "shift_intensity",
+     "type": "double",
+     "explanation": "Aggressiveness of row/column-shifting",
+     "default": 0.0
+    },
+    {
+     "name": "block_height",
+     "type": "double",
+     "explanation": "Height of each block whose shift is invariant (0 = random)",
+     "default": 0.0
+    },
+    {
+     "name": "block_height_min",
+     "type": "double",
+     "explanation": "Minimum height of block (if random mode)",
+     "default": 0.015625
+    },
+    {
+     "name": "block_height_max",
+     "type": "double",
+     "explanation": "Maximum height of block (if random mode)",
+     "default": 0.09375
     }
    ]
   },
@@ -2925,6 +3703,230 @@
    ]
   },
   {
+   "id": "sleid0r_push-down",
+   "name": "push-down",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Push from top to bottom",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Push position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_push-left",
+   "name": "push-left",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Push from right to left",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Push position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_push-right",
+   "name": "push-right",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Push from left to right",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Push position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_push-up",
+   "name": "push-up",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Push from bottom to top",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Push position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_slide-down",
+   "name": "slide-down",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Slide from top to bottom",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Slide position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_slide-left",
+   "name": "slide-left",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Slide from right to left",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Slide position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_slide-right",
+   "name": "slide-right",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Slide from left to right",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Slide position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_slide-up",
+   "name": "slide-up",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Slide from bottom to top",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Slide position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_wipe-barn-door-h",
+   "name": "wipe-barn-door-h",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Horizontal barn door wipe",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Edges position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_wipe-barn-door-v",
+   "name": "wipe-barn-door-v",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Vertical barn door wipe",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Edges position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_wipe-circle",
+   "name": "wipe-circle",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Circle wipe",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Circle size"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_wipe-down",
+   "name": "wipe-down",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Wipe from top to bottom",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Edge position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_wipe-left",
+   "name": "wipe-left",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Wipe from right to left",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Edge position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_wipe-rect",
+   "name": "wipe-rect",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Rectangular wipe",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Rectangle size"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_wipe-right",
+   "name": "wipe-right",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Wipe from left to right",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Edge position"
+    }
+   ]
+  },
+  {
+   "id": "sleid0r_wipe-up",
+   "name": "wipe-up",
+   "author": "Vadim Druzhin",
+   "kind": "mixer2",
+   "explanation": "Wipe from bottom to top",
+   "params": [
+    {
+     "name": "position",
+     "type": "double",
+     "explanation": "Edge position"
+    }
+   ]
+  },
+  {
    "id": "sobel",
    "name": "Sobel",
    "author": "Jean-Sebastien Senecal (Drone)",
@@ -3087,6 +4089,33 @@
      "type": "double",
      "explanation": "The size of the kernel, as a proportion to its coverage of the image",
      "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "squigglevision",
+   "name": "squigglevision",
+   "author": "Gabriel Lobo (https://olobo.xyz)",
+   "kind": "filter",
+   "explanation": "Hand-drawn wobble via time-quantized noise displacement",
+   "params": [
+    {
+     "name": "Strength",
+     "type": "double",
+     "explanation": "Displacement amount, normalized 0..1 mapped to 0..100 percent (8 percent is a moderate default).",
+     "default": 0.08
+    },
+    {
+     "name": "FPS",
+     "type": "double",
+     "explanation": "Squiggle updates per second, normalized 0..1 mapped to 0..30 fps (0 = frozen; 6 fps is a moderate default).",
+     "default": 0.2
+    },
+    {
+     "name": "Scale",
+     "type": "double",
+     "explanation": "Noise cell size, normalized 0..1 mapped to 4..128 px (about 23 px is a moderate default).",
+     "default": 0.15
     }
    ]
   },
@@ -3466,6 +4495,27 @@
    ]
   },
   {
+   "id": "tutorial",
+   "name": "Tutorial filter",
+   "author": "Your Name",
+   "kind": "filter",
+   "explanation": "This is an example filter, kind of a quick howto showing how to add a frei0r filter.",
+   "params": [
+    {
+     "name": "barSize",
+     "type": "double",
+     "explanation": "Size of the black bar",
+     "default": 0.1
+    },
+    {
+     "name": "pointerMethod",
+     "type": "bool",
+     "explanation": "Pointer Method (internal)",
+     "default": 1.0
+    }
+   ]
+  },
+  {
    "id": "twolay0r",
    "name": "Twolay0r",
    "author": "Martin Bayer",
@@ -3555,6 +4605,56 @@
      "type": "double",
      "explanation": "Softness",
      "default": 0.6
+    }
+   ]
+  },
+  {
+   "id": "water",
+   "name": "Water",
+   "author": "Jaromil",
+   "kind": "filter",
+   "explanation": "water drops on a video surface",
+   "params": [
+    {
+     "name": "physics",
+     "type": "double",
+     "explanation": "water density: from 0.0 to 1.0",
+     "default": 1.0
+    },
+    {
+     "name": "swirl",
+     "type": "double",
+     "explanation": "swirling whirpool in the center",
+     "default": 1.0
+    },
+    {
+     "name": "rain",
+     "type": "double",
+     "explanation": "rain drops all over",
+     "default": 0.0
+    },
+    {
+     "name": "surfer",
+     "type": "double",
+     "explanation": "surf the surface with a wandering finger",
+     "default": 0.0
+    },
+    {
+     "name": "smooth",
+     "type": "double",
+     "explanation": "smooth up all perturbations on the surface",
+     "default": 0.0
+    },
+    {
+     "name": "distort",
+     "type": "double",
+     "explanation": "distort all surface like dropping a bucket to the floor",
+     "default": 0.0
+    },
+    {
+     "name": "position",
+     "type": "position",
+     "explanation": "swirl position coordinate, Relative center coordinate"
     }
    ]
   },

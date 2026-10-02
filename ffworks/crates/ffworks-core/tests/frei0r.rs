@@ -94,16 +94,18 @@ fn every_installed_frei0r_effect_runs_with_its_default_values_including_colour_a
     }
     let mut bad = vec![];
     let mut colour_or_position = 0;
+    let mut ran = 0;
     for d in effects::registry().iter().filter(|d| d.id.starts_with(frei0r::PREFIX)) {
         if d.params.iter().any(|p| p.name.contains("(red)") || p.name.ends_with("(x)")) {
             colour_or_position += 1;
         }
+        ran += 1;
         let text = frei0r::filter_text(d.id, &BTreeMap::new()).unwrap();
         let o = Proc::new(&t.ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x240:r=25:d=0.4", "-vf", &text, "-f", "null", "-"]).output().unwrap();
         if !o.status.success() {
             bad.push(format!("{}: {}", d.id, String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or("")));
         }
     }
-    eprintln!("colour/position effects exercised: {colour_or_position}");
+    eprintln!("frei0r effects exercised: {ran}, of which colour/position: {colour_or_position}");
     assert!(bad.is_empty(), "{bad:#?}");
 }

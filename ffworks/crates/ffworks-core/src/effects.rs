@@ -45,6 +45,7 @@ const fn pa(id: &'static str, name: &'static str, min: f64, max: f64, default: f
 pub fn registry() -> Vec<EffectDef> {
     let mut v = builtin_registry();
     v.extend(crate::frei0r::offered());
+    v.extend(crate::ladspa::offered());
     v
 }
 
@@ -115,7 +116,7 @@ fn builtin_registry() -> Vec<EffectDef> {
 
 pub fn find(id: &str) -> Result<EffectDef> {
     // frei0r effects always resolve (so saved projects load anywhere); `registry()` lists only the installed ones
-    if let Some(d) = crate::frei0r::find(id) {
+    if let Some(d) = crate::frei0r::find(id).or_else(|| crate::ladspa::find(id)) {
         return Ok(d);
     }
     registry().into_iter().find(|e| e.id == id).ok_or_else(|| Error::validation(format!("unknown effect '{id}'")))
@@ -197,6 +198,7 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
     };
     let eval = |k: &str| if animated(k) { ":eval=frame" } else { "" };
     Ok(Some(match inst.effect.as_str() {
+        id if id.starts_with(crate::ladspa::PREFIX) => crate::ladspa::filter_text(id, &inst.params).ok_or_else(|| Error::validation(format!("bad LADSPA effect '{id}'")))?,
         id if id.starts_with(crate::frei0r::PREFIX) => crate::frei0r::filter_text(id, &inst.params).ok_or_else(|| Error::validation(format!("bad frei0r effect '{id}'")))?,
         GRAPH_EFFECT => {
             let g = inst.graph.as_ref().ok_or_else(|| Error::validation("graph effect has no graph"))?;

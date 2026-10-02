@@ -27,7 +27,7 @@ export function EnginesDialog() {
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
-  const [f0, setF0] = useState<{ ffmpegHasFilter: boolean; dirs: string[]; installed: number; offered: string[] } | null>(null);
+  const [f0, setF0] = useState<Awaited<ReturnType<typeof api.frei0rStatus>> | null>(null);
   const [f0dirs, setF0dirs] = useState("");
   const refresh = useCallback(async () => {
     try { const r = await api.listEngines(); setList(r.engines); setActive(r.active); } catch (e) { toast("error", String(e)); }
@@ -99,6 +99,10 @@ export function EnginesDialog() {
             <button disabled={busy} onClick={() => void guard(async () => { await api.setFrei0rDirs(f0dirs.split("\n")); await refreshF0(); })}>Save and rescan</button>
           </div>
         </div>
+        <h3>LADSPA audio plugins</h3>
+        <p className="muted" data-ladspa-status>
+          {f0 ? (f0.ladspa.ffmpegHasFilter ? `The FFmpeg in use can load LADSPA plugins. ${f0.ladspa.installed} plugin librar${f0.ladspa.installed === 1 ? "y" : "ies"} found, ${f0.ladspa.offered} effect(s) usable (listed under “LADSPA” in the audio effects). Plugins are found in LADSPA_PATH and the usual system folders.` : "The FFmpeg in use has no ladspa filter, so LADSPA plugins are not offered.") : "Checking…"}
+        </p>
         <div className="row end"><button onClick={() => setOpen(false)}>Close</button></div>
       </div>
     </div>

@@ -19,6 +19,7 @@ pub mod filterdb;
 pub mod filtergraph;
 pub mod fonts;
 pub mod frei0r;
+pub mod ladspa;
 pub mod generators;
 pub mod hwenc;
 pub mod imgseq;

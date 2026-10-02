@@ -69,7 +69,7 @@ fn removing_the_silence_shortens_the_timeline_keeps_av_linked_and_undoes_in_one_
     assert!((end - 4.0).abs() < 0.05, "audio ends at 4 s too: {end}");
     // second piece starts exactly where the first ends, and plays the source from 4 s
     let mut vs: Vec<_> = seq.tracks[0].clips.iter().collect();
-    vs.sort_by(|a, b| a.start.cmp(&b.start));
+    vs.sort_by_key(|a| a.start);
     assert_eq!(vs[0].end(), vs[1].start);
     assert!((vs[1].source_in.as_f64() - 4.0).abs() < 0.05);
     eng.undo().unwrap();

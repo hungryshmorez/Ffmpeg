@@ -33,3 +33,4 @@ Complete dependency licenses can be listed with `cargo license` and `npx license
 ## Bundled in the Windows installer (added by CI)
 * **FFmpeg "full" build** (gyan.dev / GyanD/codexffmpeg, 7.1.1): GPL-3.0 build; licence and README ship next to ffmpeg.exe. Source: https://ffmpeg.org and https://github.com/GyanD/codexffmpeg.
 * **frei0r plugins** v3.6.0 (`frei0r-3.6.0_win64.zip`, https://github.com/dyne/frei0r): GPL-2.0-or-later. Shipped as separate DLL files in `frei0r/` and loaded by FFmpeg; FFWORKS does not link them. Source offer: the repository above.
+* **LADSPA plugin control tables** (`crates/ffworks-core/assets/ladspa/plugins.json`): parameter names, ranges and defaults read from swh-plugins (GPL-2+), TAP-plugins (GPL-2+) and CMT (LGPL-2.1+). No plugin code or binaries are shipped; FFmpeg loads plugins the user has installed.

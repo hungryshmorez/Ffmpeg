@@ -66,7 +66,8 @@ fn random_value(rng: &mut Rng, d: &effects::ParamDef) -> f64 {
         d.default + reach.min(d.max - d.default)
     };
     let snapped = if d.step > 0.0 { (raw / d.step).round() * d.step } else { raw };
-    (snapped.clamp(d.min, d.max) * 1e6).round() / 1e6
+    // round for tidy numbers, then clamp again: a bound like 0.0099999997 would otherwise round past itself
+    ((snapped * 1e6).round() / 1e6).clamp(d.min, d.max)
 }
 
 /// `AddEffect` commands for `count` random effects suited to the clip's kind. `pool` restricts the choice to those effect

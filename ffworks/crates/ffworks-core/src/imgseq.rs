@@ -23,7 +23,7 @@ fn pattern_parts(path: &str) -> Option<(&str, usize, &str)> {
     let rest = &path[at + 2..];
     let d = rest.find('d')?;
     let digits: usize = rest[..d].parse().ok()?;
-    (digits >= 1 && digits <= 9).then(|| (&path[..at], digits, &rest[d + 1..]))
+    (1..=9).contains(&digits).then(|| (&path[..at], digits, &rest[d + 1..]))
 }
 
 fn frame_path(pattern: &str, n: u64) -> Option<PathBuf> {

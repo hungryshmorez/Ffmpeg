@@ -75,6 +75,10 @@
     const f0 = await inv("frei0r_status");
     step("the dialog reports frei0r support and found plugins", !!st && f0.ffmpegHasFilter && f0.installed > 20 && /can load frei0r/.test(st.textContent), st && st.textContent);
     step("glitch0r is among the usable plugins", f0.offered.includes("Glitch0r"), f0.offered.slice(0, 8).join());
+    const la = $("[data-ladspa-status]");
+    step("the dialog reports LADSPA support and usable audio plugins", !!la && f0.ladspa.ffmpegHasFilter && f0.ladspa.offered > 50 && /can load LADSPA/.test(la.textContent), la && la.textContent);
+    const effs = await inv("list_effects");
+    step("LADSPA effects are offered as audio effects", effs.filter((d) => d.category === "LADSPA").length === f0.ladspa.offered && effs.filter((d) => d.category === "LADSPA").every((d) => d.kind === "audio"), String(effs.filter((d) => d.category === "LADSPA").length));
     const ta = $("#f0dirs"); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "__BUILDS__/f0"); ta.dispatchEvent(new Event("input", { bubbles: true })); await sleep(800);
     btn(/^Save and rescan$/, $(".engines-dialog")).click();
     let saved = await inv("get_settings");

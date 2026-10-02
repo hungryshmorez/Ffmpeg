@@ -207,7 +207,8 @@ fn every_audio_effect_renders_in_real_ffmpeg() {
     let dir = tempfile::tempdir().unwrap();
     let src = tone(dir.path(), "t.mp4", 440, 0.5);
     let (mut eng, a, _) = project(&src);
-    for def in ffworks_core::effects::registry().into_iter().filter(|d| d.kind == "audio") {
+    // LADSPA plugins have their own test (tests/ladspa.rs); chaining all of them is not meant to stay audible
+    for def in ffworks_core::effects::registry().into_iter().filter(|d| d.kind == "audio" && d.category != "LADSPA") {
         add_fx(&mut eng, &a, def.id, &[]);
     }
     // eq is a no-op at its defaults; give it something to do too

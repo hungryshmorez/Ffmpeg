@@ -12,6 +12,8 @@ import { GraphEditor } from "./components/GraphEditor";
 import { FavouritesDialog } from "./components/FavouritesDialog";
 import { EnginesDialog } from "./components/EnginesDialog";
 import { DemoDialog } from "./components/DemoDialog";
+import { ShortcutsDialog } from "./components/ShortcutsDialog";
+import { actionFor, chordOf, hasCtrl } from "./state/keymap";
 import { CommandPalette } from "./components/CommandPalette";
 import { SnapshotsDialog } from "./components/SnapshotsDialog";
 import { VariationsDialog } from "./components/VariationsDialog";
@@ -92,40 +94,52 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      const chord = chordOf(e);
+      if (!chord) return;
+      const ui = useUi.getState();
+      // while the shortcut editor is waiting for a key, that key is being assigned, not used
+      if (ui.shortcutsOpen) return;
+      const action = actionFor(ui.keymap, chord);
+      if (!action) return;
+      if (action === "palette") {
         e.preventDefault();
-        const ui = useUi.getState();
         if (!document.querySelector("[aria-modal='true']") || ui.paletteOpen) ui.setPaletteOpen(!ui.paletteOpen);
         return;
       }
       // timeline shortcuts must not act on the project behind an open dialog (Delete in the graph editor would delete the clip)
       if (document.querySelector("[aria-modal='true']")) return;
       const el = e.target as HTMLElement;
-      if (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") {
-        if (!(e.ctrlKey || e.metaKey)) return;
-      }
+      if ((el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") && !hasCtrl(chord)) return;
       const { view: v, run } = useProject.getState();
       if (!v) return;
       const fps = fpsOf(v.project.settings.fps);
       const ph = usePlayhead.getState();
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); if (v.undoLabel) void run(api.undo); }
-      else if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) { e.preventDefault(); if (v.redoLabel) void run(api.redo); }
-      else if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); void saveProject(e.shiftKey); }
-      else if (mod && e.key.toLowerCase() === "o") { e.preventDefault(); void openProject(); }
-      else if (e.key === " ") { e.preventDefault(); ph.setPlaying(!ph.playing); }
-      else if (e.key.toLowerCase() === "s" && !mod) { e.preventDefault(); splitAtPlayhead(); }
-      else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteSelected(e.shiftKey); }
-      else if (e.key === "ArrowLeft") { e.preventDefault(); ph.setT(Math.max(0, Math.round(ph.t * fps) / fps - (e.shiftKey ? 10 : 1) / fps)); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); ph.setT(Math.round(ph.t * fps) / fps + (e.shiftKey ? 10 : 1) / fps); }
-      else if (e.key === "Home") ph.setT(0);
-      else if (e.key.toLowerCase() === "m" && !mod) { e.preventDefault(); void addMarkerAtPlayhead(v.project.sequences.find((q) => q.id === v.project.active_sequence)!); }
-      else if (e.key === "[" || e.key === "]") {
-        const n = neighbourMarkers(v.project.sequences.find((q) => q.id === v.project.active_sequence)!, ph.t);
-        const to = e.key === "[" ? n.prev : n.next;
-        if (to !== null) ph.setT(to);
-      }
-      else if (e.key === "Escape") useUi.getState().select(null);
+      const seq = () => v.project.sequences.find((q) => q.id === v.project.active_sequence)!;
+      const step = (n: number) => ph.setT(Math.max(0, Math.round(ph.t * fps) / fps + n / fps));
+      const handlers: Record<string, () => void> = {
+        undo: () => { if (v.undoLabel) void run(api.undo); },
+        redo: () => { if (v.redoLabel) void run(api.redo); },
+        save: () => void saveProject(false),
+        saveas: () => void saveProject(true),
+        open: () => void openProject(),
+        play: () => ph.setPlaying(!ph.playing),
+        split: () => splitAtPlayhead(),
+        delete: () => deleteSelected(false),
+        ripple: () => deleteSelected(true),
+        frameBack: () => step(-1),
+        frameFwd: () => step(1),
+        back10: () => step(-10),
+        fwd10: () => step(10),
+        start: () => ph.setT(0),
+        marker: () => void addMarkerAtPlayhead(seq()),
+        prevMarker: () => { const to = neighbourMarkers(seq(), ph.t).prev; if (to !== null) ph.setT(to); },
+        nextMarker: () => { const to = neighbourMarkers(seq(), ph.t).next; if (to !== null) ph.setT(to); },
+        deselect: () => ui.select(null),
+      };
+      const h = handlers[action];
+      if (!h) return;
+      e.preventDefault();
+      h();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -148,6 +162,7 @@ export default function App() {
       <DemoDialog />
       <CommandPalette />
       <SnapshotsDialog />
+      <ShortcutsDialog />
       <VariationsDialog />
       <QueuePanel />
       <RecoveryDialog />

@@ -111,3 +111,11 @@ jobs:
         with:
           name: ffworks-windows-installers
           path: ffworks/target/release/bundle/**/*
+      - name: Render every bundled frei0r plugin with the bundled FFmpeg (after the upload, so a failure here still leaves the installer)
+        shell: pwsh
+        run: |
+          if (-not (Get-ChildItem src-tauri/frei0r-bin -Filter *.dll -ErrorAction SilentlyContinue)) { Write-Warning "no bundled plugins"; exit 0 }
+          $env:FFWORKS_FFMPEG = (Resolve-Path src-tauri/ffmpeg-bin/ffmpeg.exe).Path
+          $env:FFWORKS_FFPROBE = (Resolve-Path src-tauri/ffmpeg-bin/ffprobe.exe).Path
+          $env:FREI0R_PATH = (Resolve-Path src-tauri/frei0r-bin).Path
+          cargo test -p ffworks-core --test frei0r -- --nocapture

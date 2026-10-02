@@ -420,10 +420,13 @@ fn list_transitions(state: State<AppState>) -> Vec<(String, String)> {
     available_transitions(&state)
 }
 
-/// Effects to offer: the built-in ones plus installed frei0r plugins, the latter only when this FFmpeg has the frei0r filter.
+/// Effects to offer: the built-in ones plus installed frei0r / LADSPA plugins, each only when this FFmpeg has the filter
+/// that loads them.
 fn usable_effects(state: &AppState) -> Vec<ffworks_core::effects::EffectDef> {
-    let has_frei0r = caps(state).is_some_and(|c| c.has_filter("frei0r"));
-    ffworks_core::effects::registry().into_iter().filter(|d| has_frei0r || d.category != "Frei0r").collect()
+    let c = caps(state);
+    let has_frei0r = c.as_ref().is_some_and(|c| c.has_filter("frei0r"));
+    let has_ladspa = c.as_ref().is_some_and(|c| c.has_filter("ladspa"));
+    ffworks_core::effects::registry().into_iter().filter(|d| (has_frei0r || d.category != "Frei0r") && (has_ladspa || d.category != "LADSPA")).collect()
 }
 
 #[tauri::command]
@@ -440,6 +443,11 @@ fn frei0r_status(state: State<AppState>) -> serde_json::Value {
         "dirs": ffworks_core::settings::Settings::load(&state.settings_file).frei0r_dirs,
         "installed": ffworks_core::frei0r::installed().len(),
         "offered": offered,
+        "ladspa": {
+            "ffmpegHasFilter": caps(&state).is_some_and(|c| c.has_filter("ladspa")),
+            "installed": ffworks_core::ladspa::installed().len(),
+            "offered": ffworks_core::ladspa::offered().len(),
+        },
     })
 }
 
@@ -733,6 +741,7 @@ fn random_effects(state: State<AppState>, clip: String, count: usize, pool: Stri
 
 /// A tiled picture of `count` random looks for `clip` at timeline time `at`; `seed` makes it reproducible.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn contact_sheet(app: AppHandle, state: State<'_, AppState>, clip: String, count: usize, stack: usize, pool: String, seed: Option<u64>, at: f64) -> Result<serde_json::Value, String> {
     let favs = ffworks_core::settings::Settings::load(&state.settings_file).favourites;
     let group = favs.pool(&pool).map_err(s)?;
@@ -943,6 +952,7 @@ pub fn run() {
             let loaded = ffworks_core::settings::Settings::load(&settings_file);
             let bundled_frei0r = app.path().resource_dir().ok().map(|d| d.join("frei0r")).filter(|d| d.is_dir());
             ffworks_core::frei0r::configure(&with_bundled(&loaded.frei0r_dirs, bundled_frei0r.as_deref()));
+            ffworks_core::ladspa::configure(&[]);
             let tools = loaded.tools_with_bundled(bundled_dir.as_deref());
             let queue = JobQueue::new(tools.clone(), base.join("tmp"), 1);
             let emitter = app.handle().clone();

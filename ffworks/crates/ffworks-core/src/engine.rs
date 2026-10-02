@@ -123,7 +123,7 @@ impl Engine {
                     return Err(Error::validation("no subtitle cues to import"));
                 }
                 self.run(&Command::AddTrack { kind: TrackKind::Video, name: Some(track.clone()) }, fwd, inv)?;
-                let tid = self.project.active()?.tracks.iter().filter(|t| t.kind == TrackKind::Video).last().expect("just added").id.clone();
+                let tid = self.project.active()?.tracks.iter().rfind(|t| t.kind == TrackKind::Video).expect("just added").id.clone();
                 for (a, b, text) in cues {
                     let start = *a + *offset;
                     if start < Rational::ZERO {
@@ -159,7 +159,7 @@ impl Engine {
             .map(|(a, b)| (crate::time::snap_to_frame(*a, fps).max(cs), crate::time::snap_to_frame(*b, fps).min(ce)))
             .filter(|(a, b)| a < b)
             .collect();
-        rs.sort_by(|x, y| x.0.cmp(&y.0));
+        rs.sort_by_key(|x| x.0);
         let mut merged: Vec<(Rational, Rational)> = vec![];
         for r in rs {
             match merged.last_mut() {
@@ -342,7 +342,7 @@ pub fn prepare_sequence_asset(tools: &Tools, frame: &Path, fps: crate::time::Fps
     info.still = false;
     info.container = "image2".into();
     info.video[0].fps = Some(fps);
-    info.duration = Rational::new(seq.count as i64 * fps.den() as i64, fps.num() as i64);
+    info.duration = Rational::new(seq.count as i64 * fps.den(), fps.num());
     let stem = Path::new(&seq.pattern).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     Ok(MediaAsset { id: new_id("med"), name: format!("{stem} ({} frames)", seq.count), path: seq.pattern, fingerprint: None, generator: None, info })
 }

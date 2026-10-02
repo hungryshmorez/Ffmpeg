@@ -65,9 +65,7 @@ fn is(p: (i32, i32, i32), want: (i32, i32, i32)) -> bool {
     (p.0 - want.0).abs() < 70 && (p.1 - want.1).abs() < 70 && (p.2 - want.2).abs() < 70
 }
 const RED: (i32, i32, i32) = (255, 0, 0);
-const GREEN: (i32, i32, i32) = (0, 128, 0); // FFmpeg's named colour `green`
 const BLUE: (i32, i32, i32) = (0, 0, 255);
-const YELLOW: (i32, i32, i32) = (255, 255, 0);
 const BLACK: (i32, i32, i32) = (0, 0, 0);
 
 fn export(eng: &Engine, out: &Path) {
@@ -89,12 +87,6 @@ fn one_clip(src: &Path) -> (Engine, String, String) {
     (eng, id, v)
 }
 
-fn set(eng: &mut Engine, clip: &str, param: &str, value: f64) {
-    eng.dispatch(Command::SetClipParam { clip: clip.into(), param: param.into(), value }).unwrap_or_else(|e| panic!("{param}: {e}"));
-}
-fn key(eng: &mut Engine, clip: &str, param: &str, t: Rational, value: f64) {
-    eng.dispatch(Command::SetKeyframe { clip: clip.into(), param: param.into(), time: t, value, interp: None }).unwrap_or_else(|e| panic!("{param}: {e}"));
-}
 
 fn mean_volume_db(media: &Path, from: f64, dur: f64) -> f64 {
     let out = Proc::new(tools().ffmpeg).args(["-nostdin", "-ss", &from.to_string(), "-t", &dur.to_string(), "-i"]).arg(media).args(["-vn", "-af", "volumedetect", "-f", "null", "-"]).output().unwrap();
@@ -166,7 +158,7 @@ fn chroma_key_makes_green_transparent_so_the_layer_below_shows() {
     let v1 = eng.project.active().unwrap().tracks[0].id.clone();
     eng.dispatch(Command::PlaceClip { media: mu, track: v1, start: secs(0), source_in: None, duration: None, with_audio: false, audio_track: None }).unwrap();
     eng.dispatch(Command::AddTrack { kind: TrackKind::Video, name: None }).unwrap();
-    let v2 = eng.project.active().unwrap().tracks.iter().filter(|t| t.kind == TrackKind::Video).last().unwrap().id.clone();
+    let v2 = eng.project.active().unwrap().tracks.iter().rfind(|t| t.kind == TrackKind::Video).unwrap().id.clone();
     eng.dispatch(Command::PlaceClip { media: mk, track: v2.clone(), start: secs(0), source_in: None, duration: None, with_audio: false, audio_track: None }).unwrap();
     let top = eng.project.active().unwrap().tracks.iter().find(|t| t.id == v2).unwrap().clips[0].id.clone();
     add(&mut eng, &top, "chroma_key", &[("similarity", 0.3)]);
