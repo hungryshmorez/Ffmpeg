@@ -43,7 +43,12 @@ Toolbar "Filters" opens a searchable list of every filter in the installed FFmpe
 * Tests: 4 real-FFmpeg tests (probe, broken entries, scan, settings), UI unit test, `engines.sh` 14 GUI checks (scan, add, refuse bad/duplicate, switch, export with another build, remove active). Windows CI skips running the scanned copies (package-manager shims).
 * Not done: FFglitch (separate `ffedit`/`ffgac` tools, not a drop-in FFmpeg) gets its own slot in the glitch phase; per-feature routing (e.g. "GL transitions always use the build that supports them") is manual for now; previews and proxies always use the in-use build.
 
-## Requested additions (still to do: demo mode)
+## Demo mode (done)
+* Toolbar "Demo mode": cuts one of the project's real video clips into N short pieces (spare footage guaranteed so every cut can take a transition), adds a random transition between pieces and/or a random effect stack on each, renders it through the normal preview pipeline at draft/quarter/half size, plays it and keeps one finished look rendered ahead so the next replaces it; repeats until Stop. Two separate boards (transitions, effects) that can run together, each drawing from everything / favourites / a named group; GL transitions off by default (slow). The list shows what each piece got, with ★ buttons. The user's project is never changed (core test + GUI check).
+* Tests: 3 real-FFmpeg tests (build, seed repeatability, pools, refusals, real preview render incl. GL transitions), demo helper unit tests, `demo.sh` 16 GUI checks (incl. >=4 distinct previews rendered and each 4.5 s long).
+* Honest limits: the sandbox webview's video decoding is unverified, so the test fires the player's "ended" event itself to prove the switch-to-next logic; real playback should be eyeballed on Windows. "Hold this one" is only checked as a toggle, not that the look stops advancing. A demo needs a source clip at least one piece plus one transition long. No audio in the demo. "Keep this look" (apply a demo's picks to the real project) is not built; use the star buttons and the random buttons instead.
+
+## Requested additions (all done except the items under Left in each phase)
 * **GL Transitions library** (gl-transitions.com, MIT). Stock Windows FFmpeg has no `gl-transition` filter, so plan is to port shaders to `xfade` custom expressions (approach of the MIT `xfade-easing` project) — only shaders expressible that way; the rest are listed as unsupported, not faked.
 * **Transition demo mode**: button that cycles random transitions through the timeline continuously (preview/playback only, nothing written to the project unless "Keep").
 * **Effects demo mode**: same for effects; two separate boards (transitions / effects) that can run combined.
