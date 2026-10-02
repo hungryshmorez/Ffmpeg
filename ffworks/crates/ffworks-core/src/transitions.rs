@@ -136,6 +136,9 @@ pub fn validate_track(p: &Project, track: &Track) -> Result<()> {
             return Err(Error::validation("clips with a transition must have opacity 100%"));
         }
         for c in [a, b] {
+            if p.media(&c.media)?.is_generated() {
+                return Err(Error::validation(format!("'{}' is a generated clip (title/solid colour); transitions are not supported on those yet — fade its opacity instead", c.name)));
+            }
             if !c.is_plain_timing() {
                 return Err(Error::validation(format!("'{}' has speed, reverse or freeze applied; transitions need normal playback (remove the transition or reset the clip's timing)", c.name)));
             }

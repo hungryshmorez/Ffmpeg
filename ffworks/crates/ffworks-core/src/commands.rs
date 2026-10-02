@@ -8,6 +8,8 @@ use crate::project::{new_id, Clip, Id, MediaAsset, Project, ProjectSettings, Tra
 use crate::time::{snap_to_frame, Rational};
 use crate::transitions::{self, Transition};
 use crate::clipprops;
+use crate::generators;
+use crate::titles::Title;
 use crate::effects::{self, EffectInstance};
 use crate::keyframes::{self, Interp, Keyframe};
 use serde::{Deserialize, Serialize};
@@ -76,6 +78,14 @@ pub enum Command {
     AddTransition { clip_a: Id, clip_b: Id, kind: String, duration: Rational },
     RemoveTransition { transition: Id },
     SetTransition { transition: Id, kind: Option<String>, duration: Option<Rational> },
+    /// A title (text drawn on a transparent generated canvas) on a video track. Position/scale/opacity/blend/keyframes are the clip's own.
+    AddTitle { track: Id, start: Rational, duration: Rational, text: String },
+    /// Replace a title clip's text and styling.
+    SetTitle { clip: Id, title: Title },
+    /// A solid-colour clip (`#RRGGBB` or `#RRGGBBAA`) on a video track.
+    AddSolid { track: Id, start: Rational, duration: Rational, color: String },
+    /// Change the colour of a solid-colour clip.
+    SetSolidColor { clip: Id, color: String },
     /// Several commands applied as one undo step (spec §112).
     Batch { label: String, commands: Vec<Command> },
 }
@@ -111,6 +121,10 @@ impl Command {
             Command::SetClipParam { param, .. } => format!("Set {param}"),
             Command::SetClipBlend { blend, .. } => format!("Blend mode {blend}"),
             Command::SetClipFades { .. } => "Fades".into(),
+            Command::AddTitle { .. } => "Add title".into(),
+            Command::SetTitle { .. } => "Edit title".into(),
+            Command::AddSolid { .. } => "Add solid colour".into(),
+            Command::SetSolidColor { .. } => "Solid colour".into(),
             Command::SetKeyframe { param, .. } => format!("Keyframe {param}"),
             Command::RemoveKeyframe { param, .. } => format!("Remove keyframe {param}"),
             Command::ClearKeyframes { param, .. } => format!("Clear keyframes {param}"),
@@ -220,7 +234,8 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 return Err(Error::validation("clips cannot start before 00:00:00"));
             }
             let s_in = source_in.unwrap_or(Rational::ZERO);
-            let dur = duration.unwrap_or(m.info.duration - s_in);
+            // a still image has no length of its own: default to 5 s
+            let dur = duration.unwrap_or(if m.info.still { Rational::from_int(5) } else { m.info.duration - s_in });
             if s_in < Rational::ZERO || dur <= Rational::ZERO || s_in + dur > m.info.duration + Rational::new(1, 1000) {
                 return Err(Error::validation(format!("source range {s_in}+{dur}s is outside '{}' ({}s)", m.name, m.info.duration.as_f64())));
             }
@@ -546,6 +561,78 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(vec![Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 }])
         }
+        Command::AddTitle { track, start, duration, text } => {
+            let t = seq.track(track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
+            ensure_unlocked(t)?;
+            if t.kind != TrackKind::Video {
+                return Err(Error::validation("titles go on a video track"));
+            }
+            let (start, dur) = (snap_to_frame(*start, fps), snap_to_frame(*duration, fps));
+            if start < Rational::ZERO || dur < Rational::from_int(1).div(fps) {
+                return Err(Error::validation("a title needs a start >= 0 and at least one frame of duration"));
+            }
+            let title = Title::new(text);
+            title.validate()?;
+            check_free(t, start, start + dur, &[])?;
+            let asset = generators::solid_asset(generators::TRANSPARENT, &p.settings)?;
+            let mut out = vec![];
+            if !p.media.iter().any(|m| m.id == asset.id) {
+                out.push(Patch::InsertMedia { index: p.media.len(), asset: asset.clone() });
+            }
+            let mut clip = Clip::new(new_id("clp"), asset.id, title_name(text), TrackKind::Video, start, Rational::ZERO, dur, None);
+            clip.title = Some(title);
+            out.push(Patch::PutClip { seq: sid, track: t.id.clone(), clip });
+            Ok(out)
+        }
+        Command::SetTitle { clip, title } => {
+            let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+            ensure_unlocked(t)?;
+            if c.title.is_none() {
+                return Err(Error::validation("this clip is not a title"));
+            }
+            title.validate()?;
+            let mut c2 = c.clone();
+            c2.name = title_name(&title.text);
+            c2.title = Some(title.clone());
+            Ok(vec![Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 }])
+        }
+        Command::AddSolid { track, start, duration, color } => {
+            let t = seq.track(track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
+            ensure_unlocked(t)?;
+            if t.kind != TrackKind::Video {
+                return Err(Error::validation("solid colours go on a video track"));
+            }
+            let (start, dur) = (snap_to_frame(*start, fps), snap_to_frame(*duration, fps));
+            if start < Rational::ZERO || dur < Rational::from_int(1).div(fps) {
+                return Err(Error::validation("a solid needs a start >= 0 and at least one frame of duration"));
+            }
+            check_free(t, start, start + dur, &[])?;
+            let asset = generators::solid_asset(color, &p.settings)?;
+            let mut out = vec![];
+            if !p.media.iter().any(|m| m.id == asset.id) {
+                out.push(Patch::InsertMedia { index: p.media.len(), asset: asset.clone() });
+            }
+            out.push(Patch::PutClip { seq: sid, track: t.id.clone(), clip: Clip::new(new_id("clp"), asset.id.clone(), asset.name.clone(), TrackKind::Video, start, Rational::ZERO, dur, None) });
+            Ok(out)
+        }
+        Command::SetSolidColor { clip, color } => {
+            let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+            ensure_unlocked(t)?;
+            let current = p.media(&c.media)?;
+            if c.title.is_some() || !matches!(current.generator, Some(generators::Generator::Solid { .. })) {
+                return Err(Error::validation("this clip is not a solid colour"));
+            }
+            let asset = generators::solid_asset(color, &p.settings)?;
+            let mut out = vec![];
+            if !p.media.iter().any(|m| m.id == asset.id) {
+                out.push(Patch::InsertMedia { index: p.media.len(), asset: asset.clone() });
+            }
+            let mut c2 = c.clone();
+            c2.media = asset.id.clone();
+            c2.name = asset.name.clone();
+            out.push(Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 });
+            Ok(out)
+        }
         Command::SetClipSpeed { clip, speed } => {
             if *speed < Rational::new(1, 10) || *speed > Rational::from_int(10) {
                 return Err(Error::validation("speed must be between 10% and 1000%"));
@@ -686,6 +773,13 @@ fn set_param_value(c: &mut Clip, param: &str, value: f64) -> Result<()> {
         None => c.set_static_param(param, value),
     }
     Ok(())
+}
+
+/// Clip name for a title: its first line, shortened.
+fn title_name(text: &str) -> String {
+    let line = text.lines().next().unwrap_or("").trim();
+    let short: String = line.chars().take(40).collect();
+    if short.is_empty() { "Title".into() } else { short }
 }
 
 fn ensure_unlocked(t: &Track) -> Result<()> {

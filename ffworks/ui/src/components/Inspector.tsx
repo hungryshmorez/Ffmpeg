@@ -4,6 +4,7 @@ import { useAnalysis } from "../state/analysis";
 import { useProject, useUi } from "../state/stores";
 import { AudioPanel } from "./AudioPanel";
 import { ClipPropsPanel } from "./ClipPropsPanel";
+import { SolidPanel, TitlePanel } from "./GeneratedPanel";
 import { EffectsPanel } from "./EffectsPanel";
 import { TransitionPanel } from "./TransitionPanel";
 import { AnalysisPanel } from "./AnalysisPanel";
@@ -37,6 +38,7 @@ export function Inspector() {
   const audioId = clip.kind === "audio" ? clip.id : linkedIds(seq, clip.id).find((id) => findClip(seq, id)?.clip.kind === "audio");
   const audio = audioId ? findClip(seq, audioId)?.clip : undefined;
 
+  const mediaOf = (c?: typeof clip) => (c ? view.project.media.find((m) => m.id === c.media) : undefined);
   const videoClip = clip.kind === "video" ? clip : linkedIds(seq, clip.id).map((id) => findClip(seq, id)?.clip).find((c) => c?.kind === "video");
   return (
     <div className="panel inspector" aria-label="Inspector">
@@ -63,7 +65,9 @@ export function Inspector() {
           })()}
         </div>
       )}
-      <AnalysisPanel video={videoClip} audio={audio} />
+      {videoClip?.title && <TitlePanel clip={videoClip} />}
+      {videoClip && !videoClip.title && mediaOf(videoClip)?.generator && <SolidPanel clip={videoClip} media={mediaOf(videoClip)!} />}
+      <AnalysisPanel video={mediaOf(videoClip)?.info.still ? undefined : videoClip} audio={audio} />
       {videoClip && <TransitionPanel clip={videoClip} track={findClip(seq, videoClip.id)!.track} seq={seq} />}
       {videoClip && <ClipPropsPanel clip={videoClip} />}
       {videoClip && <EffectsPanel clip={videoClip} />}

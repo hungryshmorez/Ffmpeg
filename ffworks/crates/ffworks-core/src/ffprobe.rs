@@ -6,6 +6,9 @@ use crate::time::{parse_fps, Fps, Rational};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// Length given to still images and generated media: they last as long as they are placed for, up to this many seconds (24 h).
+pub const STILL_SECONDS: i64 = 86_400;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct ColorInfo {
     pub pix_fmt: Option<String>,
@@ -46,6 +49,10 @@ pub struct MediaInfo {
     pub video: Vec<VideoStream>,
     pub audio: Vec<AudioStream>,
     pub tags: Vec<(String, String)>,
+    /// A single picture (PNG, JPEG, one-frame GIF…) or generated media: it has no length of its own, so `duration` is
+    /// [`STILL_SECONDS`] and the renderer loops the picture.
+    #[serde(default)]
+    pub still: bool,
 }
 
 impl MediaInfo {
@@ -92,6 +99,7 @@ struct RawStream {
     channels: Option<u32>,
     channel_layout: Option<String>,
     duration: Option<String>,
+    nb_frames: Option<String>,
     disposition: Option<RawDisposition>,
 }
 #[derive(Deserialize)]
@@ -111,6 +119,7 @@ pub fn parse_probe_json(json: &str) -> Result<MediaInfo> {
         ..Default::default()
     };
     let mut longest_stream = 0.0f64;
+    let mut video_frames: Option<u64> = None;
     for s in raw.streams {
         if let Some(d) = s.duration.as_deref().and_then(|d| d.parse::<f64>().ok()) {
             longest_stream = longest_stream.max(d);
@@ -121,6 +130,7 @@ pub fn parse_probe_json(json: &str) -> Result<MediaInfo> {
                 if still {
                     continue; // cover art is not a video track
                 }
+                video_frames = s.nb_frames.as_deref().and_then(|n| n.parse().ok());
                 let fps = s.avg_frame_rate.as_deref().and_then(parse_fps).or_else(|| s.r_frame_rate.as_deref().and_then(parse_fps));
                 info.video.push(VideoStream {
                     index: s.index,
@@ -152,6 +162,13 @@ pub fn parse_probe_json(json: &str) -> Result<MediaInfo> {
     }
     let dur = fmt.duration.and_then(|d| d.parse::<f64>().ok()).unwrap_or(longest_stream);
     info.duration = Rational::from_secs_f64(dur);
+    // image demuxers (`png_pipe`, `image2`…) and one-frame GIFs are stills
+    let image_container = info.container.ends_with("_pipe") || info.container == "image2" || info.container == "image2pipe";
+    let one_frame_gif = info.container == "gif" && video_frames.is_some_and(|n| n <= 1);
+    if info.video.len() == 1 && info.audio.is_empty() && (image_container || one_frame_gif) {
+        info.still = true;
+        info.duration = Rational::from_int(STILL_SECONDS);
+    }
     Ok(info)
 }
 
@@ -189,6 +206,23 @@ mod tests {
     fn ignores_attached_pictures() {
         let j = r#"{"streams":[{"index":0,"codec_type":"video","codec_name":"mjpeg","width":10,"height":10,"disposition":{"attached_pic":1}}],"format":{"format_name":"mp3","duration":"1.0"}}"#;
         assert!(!parse_probe_json(j).unwrap().has_video());
+    }
+
+    #[test]
+    fn single_images_are_stills_with_a_long_virtual_duration() {
+        let png = r#"{"streams":[{"index":0,"codec_type":"video","codec_name":"png","width":320,"height":180,"r_frame_rate":"25/1"}],"format":{"format_name":"png_pipe"}}"#;
+        let m = parse_probe_json(png).unwrap();
+        assert!(m.still && m.has_video() && m.duration == Rational::from_int(STILL_SECONDS));
+        // a JPEG reports 0.04 s; still a still
+        let jpg = r#"{"streams":[{"index":0,"codec_type":"video","codec_name":"mjpeg","width":10,"height":10,"duration":"0.04"}],"format":{"format_name":"image2","duration":"0.04"}}"#;
+        assert!(parse_probe_json(jpg).unwrap().still);
+        // an animated GIF is a normal clip, a one-frame GIF a still
+        let gif = |n: u32| format!(r#"{{"streams":[{{"index":0,"codec_type":"video","codec_name":"gif","width":10,"height":10,"nb_frames":"{n}","duration":"1.0"}}],"format":{{"format_name":"gif","duration":"1.0"}}}}"#);
+        assert!(!parse_probe_json(&gif(10)).unwrap().still);
+        assert!(parse_probe_json(&gif(1)).unwrap().still);
+        // a real video is never a still
+        let mp4 = r#"{"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":10,"height":10}],"format":{"format_name":"mov,mp4","duration":"3.0"}}"#;
+        assert!(!parse_probe_json(mp4).unwrap().still);
     }
 
     #[test]

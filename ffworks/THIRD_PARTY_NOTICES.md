@@ -12,6 +12,12 @@ The Windows installer includes unmodified `ffmpeg.exe` and `ffprobe.exe` from th
 
 The installer build verifies the download against a pinned SHA-256 (see `.github/workflows/ffworks.yml`).
 
+## Fonts (built into the application)
+
+Titles use **DejaVu Sans** and **DejaVu Sans Bold** (embedded in the binary; used when no other font is chosen).
+* Licence: Bitstream Vera licence with public-domain DejaVu changes (permits use, copying and redistribution; the fonts may not be sold on their own). Full text: `crates/ffworks-core/assets/fonts/DejaVu-LICENSE.txt`.
+* Source: https://dejavu-fonts.github.io/
+
 ## Rust and JavaScript libraries (statically included in the app)
 
 | Library | Used for | License |

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, FontEntry, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -26,6 +26,7 @@ export const api = {
   relinkMedia: (mediaId: string, path: string) => invoke<StateView>("relink_media", { mediaId, path }),
   listTransitions: () => invoke<[string, string][]>("list_transitions"),
   listEffects: () => invoke<EffectDef[]>("list_effects"),
+  listFonts: () => invoke<FontEntry[]>("list_fonts"),
   listClipProps: () => invoke<ClipProps>("list_clip_props"),
   renderPreview: (start: string, end: string, scaleDiv: number) => invoke<PreviewInfo>("render_preview", { start, end, scaleDiv }),
   listExportPresets: () => invoke<ExportPreset[]>("list_export_presets"),

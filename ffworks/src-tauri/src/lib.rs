@@ -62,7 +62,7 @@ fn s<E: std::fmt::Display>(e: E) -> String {
 
 fn allow_media(app: &AppHandle, e: &Engine) {
     let scope = app.asset_protocol_scope();
-    for m in &e.project.media {
+    for m in e.project.media.iter().filter(|m| !m.is_generated()) {
         let _ = scope.allow_file(&m.path);
     }
 }
@@ -142,6 +142,9 @@ fn redo(state: State<AppState>) -> Result<StateView, String> {
 fn media_for(state: &AppState, media_id: &str) -> Result<(Tools, PathBuf, String), String> {
     let e = state.engine.lock().unwrap();
     let m = e.project.media(media_id).map_err(s)?;
+    if m.is_generated() {
+        return Err("generated media (titles, solid colours) has no file to analyse".into());
+    }
     let key = m.fingerprint.clone().unwrap_or_else(|| m.id.clone());
     Ok((e.tools.clone(), PathBuf::from(&m.path), key))
 }
@@ -298,6 +301,12 @@ fn list_transitions(state: State<AppState>) -> Vec<(String, String)> {
 #[tauri::command]
 fn list_effects() -> Vec<ffworks_core::effects::EffectDef> {
     ffworks_core::effects::registry()
+}
+
+/// Bundled and installed fonts usable for titles.
+#[tauri::command]
+fn list_fonts() -> Vec<ffworks_core::fonts::FontEntry> {
+    ffworks_core::fonts::list()
 }
 
 /// Clip-level parameters (transform/opacity), blend modes and keyframe interpolations for the Inspector.
@@ -469,12 +478,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

@@ -7,7 +7,7 @@ import { usePlayhead, useProject, useUi } from "../state/stores";
 import type { MediaAsset } from "../types";
 
 export async function importViaDialog() {
-  const picked = await open({ multiple: true, title: "Import media", filters: [{ name: "Media", extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v", "mp3", "wav", "flac", "aac", "ogg", "m4a", "png", "jpg", "gif"] }, { name: "All files", extensions: ["*"] }] });
+  const picked = await open({ multiple: true, title: "Import media", filters: [{ name: "Media", extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v", "mp3", "wav", "flac", "aac", "ogg", "m4a", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"] }, { name: "All files", extensions: ["*"] }] });
   if (picked) await importPaths(Array.isArray(picked) ? picked : [picked]);
 }
 
@@ -63,7 +63,8 @@ export function MediaBrowser() {
   const [sel, setSel] = useState<string | null>(null);
   const ensure = useAnalysis((s) => s.ensureThumbs);
   const thumbs = useAnalysis((s) => s.thumbs);
-  const media = view.project.media;
+  // generated media (title canvas, solid colours) is created from the timeline, not imported
+  const media = view.project.media.filter((m) => !m.generator);
   useEffect(() => media.forEach((m) => m.info.video.length && ensure(m.id)), [media, ensure]);
   const selected = media.find((m) => m.id === sel) ?? null;
   const fps = fpsOf(view.project.settings.fps);
@@ -100,7 +101,7 @@ export function MediaBrowser() {
               <div className="thumb">{Array.isArray(th) && th[0] ? <img src={th[0]} alt="" draggable={false} /> : <span>{m.info.video.length ? "🎞" : "🎵"}</span>}</div>
               <div className="media-meta">
                 <div className="name">{m.name}{offline && <em> — offline</em>}{offline && <button className="small" onClick={(e) => { e.stopPropagation(); void locateMedia(m.id); }} onPointerDown={(e) => e.stopPropagation()}>Locate…</button>}</div>
-                <div className="muted">{timecode(toSec(m.info.duration), fps)} · {v ? `${v.width}×${v.height}` : "audio"} {v?.fps ? `· ${toSec(v.fps).toFixed(3)} fps` : ""}</div>
+                <div className="muted">{m.info.still ? "still image" : timecode(toSec(m.info.duration), fps)} · {v ? `${v.width}×${v.height}` : "audio"} {v?.fps ? `· ${toSec(v.fps).toFixed(3)} fps` : ""}</div>
               </div>
             </div>
           );

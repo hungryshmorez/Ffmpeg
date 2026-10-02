@@ -19,6 +19,14 @@ pub struct InputRef {
     pub has_audio: bool,
     /// Source frame rate (for sub-frame trim boundary placement).
     pub src_fps: Option<Fps>,
+    /// Generated media: FFmpeg colour text of the `lavfi` `color` source that replaces a file (None for real files).
+    pub generated: Option<String>,
+    /// A still image: opened with `-loop 1`, so it lasts as long as it is used.
+    pub still: bool,
+    /// The picture has an alpha channel (PNG/WebP…), kept through scaling.
+    pub alpha: bool,
+    /// Source length the renderer must supply for this use (stills and generated media are cut to it).
+    pub need: Rational,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -46,6 +54,8 @@ pub struct VideoSegment {
     pub keyframes: BTreeMap<String, Vec<Keyframe>>,
     /// An effect on this segment writes transparency (e.g. crop).
     pub alpha_fx: bool,
+    /// Title text and its resolved font file (the clip's media is the transparent title canvas).
+    pub title: Option<(crate::titles::Title, std::path::PathBuf)>,
 }
 
 impl VideoSegment {
@@ -147,6 +157,10 @@ fn effect_filters(c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
     Ok((filters, requires, alpha))
 }
 
+fn has_alpha(pix_fmt: &str) -> bool {
+    ["rgba", "bgra", "argb", "abgr", "yuva", "ya8", "ya16", "gbrap"].iter().any(|a| pix_fmt.starts_with(a))
+}
+
 /// The clip-level animated parameters (not effect parameters) of a clip.
 fn clip_keyframes(c: &Clip) -> BTreeMap<String, Vec<Keyframe>> {
     c.keyframes.iter().filter(|(k, v)| !k.starts_with("fx:") && !v.is_empty()).map(|(k, v)| (k.clone(), v.clone())).collect()
@@ -190,6 +204,10 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
             has_video: m.info.has_video(),
             has_audio: m.info.has_audio(),
             src_fps: m.info.video.first().and_then(|v| v.fps),
+            generated: m.generator.as_ref().map(|g| g.ffmpeg_color()),
+            still: m.info.still && !m.is_generated(),
+            alpha: m.info.video.first().and_then(|v| v.color.pix_fmt.as_deref()).is_some_and(has_alpha),
+            need: Rational::ZERO,
         });
         Ok(g.inputs.len() - 1)
     };
@@ -273,6 +291,10 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                             blend: c.blend.clone(),
                             keyframes: clip_keyframes(c),
                             alpha_fx,
+                            title: match &c.title {
+                                Some(t) => Some((t.clone(), crate::fonts::resolve(&t.font)?)),
+                                None => None,
+                            },
                         });
                     }
                 }
@@ -308,6 +330,14 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                 }
             }
         }
+    }
+    // how much source each input must supply (stills/generated inputs are cut to this)
+    let one_frame = Rational::from_int(1).div(g.fps);
+    let mut need: Vec<(usize, Rational)> = g.video.iter().map(|v| (v.input, v.source_in + v.source_span().max(one_frame) + one_frame.mul_int(2))).collect();
+    need.extend(g.video_transitions.iter().flat_map(|t| [(t.a.input, t.a.source_in + t.duration), (t.b.input, t.b.source_in + t.duration)]));
+    for (i, n) in need {
+        let cur = g.inputs[i].need;
+        g.inputs[i].need = cur.max(n);
     }
     Ok(g)
 }

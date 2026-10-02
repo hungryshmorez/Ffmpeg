@@ -4,8 +4,12 @@ export type TrackKind = "video" | "audio";
 
 export interface VideoStream { index: number; codec: string; width: number; height: number; fps: Rational | null; bit_rate: number | null; color: { pix_fmt: string | null; color_space: string | null; color_transfer: string | null; color_primaries: string | null; color_range: string | null; bits_per_raw_sample: number | null } }
 export interface AudioStream { index: number; codec: string; sample_rate: number; channels: number; channel_layout: string | null; bit_rate: number | null }
-export interface MediaInfo { container: string; duration: Rational; bit_rate: number | null; size_bytes: number | null; video: VideoStream[]; audio: AudioStream[]; tags: [string, string][] }
-export interface MediaAsset { id: string; name: string; path: string; info: MediaInfo; fingerprint: string | null }
+export interface MediaInfo { container: string; duration: Rational; bit_rate: number | null; size_bytes: number | null; video: VideoStream[]; audio: AudioStream[]; tags: [string, string][]; /** A single picture or generated media: lasts as long as it is placed for. */ still: boolean }
+export type Generator = { kind: "solid"; color: string };
+export interface MediaAsset { id: string; name: string; path: string; info: MediaInfo; fingerprint: string | null; /** Generated media (solid colour, title canvas) has no file. */ generator: Generator | null }
+export type Align = "left" | "center" | "right";
+export interface Title { text: string; font: string; size: number; color: string; align: Align; outline_width: number; outline_color: string; shadow: number; box_color: string | null; box_pad: number }
+export interface FontEntry { name: string; path: string; bundled: boolean }
 
 export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number> }
 export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string; animatable: boolean }
@@ -21,6 +25,8 @@ export interface Clip {
   speed: Rational; reverse: boolean; freeze: Rational | null; transform: Transform; blend: string;
   /** Audio clips: balance -1..1 and linear fades in seconds (rational). */
   pan: number; fade_in: Rational; fade_out: Rational;
+  /** Set on title clips (their media is the transparent title canvas). */
+  title: Title | null;
   /** Keyed by parameter id: `opacity`, `x`, `y`, `scale`, `rotation` or `fx:<effect id>:<param>`. */
   keyframes: Record<string, Keyframe[]>;
 }
@@ -54,6 +60,10 @@ export type Command =
   | { type: "delete_clip"; clip: string; ripple: boolean }
   | { type: "set_clip_gain"; clip: string; gain_db: number; relative: boolean }
   | { type: "set_track"; track: string; name?: string | null; muted?: boolean | null; locked?: boolean | null; gain_db?: number | null; pan?: number | null; solo?: boolean | null }
+  | { type: "add_title"; track: string; start: Rational; duration: Rational; text: string }
+  | { type: "set_title"; clip: string; title: Title }
+  | { type: "add_solid"; track: string; start: Rational; duration: Rational; color: string }
+  | { type: "set_solid_color"; clip: string; color: string }
   | { type: "set_clip_fades"; clip: string; fade_in?: Rational | null; fade_out?: Rational | null }
   | { type: "add_track"; kind: TrackKind; name?: string | null }
   | { type: "remove_track"; track: string }

@@ -7,6 +7,8 @@ use crate::effects::EffectInstance;
 use crate::keyframes::Keyframe;
 use std::collections::BTreeMap;
 use crate::ffprobe::MediaInfo;
+use crate::generators::Generator;
+use crate::titles::Title;
 use crate::time::{Fps, Rational};
 use crate::transitions::Transition;
 use serde::{Deserialize, Serialize};
@@ -42,6 +44,15 @@ pub struct MediaAsset {
     pub info: MediaInfo,
     /// Cheap content fingerprint (size + head/tail hash) used for relinking and cache keys.
     pub fingerprint: Option<String>,
+    /// Generated media (solid colour, title canvas) has no file: `path` is a label and nothing is ever read from disk.
+    #[serde(default)]
+    pub generator: Option<Generator>,
+}
+
+impl MediaAsset {
+    pub fn is_generated(&self) -> bool {
+        self.generator.is_some()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -119,6 +130,9 @@ pub struct Clip {
     pub fade_in: Rational,
     #[serde(default)]
     pub fade_out: Rational,
+    /// Title text/styling; only on clips whose media is the transparent title canvas.
+    #[serde(default)]
+    pub title: Option<Title>,
     /// FFmpeg `blend` mode name, "normal" for plain compositing.
     #[serde(default = "normal_blend")]
     pub blend: String,
@@ -141,7 +155,7 @@ impl Clip {
     /// A plain clip: speed 1, no effects, identity transform.
     #[allow(clippy::too_many_arguments)]
     pub fn new(id: Id, media: Id, name: String, kind: TrackKind, start: Rational, source_in: Rational, duration: Rational, link: Option<Id>) -> Clip {
-        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, blend: normal_blend(), keyframes: BTreeMap::new() }
+        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, title: None, blend: normal_blend(), keyframes: BTreeMap::new() }
     }
 
     pub fn end(&self) -> Rational {
@@ -273,6 +287,12 @@ impl Project {
                         }
                     }
                     crate::clipprops::check_blend(&c.blend)?;
+                    if let Some(t) = &c.title {
+                        t.validate()?;
+                        if !m.is_generated() || c.kind != TrackKind::Video {
+                            return Err(Error::validation(format!("clip '{}' has title text but is not a generated video clip", c.name)));
+                        }
+                    }
                     if c.fade_in < Rational::ZERO || c.fade_out < Rational::ZERO || c.fade_in + c.fade_out > c.duration {
                         return Err(Error::validation(format!("clip '{}': fades must be non-negative and fit inside the clip", c.name)));
                     }

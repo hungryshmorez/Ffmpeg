@@ -7,6 +7,8 @@ use crate::project::{Clip, Id, MediaAsset, Project, ProjectSettings, Track};
 use crate::transitions::Transition;
 use serde::{Deserialize, Serialize};
 
+/// A clip patch is ~0.5 KB and patches are short-lived lists, so boxing the clip would only add noise.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Patch {

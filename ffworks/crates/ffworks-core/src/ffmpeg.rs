@@ -185,7 +185,7 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
     if opts.scale_div == 0 {
         return Err(Error::validation("scale_div must be >= 1"));
     }
-    for i in &g.inputs {
+    for i in g.inputs.iter().filter(|i| i.generated.is_none()) {
         if same_path(Path::new(&i.path), &opts.output) {
             return Err(Error::validation(format!("output path equals source media '{}'; sources are never overwritten", i.path)));
         }
@@ -292,7 +292,21 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     if seg.freeze.is_none() && seg.speed != Rational::from_int(1) {
                         chain.push_str(&format!(",setpts=PTS/{}", dec(speed)));
                     }
-                    chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"));
+                    let input = &g.inputs[seg.input];
+                    if input.generated.is_some() {
+                        // generated canvases are already output-sized; keep their alpha
+                        chain.push_str(&format!(",fps={fps},format=yuva420p"));
+                    } else if input.alpha {
+                        // pictures with transparency: even pad offsets (odd ones corrupt the alpha plane in `pad`) and a transparent border
+                        chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,format=yuva420p,pad={w}:{h}:trunc((ow-iw)/4)*2:trunc((oh-ih)/4)*2:color=black@0,setsar=1"));
+                    } else {
+                        chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"));
+                    }
+                    if let Some((title, font)) = &seg.title {
+                        require(&["drawtext".to_string()])?;
+                        chain.push(',');
+                        chain.push_str(&crate::titles::to_drawtext(title, font, h));
+                    }
                     if seg.freeze.is_some() {
                         chain.push_str(&format!(",trim=end_frame=1,tpad=stop_mode=clone:stop_duration={d},trim=end={d},setpts=PTS-STARTPTS", d = secs(seg.duration)));
                     } else {
@@ -318,7 +332,7 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     let blended = seg.blend != "normal";
                     let animated_opacity = seg.animated("opacity");
                     let transform = transform_filter(seg, w, h, g.fps);
-                    let translucent = seg.opacity < 1.0 || animated_opacity || seg.alpha_fx || transform.is_some() || blended;
+                    let translucent = seg.opacity < 1.0 || animated_opacity || seg.alpha_fx || transform.is_some() || blended || input.generated.is_some() || input.alpha;
                     if animated_opacity {
                         // alpha plane × keyframed opacity, evaluated per frame (T = clip-relative seconds at this point of the chain)
                         chain.push_str(&format!(",format=yuva420p,geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='alpha(X,Y)*({})'", crate::keyframes::to_expr(&seg.keyframes["opacity"], "T")));
@@ -453,8 +467,16 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
     let mut pre: Vec<String> = ["-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats"].iter().map(|s| s.to_string()).collect();
     for i in &g.inputs {
         // Only inputs that the graph references are opened.
-        pre.push("-i".into());
-        pre.push(i.path.clone());
+        let len = secs(i.need.max(Rational::from_int(1)) + Rational::from_int(1));
+        if let Some(color) = &i.generated {
+            pre.extend(["-f".into(), "lavfi".into(), "-i".into(), format!("color=c={color}:s={w}x{h}:r={fps}:d={len},format=yuva420p")]);
+        } else if i.still {
+            // a looped single picture, bounded to what this use needs
+            pre.extend(["-loop".into(), "1".into(), "-framerate".into(), fps.clone(), "-t".into(), len, "-i".into(), i.path.clone()]);
+        } else {
+            pre.push("-i".into());
+            pre.push(i.path.clone());
+        }
     }
     let mut post: Vec<String> = vec![];
     if want_video {

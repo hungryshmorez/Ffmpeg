@@ -68,7 +68,7 @@ export function Monitor() {
   const [div, setDiv] = useState(2);
   const previewCurrent = preview !== null && preview.renderHash === view.renderHash;
   const usePreview = previewCurrent && t >= toSec(preview.start) && t < toSec(preview.end);
-  const videoUrl = usePreview ? convertFileSrc(preview.path) : vis && media ? convertFileSrc(media.path) : null;
+  const videoUrl = usePreview ? convertFileSrc(preview.path) : vis && media && !media.generator ? convertFileSrc(media.path) : null;
   const videoTime = usePreview ? t - toSec(preview.start) : vis ? sourceTime(vis.clip, t) : 0;
   // The preview file carries the mixed audio, so it plays unmuted and the per-track source audio is silenced.
   useSyncedElement(videoRef, videoUrl, videoTime, playing, 1, !usePreview, usePreview || !vis || vis.clip.reverse || vis.clip.freeze ? 1 : toSec(vis.clip.speed));
@@ -132,6 +132,7 @@ export function Monitor() {
     <div className="monitor" aria-label="Program monitor">
       <div className="monitor-screen" style={{ aspectRatio: `${width} / ${height}` }}>
         <video ref={videoRef} playsInline preload="auto" style={{ visibility: vis || usePreview ? "visible" : "hidden" }} />
+        {vis && media?.generator && !usePreview && <div className="gap-label">Generated clip ({vis.clip.title ? "title" : "solid colour"}) — render a preview to see it</div>}
         {!vis && !usePreview && <div className="gap-label">{seq.tracks.some((x) => x.clips.length) ? "no video at playhead" : "Import media and add it to the timeline"}</div>}
         {usePreview && <div className="bypass-badge ok" role="status">Processed preview · 1/{preview.scaleDiv} resolution</div>}
         {!usePreview && preview !== null && !previewCurrent && <div className="bypass-badge" role="status">Preview out of date — render again</div>}

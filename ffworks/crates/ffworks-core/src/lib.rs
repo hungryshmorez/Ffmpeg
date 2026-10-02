@@ -9,6 +9,8 @@ pub mod engine;
 pub mod error;
 pub mod ffmpeg;
 pub mod ffprobe;
+pub mod fonts;
+pub mod generators;
 pub mod jobs;
 pub mod keyframes;
 pub mod migrate;
@@ -24,6 +26,7 @@ pub mod render_graph;
 pub mod scenes;
 pub mod settings;
 pub mod time;
+pub mod titles;
 pub mod transitions;
 
 pub use commands::{Command, Edge};

@@ -218,7 +218,7 @@ impl Engine {
 
     /// Media whose source file no longer exists (spec §41 relinking input).
     pub fn offline_media(&self) -> Vec<String> {
-        self.project.media.iter().filter(|m| !Path::new(&m.path).exists()).map(|m| m.id.clone()).collect()
+        self.project.media.iter().filter(|m| !m.is_generated() && !Path::new(&m.path).exists()).map(|m| m.id.clone()).collect()
     }
 
     // ---- persistence -------------------------------------------------------------------------
@@ -257,6 +257,7 @@ pub fn prepare_asset(tools: &Tools, path: &Path) -> Result<MediaAsset> {
         name: abs.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "media".into()),
         path: abs.to_string_lossy().into_owned(),
         fingerprint: fingerprint(&abs).ok(),
+        generator: None,
         info,
     })
 }

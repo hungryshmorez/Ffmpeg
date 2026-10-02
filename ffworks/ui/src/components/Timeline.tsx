@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { fpsOf, fromSec, snapToFrame, timecode, toSec } from "../time";
 import { beatPoints, dbToGain, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
+import { addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
 import { usePlayhead, useProject, useUi } from "../state/stores";
 import type { Clip, Sequence, Track, Transition } from "../types";
 
@@ -51,6 +52,8 @@ export function Timeline() {
         <span className="muted">Zoom</span>
         <input aria-label="Timeline zoom" type="range" min={4} max={600} value={px} onChange={(e) => setZoom(Number(e.target.value))} />
         <button title="Add video track" onClick={() => dispatch({ type: "add_track", kind: "video" })}>+ Video track</button>
+        <button title="Add a title at the playhead (5 s) on the topmost free video track" onClick={() => void addTitleAtPlayhead()}>+ Title</button>
+        <button title="Add a solid colour clip at the playhead (5 s)" onClick={() => void addSolidAtPlayhead()}>+ Solid</button>
         <button title="Add audio track" onClick={() => dispatch({ type: "add_track", kind: "audio" })}>+ Audio track</button>
         <label className="check" title="Snap clip edges and the playhead to detected beats (detect beats in the Inspector first)"><input type="checkbox" checked={snapBeats} onChange={(e) => setSnapBeats(e.target.checked)} /> Snap to beats</label>
         <span className="muted right">Space play · S split · Del delete · ⇧Del ripple · ←/→ frame · Ctrl+wheel zoom</span>
@@ -140,6 +143,7 @@ const ClipView = memo(
     const select = useUi((s) => s.select);
     const dispatch = useProject((s) => s.dispatch);
     const { start, duration, sourceIn, speed } = times(clip);
+    const media = useProject((s) => s.view?.project.media.find((m) => m.id === clip.media));
     const [ghost, setGhost] = useState<{ start: number; duration: number; sourceIn: number } | null>(null);
     const group = linkedIds(seq, clip.id);
     const isSel = selected !== null && group.includes(selected);
@@ -214,7 +218,7 @@ const ClipView = memo(
         onFocus={() => select(clip.id)}
         title={`${clip.name}\nstart ${timecode(g.start, fps)}  dur ${timecode(g.duration, fps)}`}
       >
-        {clip.kind === "video" ? <Filmstrip mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} freeze={clip.freeze ? toSec(clip.freeze) : null} /> : <WaveCanvas mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} gainDb={clip.gain_db + track.gain_db} height={height} />}
+        {media?.generator ? <GeneratedFill clip={clip} media={media} /> : clip.kind === "video" ? <Filmstrip mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} freeze={media?.info.still ? 0 : clip.freeze ? toSec(clip.freeze) : null} /> : <WaveCanvas mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} gainDb={clip.gain_db + track.gain_db} height={height} />}
         {clip.kind === "audio" && speed === 1 && !clip.reverse && <BeatTicks mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} />}
         <span className="clip-name">{clip.name}{clip.gain_db !== 0 ? `  ${clip.gain_db > 0 ? "+" : ""}${clip.gain_db.toFixed(1)} dB` : ""}{badges(clip)}</span>
         <div className="handle left" onPointerDown={begin("trim-start")} />
@@ -228,6 +232,13 @@ const ClipView = memo(
 /** Cheap key capturing only what ClipView reads from the sequence (its link group). */
 function linkKey(seq: Sequence, c: Clip): string {
   return linkedIds(seq, c.id).join(",");
+}
+
+/** Fill for a generated clip: its colour for a solid, the text for a title (the real picture appears in a rendered preview). */
+function GeneratedFill({ clip, media }: { clip: Clip; media: { generator: { kind: "solid"; color: string } | null } }) {
+  const color = media.generator?.color ?? "#000000";
+  if (clip.title) return <div className="gen-fill title" aria-hidden><span>T</span> {clip.title.text.replace(/\n/g, " ⏎ ")}</div>;
+  return <div className="gen-fill" aria-hidden style={{ background: color.length === 9 ? `${color.slice(0, 7)}${color.slice(7)}` : color }} />;
 }
 
 /** Short status text appended to a clip's label: speed, reverse, freeze, keyframes, blend. */

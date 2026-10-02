@@ -17,6 +17,7 @@ fn asset(id: &str, dur: i64) -> MediaAsset {
         name: format!("{id}.mp4"),
         path: format!("/nonexistent/{id}.mp4"),
         fingerprint: None,
+        generator: None,
         info: MediaInfo {
             container: "mov,mp4".into(),
             duration: secs(dur),
