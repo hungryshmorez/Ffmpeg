@@ -225,7 +225,8 @@ fn get_settings(state: State<AppState>) -> ffworks_core::settings::Settings {
 /// Validate the chosen FFmpeg/FFprobe by running them, then persist and apply. Nothing is saved if validation fails.
 #[tauri::command]
 fn set_settings(state: State<AppState>, ffmpeg_path: Option<String>, ffprobe_path: Option<String>) -> Result<serde_json::Value, String> {
-    let new = ffworks_core::settings::Settings { ffmpeg_path, ffprobe_path };
+    let favourites = ffworks_core::settings::Settings::load(&state.settings_file).favourites;
+    let new = ffworks_core::settings::Settings { ffmpeg_path, ffprobe_path, favourites };
     let tools = new.tools_with_bundled(state.bundled_dir.as_deref());
     let (ff, pr) = ffworks_core::settings::validate_tools(&tools).map_err(s)?;
     new.save(&state.settings_file).map_err(s)?;
@@ -344,6 +345,66 @@ fn list_filters(state: State<AppState>) -> Result<Vec<ffworks_core::filterdb::Fi
 fn filter_help(state: State<AppState>, name: String) -> Result<ffworks_core::filterdb::FilterHelp, String> {
     let tools = state.engine.lock().unwrap().tools.clone();
     tools.filter_help(&name).map_err(|e| e.to_string())
+}
+
+/// Starred effects/transitions and named favourite groups.
+#[tauri::command]
+fn get_favourites(state: State<AppState>) -> ffworks_core::settings::Favourites {
+    ffworks_core::settings::Settings::load(&state.settings_file).favourites
+}
+
+#[tauri::command]
+fn set_favourites(state: State<AppState>, favourites: ffworks_core::settings::Favourites) -> Result<ffworks_core::settings::Favourites, String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    st.favourites = favourites.normalised().map_err(s)?;
+    st.save(&state.settings_file).map_err(s)?;
+    Ok(st.favourites)
+}
+
+/// Stack `count` random effects on a clip as one undoable step. `pool` is `all`, `favourites` or a named group.
+/// The seed (given or fresh) is returned so the same result can be recreated.
+#[tauri::command]
+fn random_effects(state: State<AppState>, clip: String, count: usize, pool: String, seed: Option<u64>) -> Result<serde_json::Value, String> {
+    let favs = ffworks_core::settings::Settings::load(&state.settings_file).favourites;
+    let group = favs.pool(&pool).map_err(s)?;
+    let mut e = state.engine.lock().unwrap();
+    let (_, c) = e.project.active().map_err(s)?.find_clip(&clip).ok_or("clip not found")?;
+    let seed = seed.unwrap_or_else(ffworks_core::random::fresh_seed);
+    if let Some(g) = group {
+        if g.effects.is_empty() {
+            return Err(format!("No favourite effects in '{pool}' yet: star some in the effect list first."));
+        }
+    }
+    let cmds = ffworks_core::random::effect_stack(c, count, seed, group.map(|g| g.effects.as_slice())).map_err(s)?;
+    let label = format!("Random effects ×{}", cmds.len());
+    e.dispatch(Command::Batch { label, commands: cmds }).map_err(s)?;
+    Ok(serde_json::json!({ "state": view(&e), "seed": seed }))
+}
+
+/// Add random transitions on up to `count` consecutive cuts starting after `clip`, as one undoable step. Cuts that cannot
+/// take one (no media handles, retimed clips...) are skipped and reported.
+#[tauri::command]
+fn random_transitions(state: State<AppState>, clip: String, count: usize, pool: String, seed: Option<u64>, duration: Option<f64>) -> Result<serde_json::Value, String> {
+    let favs = ffworks_core::settings::Settings::load(&state.settings_file).favourites;
+    let group = favs.pool(&pool).map_err(s)?;
+    let available: Vec<String> = match caps(&state) {
+        Some(c) if !c.xfade_transitions.is_empty() => c.xfade_transitions.into_iter().map(|(k, _)| k).collect(),
+        _ => ffworks_core::transitions::KINDS.iter().map(|(k, _)| k.to_string()).collect(),
+    };
+    let kinds: Vec<String> = match group {
+        Some(g) if g.transitions.is_empty() => return Err(format!("No favourite transitions in '{pool}' yet: star some in the transition list first.")),
+        Some(g) => available.into_iter().filter(|k| g.transitions.contains(k)).collect(),
+        None => available,
+    };
+    let mut e = state.engine.lock().unwrap();
+    let seed = seed.unwrap_or_else(ffworks_core::random::fresh_seed);
+    let dur = ffworks_core::Rational::new((duration.unwrap_or(0.5).clamp(0.1, 5.0) * 1000.0).round() as i64, 1000);
+    let plan = ffworks_core::random::transition_stack(&e.project, &clip, count, seed, &kinds, dur).map_err(s)?;
+    let applied = plan.commands.len();
+    if applied > 0 {
+        e.dispatch(Command::Batch { label: format!("Random transitions ×{applied}"), commands: plan.commands }).map_err(s)?;
+    }
+    Ok(serde_json::json!({ "state": view(&e), "seed": seed, "applied": applied, "skipped": plan.skipped }))
 }
 
 /// Structural errors (as Err) and FFmpeg pad-count problems (as the list) for a filter graph being edited.
@@ -528,12 +589,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

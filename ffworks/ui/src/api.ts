@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -24,6 +24,10 @@ export const api = {
   setSettings: (ffmpegPath: string | null, ffprobePath: string | null) => invoke<{ ffmpeg: string; ffprobe: string }>("set_settings", { ffmpegPath, ffprobePath }),
   relinkSearch: (dir: string) => invoke<RelinkResult>("relink_search", { dir }),
   relinkMedia: (mediaId: string, path: string) => invoke<StateView>("relink_media", { mediaId, path }),
+  getFavourites: () => invoke<Favourites>("get_favourites"),
+  setFavourites: (favourites: Favourites) => invoke<Favourites>("set_favourites", { favourites }),
+  randomEffects: (clip: string, count: number, pool: string, seed?: number) => invoke<RandomResult>("random_effects", { clip, count, pool, seed: seed ?? null }),
+  randomTransitions: (clip: string, count: number, pool: string, seed?: number) => invoke<RandomResult>("random_transitions", { clip, count, pool, seed: seed ?? null, duration: null }),
   listTransitions: () => invoke<[string, string][]>("list_transitions"),
   listEffects: () => invoke<EffectDef[]>("list_effects"),
   proxyStatus: () => invoke<ProxyStatus[]>("proxy_status"),

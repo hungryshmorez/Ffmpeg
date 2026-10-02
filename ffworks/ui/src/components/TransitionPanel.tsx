@@ -4,6 +4,8 @@ import { fpsOf, fromSec, toSec } from "../time";
 import { useProject } from "../state/stores";
 import type { Clip, Sequence, Track, Transition } from "../types";
 import { CommitSlider } from "./CommitSlider";
+import { RandomBar } from "./RandomBar";
+import { toggleStar, useFavs } from "../state/favourites";
 
 let kindsCache: [string, string][] | null = null;
 
@@ -13,6 +15,9 @@ export function TransitionPanel({ clip, track, seq }: { clip: Clip; track: Track
   const fps = fpsOf(useProject((s) => s.view)!.project.settings.fps);
   const [kinds, setKinds] = useState<[string, string][]>(kindsCache ?? []);
   const [pick, setPick] = useState("fade");
+  const favs = useFavs((s) => s.favs);
+  const saveFavs = useFavs((s) => s.save);
+  useEffect(() => { void useFavs.getState().load(); }, []);
   useEffect(() => {
     if (!kindsCache) void api.listTransitions().then((k) => { kindsCache = k; setKinds(k); });
   }, []);
@@ -43,8 +48,9 @@ export function TransitionPanel({ clip, track, seq }: { clip: Clip; track: Track
     <div className="field">
       <div className="row">
         <select aria-label="New transition type" value={pick} onChange={(e) => setPick(e.target.value)}>
-          {kinds.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          {kinds.map(([id, name]) => <option key={id} value={id}>{favs.starred.transitions.includes(id) ? "★ " : ""}{name}</option>)}
         </select>
+        <button className="small" aria-label={favs.starred.transitions.includes(pick) ? "Remove transition from favourites" : "Add transition to favourites"} title="Favourite" onClick={() => void saveFavs(toggleStar(favs, "transitions", pick))}>{favs.starred.transitions.includes(pick) ? "★" : "☆"}</button>
         <button onClick={() => void dispatch({ type: "add_transition", clip_a: a.id, clip_b: b.id, kind: pick, duration: fromSec(1) })}>Add</button>
       </div>
     </div>
@@ -56,6 +62,7 @@ export function TransitionPanel({ clip, track, seq }: { clip: Clip; track: Track
       <div className="panel-title sub">Transitions</div>
       {next && (outgoing ? edit(outgoing, "To next clip") : <><p className="muted pad">Cut to “{next.name}”:</p>{add(clip, next)}</>)}
       {prev && (incoming ? edit(incoming, "From previous clip") : <><p className="muted pad">Cut from “{prev.name}”:</p>{add(prev, clip)}</>)}
+      {next && <RandomBar kind="transitions" roll={(pool, count, seed) => api.randomTransitions(clip.id, count, pool, seed)} />}
       <p className="muted pad">Centered on the cut; needs unused media on both sides of it.</p>
     </div>
   );

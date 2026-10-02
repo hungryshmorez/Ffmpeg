@@ -139,3 +139,6 @@ input[type=color] { width: 56px; height: 24px; padding: 0; border: 1px solid var
 .gopt { gap: 4px; margin: 2px 0; } .gopt input { flex: 1; min-width: 0; }
 .gnode { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; min-width: 110px; font-size: 12px; color: var(--text, #ddd); }
 .gnode.sel { border-color: #3aa0ff; } .gnode.fixed { background: #1b3b2a; }
+
+.random-bar .row { gap: 4px; margin: 2px 0; }
+.fav-dialog { width: min(900px, 96vw); } .fav-table-wrap { max-height: 50vh; overflow: auto; margin-top: 6px; }

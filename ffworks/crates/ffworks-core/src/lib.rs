@@ -20,6 +20,7 @@ pub mod patch;
 pub mod preview;
 pub mod process;
 pub mod project;
+pub mod random;
 pub mod proxy;
 pub mod queue;
 pub mod loudness;

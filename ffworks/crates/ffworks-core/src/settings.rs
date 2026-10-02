@@ -11,6 +11,73 @@ use std::path::{Path, PathBuf};
 pub struct Settings {
     pub ffmpeg_path: Option<String>,
     pub ffprobe_path: Option<String>,
+    #[serde(default)]
+    pub favourites: Favourites,
+}
+
+/// A set of favourite effects and transitions (ids as listed by the effect registry / FFmpeg's transition names).
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct FavGroup {
+    #[serde(default)]
+    pub effects: Vec<String>,
+    #[serde(default)]
+    pub transitions: Vec<String>,
+}
+
+/// The starred items plus any number of named groups ("Glitchy", "Clean"...). Random buttons and demo mode can draw from
+/// everything, the starred set, or one named group.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct Favourites {
+    #[serde(default)]
+    pub starred: FavGroup,
+    #[serde(default)]
+    pub groups: std::collections::BTreeMap<String, FavGroup>,
+}
+
+pub const POOL_ALL: &str = "all";
+pub const POOL_STARRED: &str = "favourites";
+
+impl Favourites {
+    /// Reject unknown effect ids and malformed names; drop duplicates (keeping order).
+    pub fn normalised(mut self) -> Result<Favourites> {
+        let known: std::collections::BTreeSet<&str> = crate::effects::registry().iter().map(|d| d.id).collect();
+        let clean = |g: &mut FavGroup| -> Result<()> {
+            for e in &g.effects {
+                if !known.contains(e.as_str()) || e == crate::effects::GRAPH_EFFECT {
+                    return Err(Error::validation(format!("'{e}' is not an effect that can be a favourite")));
+                }
+            }
+            for t in &g.transitions {
+                crate::transitions::check_kind(t)?;
+            }
+            let dedup = |v: &mut Vec<String>| {
+                let mut seen = std::collections::BTreeSet::new();
+                v.retain(|x| seen.insert(x.clone()));
+            };
+            dedup(&mut g.effects);
+            dedup(&mut g.transitions);
+            Ok(())
+        };
+        clean(&mut self.starred)?;
+        for (name, g) in self.groups.iter_mut() {
+            let n = name.trim();
+            if n.is_empty() || n.chars().count() > 40 || n == POOL_ALL || n == POOL_STARRED {
+                return Err(Error::validation(format!("'{name}' is not a usable group name")));
+            }
+            clean(g)?;
+        }
+        Ok(self)
+    }
+
+    /// The favourites a random pick may use: `all` (no restriction, returns None), `favourites`, or a named group.
+    /// Errors when the chosen set is empty so the user is told to star something rather than getting "everything".
+    pub fn pool(&self, name: &str) -> Result<Option<&FavGroup>> {
+        match name {
+            POOL_ALL => Ok(None),
+            POOL_STARRED => Ok(Some(&self.starred)),
+            other => self.groups.get(other).map(Some).ok_or_else(|| Error::NotFound(format!("favourite group '{other}'"))),
+        }
+    }
 }
 
 impl Settings {
@@ -70,7 +137,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let f = d.path().join("s/settings.json");
         assert_eq!(Settings::load(&f), Settings::default());
-        let s = Settings { ffmpeg_path: Some("  ".into()), ffprobe_path: Some("/x/ffprobe".into()) };
+        let s = Settings { ffmpeg_path: Some("  ".into()), ffprobe_path: Some("/x/ffprobe".into()), ..Default::default() };
         s.save(&f).unwrap();
         assert_eq!(Settings::load(&f), s);
         let t = s.tools();
@@ -90,7 +157,7 @@ mod tests {
             assert_eq!(t.ffmpeg, d.path().join(name("ffmpeg")));
             assert_eq!(t.ffprobe, d.path().join(name("ffprobe")));
             // an explicit saved path beats the bundled copy
-            let t = Settings { ffmpeg_path: Some("/custom/ffmpeg".into()), ffprobe_path: None }.tools_with_bundled(Some(d.path()));
+            let t = Settings { ffmpeg_path: Some("/custom/ffmpeg".into()), ffprobe_path: None, ..Default::default() }.tools_with_bundled(Some(d.path()));
             assert_eq!(t.ffmpeg, PathBuf::from("/custom/ffmpeg"));
             assert_eq!(t.ffprobe, d.path().join(name("ffprobe")));
             // nothing bundled -> plain PATH names
@@ -106,5 +173,49 @@ mod tests {
         // `ls --version` runs but is not FFmpeg
         let t = Tools { ffmpeg: "ls".into(), ffprobe: "ls".into() };
         assert!(validate_tools(&t).is_err());
+    }
+}
+
+#[cfg(test)]
+mod fav_tests {
+    use super::*;
+
+    fn fav(effects: &[&str], transitions: &[&str]) -> FavGroup {
+        FavGroup { effects: effects.iter().map(|s| s.to_string()).collect(), transitions: transitions.iter().map(|s| s.to_string()).collect() }
+    }
+
+    #[test]
+    fn old_settings_files_load_without_favourites_and_round_trip() {
+        let old: Settings = serde_json::from_str(r#"{"ffmpeg_path":"/x/ffmpeg","ffprobe_path":null}"#).unwrap();
+        assert_eq!(old.favourites, Favourites::default());
+        let mut s = old;
+        s.favourites.starred = fav(&["blur"], &["fade"]);
+        s.favourites.groups.insert("Glitchy".into(), fav(&["noise"], &["pixelize"]));
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back, s);
+    }
+
+    #[test]
+    fn normalising_rejects_unknown_ids_and_bad_group_names_and_drops_duplicates() {
+        let ok = Favourites { starred: fav(&["blur", "blur", "hue"], &["fade", "fade"]), groups: Default::default() }.normalised().unwrap();
+        assert_eq!(ok.starred, fav(&["blur", "hue"], &["fade"]));
+        assert!(Favourites { starred: fav(&["nope"], &[]), groups: Default::default() }.normalised().is_err());
+        assert!(Favourites { starred: fav(&["graph"], &[]), groups: Default::default() }.normalised().is_err(), "the custom graph effect has no fixed look to favourite");
+        assert!(Favourites { starred: fav(&[], &["not-a-transition"]), groups: Default::default() }.normalised().is_err());
+        for bad in ["", "   ", "all", "favourites"] {
+            let mut g = std::collections::BTreeMap::new();
+            g.insert(bad.to_string(), FavGroup::default());
+            assert!(Favourites { starred: FavGroup::default(), groups: g }.normalised().is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn pool_lookup() {
+        let mut f = Favourites::default();
+        f.groups.insert("Clean".into(), fav(&["contrast"], &[]));
+        assert!(f.pool("all").unwrap().is_none());
+        assert!(f.pool("favourites").unwrap().unwrap().effects.is_empty());
+        assert_eq!(f.pool("Clean").unwrap().unwrap().effects, vec!["contrast".to_string()]);
+        assert!(f.pool("Missing").is_err());
     }
 }

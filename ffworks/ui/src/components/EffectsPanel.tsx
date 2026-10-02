@@ -5,6 +5,8 @@ import type { Clip, EffectDef } from "../types";
 import { CommitSlider } from "./CommitSlider";
 import { KeyframeField, type FieldSpec } from "./KeyframeField";
 import { useClipProps } from "./ClipPropsPanel";
+import { RandomBar } from "./RandomBar";
+import { toggleStar, useFavs } from "../state/favourites";
 
 let registryCache: EffectDef[] | null = null;
 
@@ -13,6 +15,9 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
   const dispatch = useProject((s) => s.dispatch);
   const clipProps = useClipProps();
   const [defs, setDefs] = useState<EffectDef[]>(registryCache ?? []);
+  const favs = useFavs((s) => s.favs);
+  const saveFavs = useFavs((s) => s.save);
+  useEffect(() => { void useFavs.getState().load(); }, []);
   const [pick, setPick] = useState(clip.kind === "audio" ? "compressor" : "saturation");
   useEffect(() => {
     if (!registryCache) void api.listEffects().then((d) => { registryCache = d; setDefs(d); });
@@ -29,13 +34,15 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           <select aria-label="Effect to add" value={pick} onChange={(e) => setPick(e.target.value)}>
             {groups.map((g) => (
               <optgroup key={g} label={g}>
-                {mine.filter((d) => d.category === g).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {mine.filter((d) => d.category === g).map((d) => <option key={d.id} value={d.id}>{favs.starred.effects.includes(d.id) ? "★ " : ""}{d.name}</option>)}
               </optgroup>
             ))}
           </select>
           <button onClick={() => void dispatch({ type: "add_effect", clip: clip.id, effect: pick })}>Add</button>
+          <button className="small" aria-label={favs.starred.effects.includes(pick) ? "Remove from favourites" : "Add to favourites"} title="Favourite" onClick={() => void saveFavs(toggleStar(favs, "effects", pick))}>{favs.starred.effects.includes(pick) ? "★" : "☆"}</button>
         </div>
       </div>
+      <RandomBar kind="effects" roll={(pool, count, seed) => api.randomEffects(clip.id, count, pool, seed)} />
       {clip.effects.length === 0 && <p className="muted pad">No effects.</p>}
       {clip.effects.map((fx, i) => {
         const def = byId(fx.effect);

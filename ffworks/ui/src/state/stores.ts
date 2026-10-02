@@ -82,6 +82,8 @@ interface UiStore {
   exportOpen: boolean;
   diagOpen: boolean;
   filtersOpen: boolean;
+  favsOpen: boolean;
+  setFavsOpen: (o: boolean) => void;
   graphEdit: { clip: string; fx: string } | null;
   setGraphEdit: (g: { clip: string; fx: string } | null) => void;
   setFiltersOpen: (o: boolean) => void;
@@ -102,6 +104,8 @@ export const useUi = create<UiStore>((set) => ({
   exportOpen: false,
   diagOpen: false,
   filtersOpen: false,
+  favsOpen: false,
+  setFavsOpen: (favsOpen) => set({ favsOpen }),
   graphEdit: null,
   setGraphEdit: (graphEdit) => set({ graphEdit }),
   setFiltersOpen: (filtersOpen) => set({ filtersOpen }),

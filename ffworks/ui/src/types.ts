@@ -121,3 +121,7 @@ export interface ProxyStatus { mediaId: string; eligible: boolean; ready: boolea
 export interface FilterInfo { name: string; io: string; description: string; timeline: boolean }
 export interface FilterOption { name: string; kind: string; description: string; default: string | null; min: string | null; max: string | null; choices: [string, string][]; dynamic: boolean }
 export interface FilterHelp { name: string; description: string; inputs: string[]; outputs: string[]; options: FilterOption[]; timeline: boolean }
+
+export interface FavGroup { effects: string[]; transitions: string[] }
+export interface Favourites { starred: FavGroup; groups: Record<string, FavGroup> }
+export interface RandomResult { state: StateView; seed: number; applied?: number; skipped?: string[] }

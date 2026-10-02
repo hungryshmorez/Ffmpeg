@@ -9,6 +9,7 @@ import { RecoveryDialog } from "./components/RecoveryDialog";
 import { Diagnostics } from "./components/Diagnostics";
 import { FilterBrowser } from "./components/FilterBrowser";
 import { GraphEditor } from "./components/GraphEditor";
+import { FavouritesDialog } from "./components/FavouritesDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -131,6 +132,7 @@ export default function App() {
       <Diagnostics />
       <FilterBrowser />
       <GraphEditor />
+      <FavouritesDialog />
       <QueuePanel />
       <RecoveryDialog />
       <Toasts />
