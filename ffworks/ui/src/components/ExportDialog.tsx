@@ -1,7 +1,7 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { useProject, useUi } from "../state/stores";
+import { useJobs, useProject, useUi } from "../state/stores";
 import type { ExportPreset, JobEvent } from "../types";
 
 export function ExportDialog() {
@@ -13,15 +13,12 @@ export function ExportDialog() {
   const [preset, setPreset] = useState("h264_mp4");
   const [output, setOutput] = useState("");
   const [command, setCommand] = useState("");
-  const [job, setJob] = useState<JobEvent | null>(null);
+  const setQueueOpen = useJobs((st) => st.setQueueOpen);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const job: JobEvent | null = useJobs((st) => (jobId ? st.jobs[jobId] ?? null : null));
   const [verify, setVerify] = useState<string | null>(null);
 
   useEffect(() => { void api.listExportPresets().then(setPresets); }, []);
-  useEffect(() => {
-    let un: (() => void) | undefined;
-    void api.onJob((e) => setJob(e)).then((u) => (un = u));
-    return () => un?.();
-  }, []);
   useEffect(() => {
     if (!open || !output) return setCommand("");
     api.previewCommand(preset, output).then(setCommand).catch((e) => setCommand(`Cannot build command: ${e}`));
@@ -40,8 +37,7 @@ export function ExportDialog() {
   };
   const start = async () => {
     setVerify(null);
-    setJob(null);
-    try { await api.startExport(preset, output); } catch (e) { toast("error", String(e)); }
+    try { setJobId(await api.startExport(preset, output)); } catch (e) { toast("error", String(e)); }
   };
 
   return (
@@ -50,13 +46,13 @@ export function ExportDialog() {
         <h2>Export</h2>
         <div className="field">
           <label htmlFor="preset">Preset</label>
-          <select id="preset" value={preset} onChange={(e) => { setPreset(e.target.value); setOutput(""); }} disabled={!!running}>
+          <select id="preset" value={preset} onChange={(e) => { setPreset(e.target.value); setOutput(""); }} disabled={false}>
             {presets.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
         </div>
         <div className="field">
           <label>Destination</label>
-          <div className="row"><input readOnly value={output} placeholder="Choose a file…" aria-label="Destination" /><button onClick={() => void choose()} disabled={!!running}>Browse…</button></div>
+          <div className="row"><input readOnly value={output} placeholder="Choose a file…" aria-label="Destination" /><button onClick={() => void choose()}>Browse…</button></div>
         </div>
         <details><summary>FFmpeg command (Command Inspector)</summary><pre className="cmd">{command || "Choose a destination to see the exact FFmpeg command."}</pre></details>
         {job && (
@@ -67,7 +63,7 @@ export function ExportDialog() {
                 <div className="muted">{job.fraction != null ? `${Math.round(job.fraction * 100)}%` : "working…"}{job.fps ? ` · ${job.fps.toFixed(0)} fps` : ""} · {job.elapsed_secs.toFixed(0)}s elapsed{job.eta_secs != null ? ` · ~${job.eta_secs.toFixed(0)}s left` : ""}</div>
               </>
             )}
-            {job.state === "queued" && <progress />}
+            {job.state === "queued" && <div className="muted">Queued — it starts when earlier jobs finish.</div>}
             {job.state === "completed" && <div className="ok">Export complete → {job.output}</div>}
             {job.state === "failed" && <div className="err">Export failed: {job.message}</div>}
             {job.state === "canceled" && <div className="muted">Export canceled. No file was written.</div>}
@@ -75,9 +71,10 @@ export function ExportDialog() {
           </div>
         )}
         <div className="row end">
-          {running && <button onClick={() => job && void api.cancelJob(job.jobId)}>Cancel export</button>}
-          <button onClick={() => setOpen(false)}>{running ? "Hide" : "Close"}</button>
-          <button className="primary" disabled={!output || !!running} onClick={() => void start()}>Export</button>
+          {running && <button onClick={() => job && void api.cancelJob(job.jobId)}>Cancel this export</button>}
+          <button onClick={() => { setOpen(false); setQueueOpen(true); }}>Open queue</button>
+          <button onClick={() => setOpen(false)}>Close</button>
+          <button className="primary" disabled={!output} onClick={() => void start()}>Add to queue</button>
         </div>
       </div>
     </div>

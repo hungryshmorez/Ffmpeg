@@ -4,6 +4,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useEffect } from "react";
 import { api } from "./api";
 import { APP_NAME } from "./brand";
+import { QueuePanel } from "./components/QueuePanel";
 import { RecoveryDialog } from "./components/RecoveryDialog";
 import { Diagnostics } from "./components/Diagnostics";
 import { ExportDialog } from "./components/ExportDialog";
@@ -12,7 +13,7 @@ import { importPaths, MediaBrowser } from "./components/MediaBrowser";
 import { Monitor } from "./components/Monitor";
 import { Timeline } from "./components/Timeline";
 import { deleteSelected, openProject, saveProject, splitAtPlayhead, Toolbar } from "./components/Toolbar";
-import { usePlayhead, useProject, useUi } from "./state/stores";
+import { useJobs, usePlayhead, useProject, useUi } from "./state/stores";
 import { fpsOf } from "./time";
 
 function Toasts() {
@@ -32,6 +33,14 @@ export default function App() {
 
   useEffect(() => {
     void api.getState().then((v) => useProject.getState().setView(v)).catch((e) => useProject.getState().toast("error", String(e)));
+  }, []);
+
+  // Mirror the Rust render queue.
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    void api.listJobs().then((l) => useJobs.getState().replaceAll(l)).catch(() => undefined);
+    void api.onJob((e) => useJobs.getState().upsert(e)).then((u) => (un = u));
+    return () => un?.();
   }, []);
 
   // Native window title mirrors project name / dirty state.
@@ -107,6 +116,7 @@ export default function App() {
       <Timeline />
       <ExportDialog />
       <Diagnostics />
+      <QueuePanel />
       <RecoveryDialog />
       <Toasts />
     </div>

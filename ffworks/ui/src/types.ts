@@ -53,7 +53,9 @@ export type Command =
 export interface Waveform { bins_per_sec: number; peaks: number[] }
 export interface ExportPreset { id: string; name: string; extension: string; video_codec: string | null; audio_codec: string | null }
 
-export type JobEvent = { jobId: string; operation: string; output: string } & (
+export interface JobLog { job_id: string; executable: string; args: string[]; started_unix: number; ended_unix: number | null; exit_code: number | null; stderr: string; operation: string }
+
+export type JobEvent = { jobId: string; operation: string; output: string; priority: number; enqueuedUnix: number } & (
   | { state: "queued" }
   | { state: "rendering"; fraction: number | null; fps: number | null; elapsed_secs: number; eta_secs: number | null }
   | { state: "completed" }

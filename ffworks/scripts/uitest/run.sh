@@ -7,7 +7,7 @@ W=$(mktemp -d "/tmp/ffworks-uitest.XXXXXX")
 mkdir -p "$W/m ü"
 ffmpeg -v error -y -f lavfi -i "color=c=red:s=320x240:r=25:d=4" -f lavfi -i "sine=f=440:r=44100:d=4" -c:v libx264 -pix_fmt yuv420p -g 12 -c:a aac -shortest "$W/m ü/a red.mp4"
 ffmpeg -v error -y -f lavfi -i "color=c=blue:s=640x480:r=24000/1001:d=4" -f lavfi -i "sine=f=880:r=44100:d=4" -c:v libx264 -pix_fmt yuv420p -g 12 -c:a aac -shortest "$W/m ü/b_blue.mp4"
-sed -e "s|__A__|$W/m ü/a red.mp4|" -e "s|__B__|$W/m ü/b_blue.mp4|" -e "s|__PROJECT__|$W/test.ffworks|" -e "s|__OUT__|$W/out.mp4|" scripts/uitest/uitest.js > "$W/uitest.js"
+sed -e "s|__A__|$W/m ü/a red.mp4|g" -e "s|__B__|$W/m ü/b_blue.mp4|g" -e "s|__PROJECT__|$W/test.ffworks|g" -e "s|__OUT__|$W/out.mp4|g" scripts/uitest/uitest.js > "$W/uitest.js"
 (cd ui && VITE_UITEST=1 npx vite build >/dev/null)
 touch src-tauri/src/lib.rs
 cargo build -p ffworks-app --features custom-protocol,uitest 2>&1 | tail -2

@@ -3,7 +3,7 @@ import { api } from "../api";
 import { PROJECT_EXTENSION } from "../brand";
 import { fromSec } from "../time";
 import { findClip, visibleVideoAt } from "../timeline/math";
-import { usePlayhead, useProject, useUi } from "../state/stores";
+import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
 import { importViaDialog } from "./MediaBrowser";
 
 export async function newProject() {
@@ -61,6 +61,8 @@ export function Toolbar() {
   const setExportOpen = useUi((s) => s.setExportOpen);
   const setDiagOpen = useUi((s) => s.setDiagOpen);
   const run = useProject((s) => s.run);
+  const activeJobs = useJobs((s) => Object.values(s.jobs).filter((j) => j.state === "queued" || j.state === "rendering").length);
+  const setQueueOpen = useJobs((s) => s.setQueueOpen);
   return (
     <div className="toolbar" role="toolbar" aria-label="Main toolbar">
       <span className="brand">FFWORKS</span>
@@ -79,6 +81,7 @@ export function Toolbar() {
       <button onClick={() => deleteSelected(true)} title="Ripple delete (Shift+Del)">Ripple delete</button>
       <span className="grow" />
       <span className="muted">{view.path ? view.path : "unsaved project"}</span>
+      <button onClick={() => setQueueOpen(true)} title="Render queue">Queue{activeJobs ? ` (${activeJobs})` : ""}</button>
       <button onClick={() => setDiagOpen(true)}>Diagnostics</button>
       <button className="primary" onClick={() => setExportOpen(true)}>Export…</button>
     </div>

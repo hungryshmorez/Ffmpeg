@@ -491,3 +491,119 @@ fn beats_are_detected_from_a_real_audio_file_and_cached() {
     ffmpeg(&["-f", "lavfi", "-i", "color=c=red:s=64x64:d=1", "-c:v", "libx264", silent.to_str().unwrap()]);
     assert!(ffworks_core::beats::detect(&tools(), &silent, &cache, "v").is_err());
 }
+
+mod queue_tests {
+    use super::*;
+    use ffworks_core::queue::{JobQueue, PRIORITY_BACKGROUND, PRIORITY_EXPORT};
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    fn job_for(eng: &Engine, out: PathBuf, slow: bool) -> ffworks_core::ffmpeg::FfmpegJob {
+        let g = render_graph::build(&eng.project).unwrap();
+        let mut s = ExportSettings::find("h264_mp4").unwrap();
+        if slow {
+            s.encoder_preset = Some("veryslow".into());
+        }
+        compile(&g, &RenderOptions { output: out, settings: s, range: None, scale_div: 1 }, None).unwrap()
+    }
+
+    fn wait_until(q: &JobQueue, id: &str, pred: impl Fn(&JobState) -> bool, secs: u64) -> bool {
+        let end = Instant::now() + Duration::from_secs(secs);
+        while Instant::now() < end {
+            if q.snapshot().iter().any(|j| j.job_id == id && pred(&j.state)) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+        false
+    }
+    fn finished(s: &JobState) -> bool {
+        matches!(s, JobState::Completed | JobState::Failed { .. } | JobState::Canceled)
+    }
+
+    #[test]
+    fn priority_order_cancel_queued_cancel_running_and_logs() {
+        let dir = tempfile::tempdir().unwrap();
+        let (eng, _) = single_clip_project(dir.path(), "red");
+        let q = JobQueue::new(tools(), dir.path().join("tmp"), 1);
+        let started: Arc<Mutex<Vec<String>>> = Arc::default();
+        let s2 = Arc::clone(&started);
+        q.set_listener(move |snap| {
+            if matches!(snap.state, JobState::Rendering { .. }) && !s2.lock().unwrap().contains(&snap.job_id) {
+                s2.lock().unwrap().push(snap.job_id.clone());
+            }
+        });
+
+        let out = |n: &str| dir.path().join(n);
+        let first = q.submit(job_for(&eng, out("first.mp4"), true), "export", PRIORITY_EXPORT);
+        assert!(wait_until(&q, &first, |s| matches!(s, JobState::Rendering { .. }), 10));
+        let low = q.submit(job_for(&eng, out("low.mp4"), false), "background", PRIORITY_BACKGROUND);
+        let canceled_while_queued = q.submit(job_for(&eng, out("never.mp4"), false), "export", PRIORITY_EXPORT);
+        let high = q.submit(job_for(&eng, out("high.mp4"), false), "export", PRIORITY_EXPORT + 5);
+        assert_eq!(q.active(), 4);
+        assert!(q.cancel(&canceled_while_queued));
+        assert!(!q.cancel("job_does_not_exist"));
+        // cancel the long-running first job so the rest proceed
+        assert!(q.cancel(&first));
+        assert!(wait_until(&q, &first, finished, 20));
+        assert!(wait_until(&q, &low, finished, 60) && wait_until(&q, &high, finished, 60));
+
+        let snaps = q.snapshot();
+        let state = |id: &str| snaps.iter().find(|j| j.job_id == id).unwrap().state.clone();
+        assert_eq!(state(&first), JobState::Canceled);
+        assert_eq!(state(&canceled_while_queued), JobState::Canceled);
+        assert_eq!(state(&high), JobState::Completed);
+        assert_eq!(state(&low), JobState::Completed);
+        assert!(!out("first.mp4").exists() && !out("never.mp4").exists(), "canceled jobs write nothing");
+        assert!(out("high.mp4").exists() && out("low.mp4").exists());
+
+        // order: first (running), then the high-priority job before the low one; the canceled-queued job never ran
+        let order = started.lock().unwrap().clone();
+        assert_eq!(order, vec![first.clone(), high.clone(), low.clone()], "{order:?}");
+
+        // logs: completed job has argv, exit code 0; canceled running job still has a log
+        let end = Instant::now() + Duration::from_secs(5);
+        while q.log(&high).is_none() && Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(30));
+        }
+        let log = q.log(&high).expect("completed job has a log");
+        assert_eq!(log.exit_code, Some(0));
+        assert!(log.args.iter().any(|a| a == "-filter_complex_script"));
+        assert!(q.log(&canceled_while_queued).is_none(), "a job that never ran has no log");
+        q.clear_finished();
+        assert!(q.snapshot().is_empty());
+        q.shutdown();
+    }
+
+    #[test]
+    fn failed_job_keeps_stderr_and_a_plain_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let (eng, _) = single_clip_project(dir.path(), "red");
+        let q = JobQueue::new(tools(), dir.path().join("tmp"), 1);
+        let id = q.submit(job_for(&eng, dir.path().join("no_such_dir/x.mp4"), false), "export", PRIORITY_EXPORT);
+        assert!(wait_until(&q, &id, finished, 30));
+        assert!(matches!(q.snapshot()[0].state, JobState::Failed { .. }));
+        let end = Instant::now() + Duration::from_secs(5);
+        while q.log(&id).is_none() && Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(30));
+        }
+        let log = q.log(&id).expect("failed jobs keep their log");
+        assert_ne!(log.exit_code, Some(0));
+        assert!(!log.stderr.is_empty());
+        q.shutdown();
+    }
+
+    #[test]
+    fn two_workers_run_two_jobs_at_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let (eng, _) = single_clip_project(dir.path(), "red");
+        let q = JobQueue::new(tools(), dir.path().join("tmp"), 2);
+        let a = q.submit(job_for(&eng, dir.path().join("a.mp4"), true), "export", PRIORITY_EXPORT);
+        let b = q.submit(job_for(&eng, dir.path().join("b.mp4"), true), "export", PRIORITY_EXPORT);
+        assert!(wait_until(&q, &a, |s| matches!(s, JobState::Rendering { .. }), 10));
+        assert!(wait_until(&q, &b, |s| matches!(s, JobState::Rendering { .. }), 10), "second worker picks up the second job");
+        q.cancel(&a);
+        q.cancel(&b);
+        q.shutdown();
+    }
+}

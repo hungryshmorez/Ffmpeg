@@ -152,6 +152,29 @@
     for (let i = 0; i < 240 && !ver; i++) { await sleep(500); try { ver = await inv("verify_output", { path: "__OUT__" }); } catch (_) {} }
     R.info.verify = ver;
     step("export finished and FFprobe verification matches the timeline", ver && /640×360|1920×1080/.test(ver) && !/WARNING/.test(ver), ver);
+    // render queue: three jobs through the UI-visible queue; the last is canceled while still queued
+    {
+      const A = "__OUT__".replace(/out\.mp4$/, "qa.mp4"), B = "__OUT__".replace(/out\.mp4$/, "qb.mp4"), C = "__OUT__".replace(/out\.mp4$/, "qc.mp4");
+      const ids = [];
+      for (const o of [A, B, C]) ids.push(await inv("start_export", { preset: "h264_mp4", output: o }));
+      clickBtn("Queue"); await sleep(400);
+      step("Queue panel lists the submitted jobs", !!$("[aria-label='Render queue']") && $$(".job-row").length >= 3, $$(".job-row").length);
+      const rowC = $(`.job-row[data-job='${ids[2]}']`);
+      const cancelBtn = rowC && [...rowC.querySelectorAll("button")].find((b) => b.textContent === "Cancel");
+      step("a queued job has a Cancel button", !!cancelBtn);
+      cancelBtn.click(); await sleep(400);
+      step("canceling a queued job marks it canceled without running it", /canceled/.test($(`.job-row[data-job='${ids[2]}'] .state-badge`).textContent));
+      const done = await waitFor(() => ["qa", "qb"].every((_, i) => /completed/.test(($(`.job-row[data-job='${ids[i]}'] .state-badge`) || {}).textContent || "")), 120000);
+      step("the other two jobs complete in the background", !!done, ids.map((id) => ($(`.job-row[data-job='${id}']`) || {}).textContent).join(" || "));
+      const logBtn = [...$(`.job-row[data-job='${ids[0]}']`).querySelectorAll("button")].find((b) => b.textContent === "Log"); logBtn.click(); await sleep(500);
+      const logTxt = ($(`.job-row[data-job='${ids[0]}'] pre`) || {}).textContent || "";
+      step("job log shows exit code 0 and the real FFmpeg command line", /exit code: 0/.test(logTxt) && /-filter_complex_script/.test(logTxt), logTxt.slice(0, 120));
+      let v1 = null, v2 = null, v3 = true;
+      try { v1 = await inv("verify_output", { path: A }); v2 = await inv("verify_output", { path: B }); } catch (e) { v1 = null; }
+      try { await inv("verify_output", { path: C }); } catch (e) { v3 = false; }
+      step("queued exports produced valid files and the canceled one produced none", !!v1 && !!v2 && v3 === false);
+      clickBtn("Close"); await sleep(100);
+    }
     void dlg;
   } catch (e) {
     step("no exception", false, (e && e.stack) || e);

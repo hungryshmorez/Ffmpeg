@@ -66,6 +66,10 @@ A registry of `EffectDef`s (id, category, required FFmpeg filters, `ParamDef`s w
 
 FFmpeg decodes the first audio stream to mono 44.1 kHz f32; a 1024-sample Hann-windowed FFT (hop 512) gives spectral flux; peaks must be local maxima, exceed 1.35× the moving average and a 5 % strength floor, and be ≥ 0.18 s apart; BPM is the median inter-onset interval folded into 60–200. Results are cached per media fingerprint. Beat times are source-relative; the UI maps them to the timeline per clip (`beatPoints`) for ticks and snapping.
 
+## Render queue (`queue.rs`)
+
+`JobQueue` owns worker threads (concurrency limit, default 1). `submit(job, operation, priority)` returns an id; workers always take the highest-priority queued job, oldest first (`PRIORITY_EXPORT` > `PRIORITY_BACKGROUND`). `cancel` removes a queued job without ever running it or kills a running one (nothing is written to the destination). Every state change goes to a listener (Tauri turns it into `job-state` events); `run_job_logged` guarantees a `JobLog` (argv, exit code, stderr) for completed, failed and canceled runs. Not yet done: persisting queue state across crashes (spec §160) and routing previews/analysis through the queue.
+
 ## Jobs (`jobs.rs`)
 
 `run_job` executes on a worker thread with real progress from FFmpeg `-progress pipe:1` (`out_time_us` ÷ timeline length → fraction; no fake percentages), ETA, cancellation (watchdog kills the process tree), stderr capture, and a `JobLog` (executable, argv, timestamps, exit code, stderr). Output goes to `name.ffworks-partial.ext` and is renamed on success, so a failed/cancelled export never leaves a truncated file or clobbers a good one. Failures get a plain-language hint (`explain_failure`) alongside the raw log.

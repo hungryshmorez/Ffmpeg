@@ -14,6 +14,7 @@ pub mod patch;
 pub mod preview;
 pub mod process;
 pub mod project;
+pub mod queue;
 pub mod recovery;
 pub mod relink;
 pub mod render_graph;

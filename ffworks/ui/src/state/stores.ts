@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "../api";
-import type { Command, PreviewInfo, StateView } from "../types";
+import type { Command, JobEvent, PreviewInfo, StateView } from "../types";
 
 /** Persistent project state mirrored from the Rust engine (serialisable; the engine is the source of truth). */
 interface ProjectStore {
@@ -35,6 +35,24 @@ export const useProject = create<ProjectStore>((set, get) => ({
     }
   },
   dispatch: (c) => get().run(() => api.dispatch(c)),
+}));
+
+/** Render queue mirror: updated from backend `job-state` events (the queue itself lives in Rust). */
+interface JobsStore {
+  jobs: Record<string, JobEvent>;
+  order: string[];
+  queueOpen: boolean;
+  upsert: (e: JobEvent) => void;
+  replaceAll: (e: JobEvent[]) => void;
+  setQueueOpen: (o: boolean) => void;
+}
+export const useJobs = create<JobsStore>((set) => ({
+  jobs: {},
+  order: [],
+  queueOpen: false,
+  upsert: (e) => set((s) => ({ jobs: { ...s.jobs, [e.jobId]: e }, order: s.order.includes(e.jobId) ? s.order : [...s.order, e.jobId] })),
+  replaceAll: (list) => set({ jobs: Object.fromEntries(list.map((j) => [j.jobId, j])), order: list.map((j) => j.jobId) }),
+  setQueueOpen: (queueOpen) => set({ queueOpen }),
 }));
 
 /** High-frequency playback state lives apart so ticking the playhead never re-renders the whole editor. */

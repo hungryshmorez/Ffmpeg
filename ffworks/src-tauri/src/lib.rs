@@ -5,27 +5,21 @@ use ffworks_core::analysis;
 use ffworks_core::commands::Command;
 use ffworks_core::engine::{prepare_asset, Engine};
 use ffworks_core::ffmpeg::{compile, ExportSettings, FfmpegJob, RenderOptions};
-use ffworks_core::jobs::{run_job, CancelToken, JobLog, JobState};
+use ffworks_core::jobs::{CancelToken, JobLog};
+use ffworks_core::queue::{JobQueue, JobSnapshot, PRIORITY_EXPORT};
 use ffworks_core::process::{Capabilities, Tools};
 use ffworks_core::project::{Project, ProjectSettings};
 use ffworks_core::{render_graph, Rational};
 use serde::Serialize;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-struct JobEntry {
-    cancel: CancelToken,
-    log: Option<JobLog>,
-}
-
 struct AppState {
     engine: Mutex<Engine>,
-    jobs: Mutex<HashMap<String, JobEntry>>,
+    queue: JobQueue,
     caps: Mutex<Option<Capabilities>>,
     cache_dir: PathBuf,
-    temp_dir: PathBuf,
     recovery_dir: PathBuf,
     settings_file: PathBuf,
 }
@@ -231,6 +225,7 @@ fn set_settings(state: State<AppState>, ffmpeg_path: Option<String>, ffprobe_pat
     let tools = new.tools();
     let (ff, pr) = ffworks_core::settings::validate_tools(&tools).map_err(s)?;
     new.save(&state.settings_file).map_err(s)?;
+    state.queue.set_tools(tools.clone());
     state.engine.lock().unwrap().tools = tools;
     *state.caps.lock().unwrap() = None;
     Ok(serde_json::json!({ "ffmpeg": ff, "ffprobe": pr }))
@@ -308,44 +303,31 @@ fn preview_command(state: State<AppState>, preset: String, output: String) -> Re
     Ok(build_job(&state, &preset, &output, None, 1)?.display())
 }
 
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct JobEvent {
-    job_id: String,
-    operation: String,
-    output: String,
-    #[serde(flatten)]
-    state: JobState,
-}
-
+/// Queue an export. It runs in the background (one at a time by default); progress arrives as `job-state` events.
 #[tauri::command]
-fn start_export(app: AppHandle, state: State<AppState>, preset: String, output: String) -> Result<String, String> {
+fn start_export(state: State<AppState>, preset: String, output: String) -> Result<String, String> {
     let job = build_job(&state, &preset, &output, None, 1)?;
-    let tools = state.engine.lock().unwrap().tools.clone();
-    let job_id = format!("job_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
-    let cancel = CancelToken::new();
-    state.jobs.lock().unwrap().insert(job_id.clone(), JobEntry { cancel: cancel.clone(), log: None });
-    let temp = state.temp_dir.clone();
-    let (id2, out2, app2) = (job_id.clone(), output.clone(), app.clone());
-    std::thread::spawn(move || {
-        let emit = |st: JobState| {
-            let _ = app2.emit("job-state", JobEvent { job_id: id2.clone(), operation: "export".into(), output: out2.clone(), state: st });
-        };
-        let result = run_job(&tools, &job, &id2, "export", &cancel, &temp, &mut |st| emit(st));
-        if let Ok(log) = result {
-            if let Some(j) = app2.state::<AppState>().jobs.lock().unwrap().get_mut(&id2) {
-                j.log = Some(log);
-            }
-        }
-    });
-    Ok(job_id)
+    Ok(state.queue.submit(job, "export", PRIORITY_EXPORT))
 }
 
 #[tauri::command]
-fn cancel_job(state: State<AppState>, job_id: String) {
-    if let Some(j) = state.jobs.lock().unwrap().get(&job_id) {
-        j.cancel.cancel();
-    }
+fn cancel_job(state: State<AppState>, job_id: String) -> bool {
+    state.queue.cancel(&job_id)
+}
+
+#[tauri::command]
+fn list_jobs(state: State<AppState>) -> Vec<JobSnapshot> {
+    state.queue.snapshot()
+}
+
+#[tauri::command]
+fn get_job_log(state: State<AppState>, job_id: String) -> Option<JobLog> {
+    state.queue.log(&job_id)
+}
+
+#[tauri::command]
+fn clear_finished_jobs(state: State<AppState>) {
+    state.queue.clear_finished();
 }
 
 /// Post-export FFprobe check (spec §166): reports what the file actually contains.
@@ -400,12 +382,16 @@ pub fn run() {
             let base = app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir().join("ffworks"));
             let settings_file = app.path().app_config_dir().unwrap_or_else(|_| base.clone()).join("settings.json");
             let tools = ffworks_core::settings::Settings::load(&settings_file).tools();
+            let queue = JobQueue::new(tools.clone(), base.join("tmp"), 1);
+            let emitter = app.handle().clone();
+            queue.set_listener(move |snap| {
+                let _ = emitter.emit("job-state", snap);
+            });
             app.manage(AppState {
                 engine: Mutex::new(Engine::new("Untitled", ProjectSettings::default(), tools)),
-                jobs: Mutex::new(HashMap::new()),
+                queue,
                 caps: Mutex::new(None),
                 cache_dir: base.join("analysis"),
-                temp_dir: base.join("tmp"),
                 recovery_dir: base.join("recovery"),
                 settings_file,
             });
@@ -436,12 +422,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
+            get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
+            get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

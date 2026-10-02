@@ -69,10 +69,44 @@ pub fn run_job(
     temp_dir: &std::path::Path,
     on_state: &mut dyn FnMut(JobState),
 ) -> Result<JobLog> {
-    std::fs::create_dir_all(temp_dir).map_err(|e| Error::io(temp_dir, e))?;
+    let (result, log) = run_job_logged(tools, job, job_id, operation, cancel, temp_dir, on_state);
+    result.map(|()| log.expect("log exists after a successful run"))
+}
+
+/// Like [`run_job`], but always returns the log when FFmpeg was started, including for failed and canceled runs.
+pub fn run_job_logged(
+    tools: &Tools,
+    job: &FfmpegJob,
+    job_id: &str,
+    operation: &str,
+    cancel: &CancelToken,
+    temp_dir: &std::path::Path,
+    on_state: &mut dyn FnMut(JobState),
+) -> (Result<()>, Option<JobLog>) {
+    run_inner(tools, job, job_id, operation, cancel, temp_dir, on_state)
+}
+
+fn run_inner(
+    tools: &Tools,
+    job: &FfmpegJob,
+    job_id: &str,
+    operation: &str,
+    cancel: &CancelToken,
+    temp_dir: &std::path::Path,
+    on_state: &mut dyn FnMut(JobState),
+) -> (Result<()>, Option<JobLog>) {
+    macro_rules! tri {
+        ($e:expr) => {
+            match $e {
+                Ok(v) => v,
+                Err(e) => return (Err(e), None),
+            }
+        };
+    }
+    tri!(std::fs::create_dir_all(temp_dir).map_err(|e| Error::io(temp_dir, e)));
     // Write the filter graph to a managed temp file (never to a shell). Removed afterwards.
     let script: PathBuf = temp_dir.join(format!("{job_id}.filtergraph"));
-    std::fs::write(&script, &job.filter_graph).map_err(|e| Error::io(&script, e))?;
+    tri!(std::fs::write(&script, &job.filter_graph).map_err(|e| Error::io(&script, e)));
     let args = job.argv(Some(&script));
 
     // Render to a partial file and rename on success, so a failed/canceled export never leaves a
@@ -99,7 +133,7 @@ pub fn run_job(
     let mut cmd = Command::new(&tools.ffmpeg);
     cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     suppress_console_window(&mut cmd);
-    let mut child = cmd.spawn().map_err(|e| Error::ToolUnavailable { tool: tools.ffmpeg.display().to_string(), reason: e.to_string() })?;
+    let mut child = tri!(cmd.spawn().map_err(|e| Error::ToolUnavailable { tool: tools.ffmpeg.display().to_string(), reason: e.to_string() }));
 
     // Drain stderr on its own thread so a full pipe can never stall FFmpeg.
     let stderr_buf = Arc::new(Mutex::new(String::new()));
@@ -163,7 +197,7 @@ pub fn run_job(
             }
         }
     }
-    let status = child.wait().map_err(|e| Error::ToolUnavailable { tool: "ffmpeg".into(), reason: e.to_string() })?;
+    let status = tri!(child.wait().map_err(|e| Error::ToolUnavailable { tool: "ffmpeg".into(), reason: e.to_string() }));
     done.store(true, Ordering::SeqCst);
     let _ = watchdog.join();
     let _ = err_thread.join();
@@ -176,17 +210,20 @@ pub fn run_job(
     if cancel.is_canceled() {
         let _ = std::fs::remove_file(&partial);
         on_state(JobState::Canceled);
-        return Err(Error::Canceled);
+        return (Err(Error::Canceled), Some(log));
     }
     if !status.success() {
         let _ = std::fs::remove_file(&partial);
         let msg = explain_failure(&log.stderr);
         on_state(JobState::Failed { message: msg.clone() });
-        return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: status.code(), hint: msg });
+        return (Err(Error::ToolFailed { tool: "ffmpeg".into(), code: status.code(), hint: msg }), Some(log));
     }
-    std::fs::rename(&partial, &final_out).map_err(|e| Error::io(&final_out, e))?;
+    if let Err(e) = std::fs::rename(&partial, &final_out).map_err(|e| Error::io(&final_out, e)) {
+        on_state(JobState::Failed { message: e.to_string() });
+        return (Err(e), Some(log));
+    }
     on_state(JobState::Completed);
-    Ok(log)
+    (Ok(()), Some(log))
 }
 
 fn partial_path(out: &std::path::Path) -> PathBuf {
