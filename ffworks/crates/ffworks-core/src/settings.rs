@@ -22,6 +22,56 @@ pub struct Settings {
     /// Extra folders holding frei0r plugins (glitch0r, pixeliz0r...), searched before the standard ones.
     #[serde(default)]
     pub frei0r_dirs: Vec<String>,
+    /// Named effect stacks saved from a clip ("My glitch look") that can be applied to any clip of the same kind.
+    #[serde(default)]
+    pub effect_presets: std::collections::BTreeMap<String, EffectPreset>,
+}
+
+/// One effect inside a preset: the effect id and its parameter values.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PresetEffect {
+    pub effect: String,
+    #[serde(default)]
+    pub params: std::collections::BTreeMap<String, f64>,
+}
+
+/// A saved effect stack. `kind` is "video" or "audio": which clips it can be applied to.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct EffectPreset {
+    pub kind: String,
+    pub effects: Vec<PresetEffect>,
+}
+
+pub const MAX_PRESETS: usize = 100;
+
+impl EffectPreset {
+    /// Check every effect exists, belongs to `kind`, and has parameters inside their ranges. Custom filter graphs are not saved
+    /// (their node graph is part of the project, not a parameter list).
+    pub fn validate(&self, name: &str) -> Result<()> {
+        let n = name.trim();
+        if n.is_empty() || n.chars().count() > 60 {
+            return Err(Error::validation("preset names must be 1-60 characters"));
+        }
+        if self.kind != "video" && self.kind != "audio" {
+            return Err(Error::validation("preset kind must be video or audio"));
+        }
+        if self.effects.is_empty() || self.effects.len() > 30 {
+            return Err(Error::validation("a preset needs 1-30 effects"));
+        }
+        for fx in &self.effects {
+            let def = crate::effects::find(&fx.effect)?;
+            if fx.effect == crate::effects::GRAPH_EFFECT {
+                return Err(Error::validation("custom filter graphs cannot be saved as presets"));
+            }
+            if def.kind != self.kind {
+                return Err(Error::validation(format!("'{}' is a {} effect, not {}", def.name, def.kind, self.kind)));
+            }
+            for (k, v) in &fx.params {
+                crate::effects::check_param(&def, k, *v)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A set of favourite effects and transitions (ids as listed by the effect registry / FFmpeg's transition names).
@@ -90,6 +140,17 @@ impl Favourites {
 }
 
 impl Settings {
+    /// Add or replace a preset (validated). Names are trimmed.
+    pub fn put_preset(&mut self, name: &str, preset: EffectPreset) -> Result<()> {
+        preset.validate(name)?;
+        let n = name.trim().to_string();
+        if !self.effect_presets.contains_key(&n) && self.effect_presets.len() >= MAX_PRESETS {
+            return Err(Error::validation(format!("at most {MAX_PRESETS} presets; delete one first")));
+        }
+        self.effect_presets.insert(n, preset);
+        Ok(())
+    }
+
     pub fn load(file: &Path) -> Settings {
         std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
     }
@@ -234,5 +295,36 @@ mod fav_tests {
         assert!(f.pool("favourites").unwrap().unwrap().effects.is_empty());
         assert_eq!(f.pool("Clean").unwrap().unwrap().effects, vec!["contrast".to_string()]);
         assert!(f.pool("Missing").is_err());
+    }
+}
+
+#[cfg(test)]
+mod preset_tests {
+    use super::*;
+
+    fn fx(effect: &str, params: &[(&str, f64)]) -> PresetEffect {
+        PresetEffect { effect: effect.into(), params: params.iter().map(|(k, v)| (k.to_string(), *v)).collect() }
+    }
+
+    #[test]
+    fn presets_are_validated_stored_replaced_and_survive_a_save_load() {
+        let mut st = Settings::default();
+        let ok = EffectPreset { kind: "video".into(), effects: vec![fx("blur", &[("sigma", 9.0)]), fx("hue", &[("degrees", 40.0)])] };
+        st.put_preset("  Dreamy ", ok.clone()).unwrap();
+        assert!(st.effect_presets.contains_key("Dreamy"), "name is trimmed");
+        let replaced = EffectPreset { kind: "video".into(), effects: vec![fx("negate", &[])] };
+        st.put_preset("Dreamy", replaced.clone()).unwrap();
+        assert_eq!(st.effect_presets["Dreamy"], replaced);
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("s.json");
+        st.save(&f).unwrap();
+        assert_eq!(Settings::load(&f).effect_presets["Dreamy"], replaced);
+        // refusals
+        assert!(st.put_preset("", ok.clone()).is_err());
+        assert!(st.put_preset("x", EffectPreset { kind: "video".into(), effects: vec![] }).is_err());
+        assert!(st.put_preset("x", EffectPreset { kind: "video".into(), effects: vec![fx("nope", &[])] }).is_err());
+        assert!(st.put_preset("x", EffectPreset { kind: "video".into(), effects: vec![fx("blur", &[("sigma", 9999.0)])] }).is_err());
+        assert!(st.put_preset("x", EffectPreset { kind: "audio".into(), effects: vec![fx("blur", &[])] }).is_err(), "video effect in an audio preset");
+        assert!(st.put_preset("x", EffectPreset { kind: "video".into(), effects: vec![fx("graph", &[])] }).is_err());
     }
 }

@@ -51,6 +51,26 @@
     step("paste to track adds the stack to every clip on the track (source clip gets a second copy too)", vs().map((c) => c.effects.length).join(",") === "4,2,2", vs().map((c) => c.effects.length).join(","));
     P().setView(await inv("undo")); await sleep(300);
     step("the whole paste-to-track is ONE undo step", vs().map((c) => c.effects.length).join(",") === "2,0,0", vs().map((c) => c.effects.length).join(","));
+    // ---- saved looks (effect presets in the settings file) ----
+    await select($$(".track.video .clip")[0]);
+    const nameBox = await waitFor(() => $("[aria-label=Effects][data-kind=video] input[aria-label='Look name']"));
+    setNum(nameBox, "Dreamy glitch"); await sleep(150);
+    btn("Save").click(); await sleep(500);
+    const stored = await inv("get_effect_presets");
+    if (false) step("debug", JSON.stringify(P().toasts || null) + " disabled=" + btn("Save")?.disabled + " name=" + (nameBox && nameBox.value) + " sel=" + window.__ffworks.useUi.getState().selected + " vs=" + vs().map((c) => c.id + ":" + c.effects.length).join(","));
+    step("the look is saved in the settings file with both effects and values", stored["Dreamy glitch"] && stored["Dreamy glitch"].effects.length === 2 && stored["Dreamy glitch"].effects[0].params.sigma === 9, JSON.stringify(stored));
+    await select($$(".track.video .clip")[2]);
+    const lookSel = await waitFor(() => $("[aria-label=Effects][data-kind=video] select[aria-label='Saved look']"));
+    setSel(lookSel, "Dreamy glitch"); await sleep(150);
+    btn("Apply").click(); await sleep(500);
+    const fx2 = vs()[2].effects;
+    step("applying the look puts both effects on the third clip", fx2.length === 2 && fx2[0].effect === "blur" && fx2[1].effect === "pixelate" && fx2[1].params.size === 40, JSON.stringify(fx2));
+    P().setView(await inv("undo")); await sleep(300);
+    step("applying a look is ONE undo step", vs()[2].effects.length === 0);
+    await select($$(".track.video .clip")[2]);
+    setSel($("[aria-label=Effects][data-kind=video] select[aria-label='Saved look']"), "Dreamy glitch"); await sleep(150);
+    $("[aria-label=Effects][data-kind=video] button[aria-label='Delete saved look']").click(); await sleep(500);
+    step("deleting removes it from the settings file", Object.keys(await inv("get_effect_presets")).length === 0);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

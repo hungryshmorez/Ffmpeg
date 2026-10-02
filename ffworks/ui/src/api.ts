@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, RelinkResult, StateView, Waveform } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -21,6 +21,9 @@ export const api = {
   detectRanges: (mediaId: string, kind: DetectKind, threshold: number, minLen: number) => invoke<[number, number][]>("detect_ranges", { mediaId, kind, threshold, minLen }),
   importSubtitles: (path: string, offset: number) => invoke<StateView>("import_subtitles", { path, offset }),
   syncOffset: (reference: string, clip: string) => invoke<{ lag: number; confidence: number; start: number }>("sync_offset", { reference, clip }),
+  getEffectPresets: () => invoke<Record<string, EffectPreset>>("get_effect_presets"),
+  saveEffectPreset: (name: string, preset: EffectPreset) => invoke<Record<string, EffectPreset>>("save_effect_preset", { name, preset }),
+  deleteEffectPreset: (name: string) => invoke<Record<string, EffectPreset>>("delete_effect_preset", { name }),
   measureLoudness: (mediaId: string) => invoke<Loudness>("measure_loudness", { mediaId }),
   getBeats: (mediaId: string) => invoke<BeatAnalysis>("get_beats", { mediaId }),
   getSettings: () => invoke<AppSettings>("get_settings"),

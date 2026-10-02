@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
-import type { Clip, EffectDef } from "../types";
+import type { Clip, EffectDef, EffectPreset } from "../types";
 import { CommitSlider } from "./CommitSlider";
 import { KeyframeField, type FieldSpec } from "./KeyframeField";
 import { useClipProps } from "./ClipPropsPanel";
@@ -35,6 +35,22 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
     void dispatch({ type: "batch", label: `Paste ${clip$.effects.length - skipped} effects onto ${targets.length} clip(s)`, commands: all });
   };
   const trackClips = view?.project.sequences[0]?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
+  const kind = clip.kind === "audio" ? "audio" : "video";
+  const [presets, setPresets] = useState<Record<string, EffectPreset>>({});
+  const [presetName, setPresetName] = useState("");
+  const [presetPick, setPresetPick] = useState("");
+  useEffect(() => { void api.getEffectPresets().then(setPresets).catch(() => {}); }, []);
+  const mine$ = Object.entries(presets).filter(([, p]) => p.kind === kind);
+  const savePreset = async () => {
+    const effects = clip.effects.filter((e) => e.effect !== "graph").map((e) => ({ effect: e.effect, params: { ...e.params } }));
+    try { setPresets(await api.saveEffectPreset(presetName.trim(), { kind, effects })); setPresetPick(presetName.trim()); setPresetName(""); toast("info", `Saved look "${presetName.trim()}"`); } catch (e) { toast("error", String(e)); }
+  };
+  const applyPreset = () => {
+    const p = presets[presetPick];
+    if (!p) return;
+    const commands = p.effects.map((e) => ({ type: "add_effect" as const, clip: clip.id, effect: e.effect, params: { ...e.params } }));
+    void dispatch({ type: "batch", label: `Apply look "${presetPick}"`, commands });
+  };
   const byId = (id: string) => defs.find((d) => d.id === id);
   const mine = defs.filter((d) => d.kind === clip.kind);
   const groups = [...new Set(mine.map((d) => d.category))];
@@ -61,6 +77,23 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           <button disabled={!sameKind} title="Add the copied effects to this clip (one undo step)" onClick={() => paste([clip])}>Paste</button>
           <button disabled={!sameKind || trackClips.length < 2} title="Add the copied effects to every clip on this track (one undo step)" onClick={() => paste(trackClips)}>Paste to track</button>
         </div>
+      </div>
+      <div className="field" aria-label="Saved looks">
+        <label>Saved looks</label>
+        <div className="row">
+          <input aria-label="Look name" placeholder="name this stack" value={presetName} onChange={(e) => setPresetName(e.target.value)} />
+          <button disabled={!presetName.trim() || clip.effects.filter((e) => e.effect !== "graph").length === 0} title="Save this clip's effect stack under that name" onClick={() => void savePreset()}>Save</button>
+        </div>
+        {mine$.length > 0 && (
+          <div className="row">
+            <select aria-label="Saved look" value={presetPick} onChange={(e) => setPresetPick(e.target.value)}>
+              <option value="">choose a look…</option>
+              {mine$.map(([n, pr]) => <option key={n} value={n}>{n} ({pr.effects.length})</option>)}
+            </select>
+            <button disabled={!presetPick} title="Add the saved effects to this clip (one undo step)" onClick={applyPreset}>Apply</button>
+            <button className="small" disabled={!presetPick} aria-label="Delete saved look" title="Delete this saved look" onClick={() => void api.deleteEffectPreset(presetPick).then((r) => { setPresets(r); setPresetPick(""); }).catch((e) => toast("error", String(e)))}>✕</button>
+          </div>
+        )}
       </div>
       <RandomBar kind="effects" roll={(pool, count, seed) => api.randomEffects(clip.id, count, pool, seed)} />
       {clip.effects.length === 0 && <p className="muted pad">No effects.</p>}

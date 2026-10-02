@@ -115,6 +115,7 @@ export interface AppSettings { ffmpeg_path: string | null; ffprobe_path: string 
 export interface RelinkResult { state: StateView; relinked: string[]; unresolved: { mediaId: string; candidates: { path: string; exact: boolean; reason: string }[] }[] }
 export interface BeatAnalysis { beats: number[]; bpm: number; duration: number }
 export interface SceneAnalysis { cuts: number[]; scenes: [number, number][]; threshold: number }
+export interface EffectPreset { kind: "video" | "audio"; effects: { effect: string; params: Record<string, number> }[] }
 export type DetectKind = "silence" | "black" | "freeze";
 export interface Loudness { integrated_lufs: number | null; range_lu: number; true_peak_dbtp: number | null }
 
