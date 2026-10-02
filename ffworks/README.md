@@ -33,7 +33,7 @@ Nothing in the UI is a placeholder: unimplemented features are simply absent.
 ## Requirements
 
 * Windows 10/11 x64 (target). Linux/macOS builds work for development.
-* **FFmpeg ≥ 4.4 and FFprobe** on `PATH`, set in *Diagnostics → FFmpeg location*, or via `FFWORKS_FFMPEG` / `FFWORKS_FFPROBE`. Not bundled and never downloaded automatically. *Diagnostics* in the app reports what was found (H.264 export needs a build with `libx264`).
+* **FFmpeg ≥ 4.4 and FFprobe.** The Windows installer built by CI bundles FFmpeg 7.1.1 (GPL build, see `THIRD_PARTY_NOTICES.md`), so end users need nothing else. For development, or to use your own build, they are resolved in this order: *Diagnostics → FFmpeg location*, `FFWORKS_FFMPEG`/`FFWORKS_FFPROBE`, the bundled copy, then `PATH`. Nothing is downloaded at runtime. *Diagnostics* in the app reports what was found (H.264 export needs a build with `libx264`).
 * Rust (stable), Node 20+. On Windows: Visual Studio Build Tools (C++) and WebView2 (preinstalled on Windows 11).
 
 ## Build and run

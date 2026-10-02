@@ -32,7 +32,7 @@ export function Diagnostics() {
         {ok && (
           <dl className="metadata">
             <div><dt>FFmpeg</dt><dd>{String(d.ffmpeg)}</dd></div>
-            <div><dt>ffmpeg path</dt><dd>{String(d.ffmpegPath)}</dd></div>
+            <div><dt>ffmpeg path</dt><dd>{String(d.ffmpegPath)}{d.bundled ? " (bundled with FFWORKS)" : ""}</dd></div>
             <div><dt>ffprobe path</dt><dd>{String(d.ffprobePath)}</dd></div>
             <div><dt>Filters / encoders</dt><dd>{String(d.filters)} / {String(d.encoders)}</dd></div>
             <div><dt>libx264 (H.264 export)</dt><dd>{d.x264 ? "available" : "MISSING — H.264 export will be refused"}</dd></div>

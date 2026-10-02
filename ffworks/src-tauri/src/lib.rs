@@ -22,6 +22,7 @@ struct AppState {
     cache_dir: PathBuf,
     recovery_dir: PathBuf,
     settings_file: PathBuf,
+    bundled_dir: Option<PathBuf>,
 }
 
 #[derive(Serialize)]
@@ -222,7 +223,7 @@ fn get_settings(state: State<AppState>) -> ffworks_core::settings::Settings {
 #[tauri::command]
 fn set_settings(state: State<AppState>, ffmpeg_path: Option<String>, ffprobe_path: Option<String>) -> Result<serde_json::Value, String> {
     let new = ffworks_core::settings::Settings { ffmpeg_path, ffprobe_path };
-    let tools = new.tools();
+    let tools = new.tools_with_bundled(state.bundled_dir.as_deref());
     let (ff, pr) = ffworks_core::settings::validate_tools(&tools).map_err(s)?;
     new.save(&state.settings_file).map_err(s)?;
     state.queue.set_tools(tools.clone());
@@ -364,6 +365,7 @@ fn get_diagnostics(state: State<AppState>) -> serde_json::Value {
     match caps(&state) {
         Some(c) => serde_json::json!({
             "ffmpeg": c.version, "ffmpegPath": tools.ffmpeg, "ffprobePath": tools.ffprobe,
+            "bundled": state.bundled_dir.as_ref().is_some_and(|d| tools.ffmpeg.starts_with(d)),
             "filters": c.filters.len(), "encoders": c.encoders.len(), "hwaccels": c.hwaccels,
             "x264": c.has_encoder("libx264"), "vp9": c.has_encoder("libvpx-vp9"),
         }),
@@ -386,7 +388,9 @@ pub fn run() {
         .setup(|app| {
             let base = app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir().join("ffworks"));
             let settings_file = app.path().app_config_dir().unwrap_or_else(|_| base.clone()).join("settings.json");
-            let tools = ffworks_core::settings::Settings::load(&settings_file).tools();
+            // Installer builds ship FFmpeg/FFprobe under <resources>/ffmpeg (see tauri.windows.conf.json).
+            let bundled_dir = app.path().resource_dir().ok().map(|d| d.join("ffmpeg"));
+            let tools = ffworks_core::settings::Settings::load(&settings_file).tools_with_bundled(bundled_dir.as_deref());
             let queue = JobQueue::new(tools.clone(), base.join("tmp"), 1);
             let emitter = app.handle().clone();
             queue.set_listener(move |snap| {
@@ -399,6 +403,7 @@ pub fn run() {
                 cache_dir: base.join("analysis"),
                 recovery_dir: base.join("recovery"),
                 settings_file,
+                bundled_dir,
             });
             // Autosave unsaved work periodically (spec §47). Never touches the saved project file.
             let secs = std::env::var("FFWORKS_AUTOSAVE_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20).max(1);
