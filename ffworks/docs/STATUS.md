@@ -75,6 +75,12 @@ Toolbar "Filters" opens a searchable list of every filter in the installed FFmpe
 * **Headless CLI** grew `presets`, `run` (apply a JSON list of commands to a project, all-or-nothing, `--dry-run`, `--save`), `detect`, `sync`, `batch` (transcode a folder). Test: `crates/ffworks-cli/tests/cli.rs`.
 * **Windows installer** now fetches the gyan full FFmpeg build and the official frei0r Win64 plugins in CI (see `.github/workflows/ffworks.yml`); the CI job summary lists which plugin filters the bundled build has and logs both SHA-256 values for pinning. Verified on CI so far: both downloads succeed; the installer build itself has not yet been confirmed after the tests fix.
 
+## Added after the first pass
+* **Image sequences:** import any one frame of `shot_0001.png …` as ONE clip (`imgseq.rs`, `-framerate`/`-start_number`), frame rate chosen at import; export preset "PNG image sequence" writes `name_00001.png …`. Tests: real render with colour fade, save/load, `seq.sh` 6 GUI checks, export frame count.
+* **Scopes:** waveform, vectorscope, histogram of the frame under the playhead and an audio spectrogram (`scopes.rs`, FFmpeg's own filters; PNG cached). Tests: scopes differ per picture, spectrogram peak sits at the tone's frequency; `scopes.sh` 6 GUI checks incl. the image really loading in the webview. Not done: live updating while playing.
+* **Demo mode "Keep look":** each demo segment can be saved as a saved look (with its random values) or added to the selected clip. Transitions can only be starred, not applied from the demo.
+* **Command palette** (Ctrl+K) lists every action with its shortcut; shortcuts themselves are still fixed.
+
 ## Unverified / known gaps
 * Proxies: the file properties are verified (960x540 H.264/AAC), but whether a proxy plays in a webview that cannot decode the original (e.g. ProRes on Windows WebView2) is unverified: this sandbox webview cannot decode H.264 at all, so only the "original fails → offer proxy → proxy created" path was exercised. Markers aren't exported as chapters yet.
 * Research notes: OpenShot (libopenshot LGPL-3) and Audacity (GPLv3) are reference only; do not copy their code into FFWORKS. Candidate FFmpeg-filter effects inspired by them: chroma key, mask, deinterlace, pixelate, phaser/chorus/flanger, gate, de-click.

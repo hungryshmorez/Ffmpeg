@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prettyKind, stepAt } from "./demo";
 
-const steps = [0, 1, 2].map((i) => ({ index: i, start: i * 3, transition: null, effects: [] }));
+const steps = [0, 1, 2].map((i) => ({ index: i, start: i * 3, transition: null, effects: [], fx: [] }));
 
 describe("demo helpers", () => {
   it("finds the segment playing at a time", () => {

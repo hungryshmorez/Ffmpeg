@@ -86,6 +86,17 @@
     btn(/^Start demo$/, dlg()).click();
     await waitFor(() => /No favourite effects/.test(document.body.textContent), 20000);
     step("an empty favourites pool is refused with a reason and nothing runs", /No favourite effects/.test(document.body.textContent) && !!btn(/^Start demo$/, dlg()));
+
+    // keep a look / use it on the selected clip
+    setSel(dlg().querySelector("select[aria-label='Effect pool']"), "all"); setSel(dlg().querySelector("select[aria-label='Transition pool']"), "all"); await sleep(100);
+    if (!check("Random effects").checked) click(check("Random effects"));
+    await sleep(150);
+    btn(/^Start demo$/, dlg()).click();
+    await waitFor(() => dlg().querySelector("button[aria-label^='Keep look']"), 30000);
+    dlg().querySelector("button[aria-label^='Keep look']").click(); await sleep(600);
+    const looks = await inv("get_effect_presets");
+    step("Keep look saves the segment's effect stack as a saved look", Object.keys(looks).some((k) => /^Demo look \d+-1$/.test(k)) && Object.values(looks)[0].effects.length >= 1, JSON.stringify(Object.keys(looks)));
+    btn(/^Stop$/, dlg()).click(); await sleep(300);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

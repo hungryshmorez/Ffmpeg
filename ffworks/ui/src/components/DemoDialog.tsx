@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { POOL_ALL, POOL_STARRED, toggleStar, useFavs } from "../state/favourites";
 import { useProject, useUi } from "../state/stores";
+import { pasteCommands } from "../state/fxClipboard";
 import type { DemoBatch } from "../types";
 import { prettyKind, stepAt } from "./demo";
 
@@ -10,6 +11,15 @@ import { prettyKind, stepAt } from "./demo";
  * Demo mode: cuts one of your clips into short segments with random transitions and/or effects, renders that as a preview,
  * plays it and keeps replacing it with a new random one until you stop. Your project is never changed.
  */
+/** Add a demo segment's effects (with their values) to the clip selected on the timeline, as one undo step. */
+function applyDemoLook(fx: { effect: string; params: Record<string, number> }[]) {
+  const { view, dispatch, toast } = useProject.getState();
+  const sel = useUi.getState().selected;
+  const clip = view?.project.sequences.find((q) => q.id === view.project.active_sequence)?.tracks.flatMap((t) => t.clips).find((c) => c.id === sel);
+  if (!clip || clip.kind !== "video") return toast("error", "Select a video clip on the timeline first");
+  void dispatch({ type: "batch", label: "Use demo look", commands: pasteCommands(fx.map((e, i) => ({ id: String(i), enabled: true, ...e })), clip).commands });
+}
+
 export function DemoDialog() {
   const open = useUi((s) => s.demoOpen);
   const setOpen = useUi((s) => s.setDemoOpen);
@@ -131,6 +141,11 @@ export function DemoDialog() {
                 {s.effects.map((e, i) => (
                   <span key={i}> {e}<button className="small" aria-label={`${favs.starred.effects.includes(e) ? "Unstar" : "Star"} effect ${e}`} onClick={() => void save(toggleStar(favs, "effects", e)).catch((er) => toast("error", String(er)))}>{favs.starred.effects.includes(e) ? "★" : "☆"}</button></span>
                 ))}
+                {s.fx.length > 0 && <>
+                  {" "}
+                  <button className="small" title="Save this segment's effect stack (with its random values) as a saved look" aria-label={`Keep look of segment ${s.index + 1}`} onClick={() => void api.saveEffectPreset(`Demo look ${batch.seed}-${s.index + 1}`, { kind: "video", effects: s.fx }).then(() => toast("info", `Saved "Demo look ${batch.seed}-${s.index + 1}" (apply it from the clip's Effects panel)`)).catch((er) => toast("error", String(er)))}>Keep look</button>
+                  <button className="small" title="Add this segment's effects to the clip selected on the timeline" aria-label={`Use look of segment ${s.index + 1} on the selected clip`} onClick={() => applyDemoLook(s.fx)}>Use on selected</button>
+                </>}
                 {!s.transition && s.effects.length === 0 && <span className="muted">start</span>}
               </li>
             ))}

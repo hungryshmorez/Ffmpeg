@@ -35,6 +35,9 @@ pub struct DemoStep {
     /// Transition into this segment (None for the first or when it could not be added).
     pub transition: Option<String>,
     pub effects: Vec<String>,
+    /// The same effects with their random parameter values, so a look can be kept.
+    #[serde(default)]
+    pub fx: Vec<crate::settings::PresetEffect>,
 }
 
 fn secs(x: f64) -> Rational {
@@ -85,12 +88,13 @@ pub fn build(project: &Project, tools: &Tools, o: &DemoOptions) -> Result<(Proje
         eng.dispatch(Command::PlaceClip { media: media_id.clone(), track: track.clone(), start: secs(i as f64 * o.segment_secs), source_in: Some(secs(from)), duration: Some(secs(o.segment_secs)), with_audio: false, audio_track: None })?;
         clips.push(eng.project.active()?.tracks.iter().find(|t| t.id == track).unwrap().clips.last().unwrap().id.clone());
     }
-    let mut steps: Vec<DemoStep> = (0..o.segments).map(|i| DemoStep { index: i, start: i as f64 * o.segment_secs, transition: None, effects: vec![] }).collect();
+    let mut steps: Vec<DemoStep> = (0..o.segments).map(|i| DemoStep { index: i, start: i as f64 * o.segment_secs, transition: None, effects: vec![], fx: vec![] }).collect();
     if let Some((count, pool)) = &o.effects {
         for (i, id) in clips.iter().enumerate() {
             let clip = eng.project.active()?.find_clip(id).unwrap().1.clone();
             let cmds = effect_stack(&clip, *count, o.seed.wrapping_add(i as u64 * 7919), pool.as_deref())?;
             steps[i].effects = cmds.iter().filter_map(|c| if let Command::AddEffect { effect, .. } = c { Some(effect.clone()) } else { None }).collect();
+            steps[i].fx = cmds.iter().filter_map(|c| if let Command::AddEffect { effect, params, .. } = c { Some(crate::settings::PresetEffect { effect: effect.clone(), params: params.clone() }) } else { None }).collect();
             eng.dispatch(Command::Batch { label: "demo effects".into(), commands: cmds })?;
         }
     }

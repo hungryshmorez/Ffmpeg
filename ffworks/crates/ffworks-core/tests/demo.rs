@@ -58,6 +58,10 @@ fn builds_segments_transitions_and_effects_without_touching_the_users_project() 
     assert_eq!(track.transitions.len(), 3);
     assert!(track.clips.iter().all(|c| c.effects.len() == 2), "two random effects on every segment");
     assert_eq!(steps.len(), 4);
+    assert!(steps.iter().flat_map(|s| &s.fx).any(|f| !f.params.is_empty()), "random values are recorded");
+    for st in &steps {
+        assert_eq!(st.fx.iter().map(|f| f.effect.clone()).collect::<Vec<_>>(), st.effects, "kept values belong to the listed effects");
+    }
     assert!(steps[0].transition.is_none() && steps[1..].iter().all(|s| s.transition.is_some()));
     assert!(steps.iter().all(|s| s.effects.len() == 2));
     assert_eq!(steps[2].start, 4.0);
