@@ -188,7 +188,7 @@ fn relative_gain_and_range_validation() {
 fn locked_track_blocks_edits() {
     let (mut e, m, v, _) = engine();
     place(&mut e, &m, &v, secs(0));
-    e.dispatch(Command::SetTrack { track: v.clone(), name: None, muted: None, locked: Some(true), gain_db: None }).unwrap();
+    e.dispatch(Command::SetTrack { track: v.clone(), name: None, muted: None, locked: Some(true), gain_db: None, pan: None, solo: None }).unwrap();
     let id = e.project.active().unwrap().tracks[0].clips[0].id.clone();
     assert!(e.dispatch(Command::DeleteClip { clip: id, ripple: false }).is_err());
 }
@@ -210,7 +210,7 @@ fn dirty_tracking_follows_undo() {
     e.undo().unwrap();
     assert!(e.is_dirty());
     let id = e.project.active().unwrap().tracks[0].id.clone();
-    e.dispatch(Command::SetTrack { track: id, name: Some("renamed".into()), muted: None, locked: None, gain_db: None }).unwrap();
+    e.dispatch(Command::SetTrack { track: id, name: Some("renamed".into()), muted: None, locked: None, gain_db: None, pan: None, solo: None }).unwrap();
     assert!(e.is_dirty(), "new edit at the same history depth as the save must not look clean");
 }
 

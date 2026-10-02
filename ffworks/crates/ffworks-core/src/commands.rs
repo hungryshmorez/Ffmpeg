@@ -31,7 +31,7 @@ pub enum Command {
     RelinkMedia { asset: MediaAsset },
     AddTrack { kind: TrackKind, name: Option<String> },
     RemoveTrack { track: Id },
-    SetTrack { track: Id, name: Option<String>, muted: Option<bool>, locked: Option<bool>, gain_db: Option<f64> },
+    SetTrack { track: Id, name: Option<String>, muted: Option<bool>, locked: Option<bool>, gain_db: Option<f64>, pan: Option<f64>, solo: Option<bool> },
     /// Place media on a track. For video media with audio, a linked audio clip is placed too
     /// (on `audio_track` or the first audio track with room) unless `with_audio` is false.
     PlaceClip {
@@ -60,6 +60,8 @@ pub enum Command {
     /// Set a static clip parameter (`x`, `y`, `scale`, `rotation`, `opacity`) or `fx:<effect id>:<param>`. Refused while the parameter is animated.
     SetClipParam { clip: Id, param: String, value: f64 },
     SetClipBlend { clip: Id, blend: String },
+    /// Linear fade-in / fade-out lengths (seconds, snapped to frames) for an audio clip. `None` leaves a side unchanged.
+    SetClipFades { clip: Id, fade_in: Option<Rational>, fade_out: Option<Rational> },
     /// Insert or update the keyframe of `param` at clip-relative `time` (snapped to the frame grid). `interp` keeps the existing curve shape when omitted.
     SetKeyframe { clip: Id, param: String, time: Rational, value: f64, #[serde(default)] interp: Option<Interp> },
     RemoveKeyframe { clip: Id, param: String, time: Rational },
@@ -108,6 +110,7 @@ impl Command {
             Command::SetClipOpacity { .. } => "Clip opacity".into(),
             Command::SetClipParam { param, .. } => format!("Set {param}"),
             Command::SetClipBlend { blend, .. } => format!("Blend mode {blend}"),
+            Command::SetClipFades { .. } => "Fades".into(),
             Command::SetKeyframe { param, .. } => format!("Keyframe {param}"),
             Command::RemoveKeyframe { param, .. } => format!("Remove keyframe {param}"),
             Command::ClearKeyframes { param, .. } => format!("Clear keyframes {param}"),
@@ -175,7 +178,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             Ok(vec![Patch::InsertTrack {
                 seq: sid,
                 index,
-                track: Track { id: new_id("trk"), name: name.clone().unwrap_or(default), kind: *kind, muted: false, locked: false, gain_db: 0.0, clips: vec![], transitions: vec![] },
+                track: Track { id: new_id("trk"), name: name.clone().unwrap_or(default), kind: *kind, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
             }])
         }
         Command::RemoveTrack { track } => {
@@ -185,8 +188,18 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(vec![Patch::RemoveTrack { seq: sid, track: track.clone() }])
         }
-        Command::SetTrack { track, name, muted, locked, gain_db } => {
+        Command::SetTrack { track, name, muted, locked, gain_db, pan, solo } => {
             let t = seq.track(track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
+            if let Some(p) = pan {
+                if !(-1.0..=1.0).contains(p) {
+                    return Err(Error::validation("pan must be between -1 and 1"));
+                }
+            }
+            if let Some(g) = gain_db {
+                if !g.is_finite() || !(-96.0..=24.0).contains(g) {
+                    return Err(Error::validation(format!("track gain {g} dB is outside -96..+24 dB")));
+                }
+            }
             Ok(vec![Patch::SetTrackProps {
                 seq: sid,
                 track: track.clone(),
@@ -194,6 +207,8 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 muted: muted.unwrap_or(t.muted),
                 locked: locked.unwrap_or(t.locked),
                 gain_db: gain_db.unwrap_or(t.gain_db),
+                pan: pan.unwrap_or(t.pan),
+                solo: solo.unwrap_or(t.solo),
             }])
         }
         Command::PlaceClip { media, track, start, source_in, duration, with_audio, audio_track } => {
@@ -324,6 +339,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                         }
                     }
                 }
+                c.clamp_fades();
                 let m = p.media(&c.media)?;
                 if c.duration < Rational::from_int(1).div(fps) {
                     return Err(Error::validation("trim would leave less than one frame; delete the clip instead"));
@@ -367,6 +383,11 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 right.link = right_link.clone();
                 // source ranges (a reversed clip plays its source end first, so the left piece takes the later source)
                 let cut = at - gc.start;
+                // the fade-in belongs to the left piece, the fade-out to the right one
+                left.fade_out = Rational::ZERO;
+                right.fade_in = Rational::ZERO;
+                left.clamp_fades();
+                right.clamp_fades();
                 if gc.freeze.is_none() {
                     if gc.reverse {
                         left.source_in = gc.source_in + (gc.duration - cut).mul(gc.speed);
@@ -406,21 +427,29 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(out)
         }
-        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetKeyframe { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
+        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
             let clip_id = match cmd {
-                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetKeyframe { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
+                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
                 _ => unreachable!(),
             };
             let (t, c) = seq.find_clip(clip_id).ok_or_else(|| Error::NotFound(format!("clip {clip_id}")))?;
             ensure_unlocked(t)?;
-            if c.kind != TrackKind::Video {
-                return Err(Error::validation("effects, transform, blend and opacity apply to video clips; select the video clip"));
+            if c.kind != TrackKind::Video && matches!(cmd, Command::SetClipOpacity { .. } | Command::SetClipBlend { .. }) {
+                return Err(Error::validation("opacity and blend mode apply to video clips; select the video clip"));
+            }
+            if c.kind != TrackKind::Audio && matches!(cmd, Command::SetClipFades { .. }) {
+                return Err(Error::validation("fades apply to audio clips; select the audio clip"));
             }
             let mut c2 = c.clone();
             let find_fx = |c: &Clip, id: &str| c.effects.iter().position(|e| e.id == id).ok_or_else(|| Error::NotFound(format!("effect {id}")));
             let animated = |c: &Clip, param: &str| c.keyframes.get(param).is_some_and(|k| !k.is_empty());
             match cmd {
                 Command::AddEffect { effect, params, index, .. } => {
+                    let want = if c2.kind == TrackKind::Video { "video" } else { "audio" };
+                    let def = effects::find(effect)?;
+                    if def.kind != want {
+                        return Err(Error::validation(format!("'{}' is an {} effect and cannot be added to a {want} clip", def.name, def.kind)));
+                    }
                     let inst = EffectInstance::new(new_id("fx"), effect, params)?;
                     let at = index.unwrap_or(c2.effects.len()).min(c2.effects.len());
                     c2.effects.insert(at, inst);
@@ -475,6 +504,18 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                     clipprops::check_blend(blend)?;
                     c2.blend = blend.clone();
                 }
+                Command::SetClipFades { fade_in, fade_out, .. } => {
+                    let snap = |r: Rational| snap_to_frame(r, fps);
+                    if let Some(f) = fade_in {
+                        c2.fade_in = snap(*f);
+                    }
+                    if let Some(f) = fade_out {
+                        c2.fade_out = snap(*f);
+                    }
+                    if c2.fade_in < Rational::ZERO || c2.fade_out < Rational::ZERO || c2.fade_in + c2.fade_out > c2.duration {
+                        return Err(Error::validation("fades must be non-negative and together no longer than the clip"));
+                    }
+                }
                 Command::SetKeyframe { param, time, value, interp, .. } => {
                     clipprops::check_value(&c2, param, *value, true)?;
                     let tt = snap_to_frame(*time, fps);
@@ -526,6 +567,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 let mut c = gc.clone();
                 c.speed = *speed;
                 c.duration = new_dur;
+                c.clamp_fades();
                 let m = p.media(&c.media)?;
                 if c.source_in + c.source_span() > m.info.duration + Rational::new(1, 1000) {
                     return Err(Error::validation(format!("'{}' does not have enough source media for that speed", c.name)));
@@ -620,6 +662,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             };
             let (tt, tc) = seq.find_clip(&target).expect("exists");
             ensure_unlocked(tt)?;
+            if tc.keyframes.contains_key("gain_db") {
+                return Err(Error::validation("volume is animated; edit its keyframes instead"));
+            }
             let new_gain = if *relative { tc.gain_db + gain_db } else { *gain_db };
             if !(-96.0..=24.0).contains(&new_gain) {
                 return Err(Error::validation(format!("gain {new_gain:.1} dB is outside -96..+24 dB")));

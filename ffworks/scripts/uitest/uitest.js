@@ -79,8 +79,8 @@
 
     // effects: add Saturation through the Inspector, set Amount to 0 (grey), exercise opacity
     {
-      const addBtn = $$(".effects button").find((b) => b.textContent.trim() === "Add");
-      step("inspector shows the Effects panel for the selected clip", !!addBtn && !!$("select[aria-label='Effect to add']"));
+      const addBtn = $$("[aria-label='Effects'][data-kind='video'] button").find((b) => b.textContent.trim() === "Add");
+      step("inspector shows the Effects panel for the selected clip", !!addBtn && !!$("[data-kind='video'] select[aria-label='Effect to add']"));
       addBtn.click(); await sleep(300);
       const fx = await waitFor(() => $(".fx[data-effect='saturation']"));
       step("Add puts a Saturation effect on the clip", !!fx);

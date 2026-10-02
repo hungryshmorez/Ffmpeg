@@ -115,6 +115,9 @@ function TrackRow({ seq, track, px, fps, width }: { seq: Sequence; track: Track;
         >
           {track.kind === "video" ? "👁" : "M"}
         </button>
+        {track.kind === "audio" && (
+          <button aria-pressed={track.solo} title="Solo track" className={track.solo ? "on" : ""} onClick={() => dispatch({ type: "set_track", track: track.id, solo: !track.solo })}>S</button>
+        )}
         <button aria-pressed={track.locked} title="Lock track" className={track.locked ? "on" : ""} onClick={() => dispatch({ type: "set_track", track: track.id, locked: !track.locked })}>
           🔒
         </button>
@@ -238,6 +241,11 @@ export function badges(c: Clip): string {
   }
   if (Object.values(c.keyframes).some((k) => k.length)) out.push("◆");
   if (c.blend !== "normal") out.push(c.blend);
+  if (c.kind === "audio") {
+    if (c.pan !== 0) out.push(`pan ${c.pan > 0 ? "R" : "L"}${Math.round(Math.abs(c.pan) * 100)}`);
+    if (toSec(c.fade_in) > 0 || toSec(c.fade_out) > 0) out.push("fade");
+    if (c.effects.some((e) => e.enabled)) out.push("fx");
+  }
   return out.length ? `  ${out.join(" ")}` : "";
 }
 

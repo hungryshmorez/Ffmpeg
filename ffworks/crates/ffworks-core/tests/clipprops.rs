@@ -284,3 +284,102 @@ fn audio_clips_reject_video_only_properties() {
     assert!(e.dispatch(Command::SetClipParam { clip: aud.clone(), param: "scale".into(), value: 2.0 }).is_err());
     assert!(e.dispatch(Command::SetClipFreeze { clip: aud, at: Some(secs(1)) }).is_err());
 }
+
+fn audio_of(e: &Engine, video: &str) -> Clip {
+    let seq = e.project.active().unwrap();
+    let id = seq.linked_group(video).into_iter().find(|g| seq.find_clip(g).unwrap().1.kind == TrackKind::Audio).unwrap();
+    seq.find_clip(&id).unwrap().1.clone()
+}
+
+#[test]
+fn audio_pan_fades_gain_envelope_and_track_mixer_properties_are_commands() {
+    let (mut e, vid) = engine();
+    let a = audio_of(&e, &vid).id;
+    e.dispatch(Command::SetClipParam { clip: a.clone(), param: "pan".into(), value: -0.5 }).unwrap();
+    assert_eq!(audio_of(&e, &vid).pan, -0.5);
+    assert!(e.dispatch(Command::SetClipParam { clip: a.clone(), param: "pan".into(), value: 2.0 }).is_err());
+    // pan cannot be keyframed, gain can
+    assert!(e.dispatch(Command::SetKeyframe { clip: a.clone(), param: "pan".into(), time: secs(1), value: 0.0, interp: None }).unwrap_err().to_string().contains("cannot be animated"));
+    key(&mut e, &a, "gain_db", 0, -60.0).unwrap();
+    key(&mut e, &a, "gain_db", 2, 0.0).unwrap();
+    assert!(e.dispatch(Command::SetClipGain { clip: vid.clone(), gain_db: -3.0, relative: false }).is_err(), "static gain refused while the envelope exists");
+    // video-only parameters are refused on audio
+    assert!(e.dispatch(Command::SetClipOpacity { clip: a.clone(), opacity: 0.5 }).is_err());
+    // fades are snapped to frames and must fit the clip
+    e.dispatch(Command::SetClipFades { clip: a.clone(), fade_in: Some(Rational::new(51, 100)), fade_out: Some(secs(2)) }).unwrap();
+    let c = audio_of(&e, &vid);
+    assert_eq!((c.fade_in, c.fade_out), (Rational::new(1, 2), secs(2)));
+    assert!(e.dispatch(Command::SetClipFades { clip: a.clone(), fade_in: Some(secs(9)), fade_out: None }).is_err(), "9 + 2 > 10");
+    assert!(e.dispatch(Command::SetClipFades { clip: vid.clone(), fade_in: Some(secs(1)), fade_out: None }).is_err(), "fades are for audio clips");
+    // track mixer properties
+    let at = e.project.active().unwrap().tracks.iter().find(|t| t.kind == TrackKind::Audio).unwrap().id.clone();
+    e.dispatch(Command::SetTrack { track: at.clone(), name: None, muted: None, locked: None, gain_db: Some(-6.0), pan: Some(0.25), solo: Some(true) }).unwrap();
+    let t = e.project.active().unwrap().track(&at).unwrap().clone();
+    assert_eq!((t.gain_db, t.pan, t.solo), (-6.0, 0.25, true));
+    assert!(e.dispatch(Command::SetTrack { track: at.clone(), name: None, muted: None, locked: None, gain_db: None, pan: Some(1.5), solo: None }).is_err());
+    e.undo().unwrap();
+    assert!(!e.project.active().unwrap().track(&at).unwrap().solo, "undo restores the mixer state");
+}
+
+#[test]
+fn audio_and_video_effects_cannot_be_mixed_up() {
+    let (mut e, vid) = engine();
+    let a = audio_of(&e, &vid).id;
+    assert!(e.dispatch(Command::AddEffect { clip: vid.clone(), effect: "compressor".into(), params: Default::default(), index: None }).unwrap_err().to_string().contains("audio effect"));
+    assert!(e.dispatch(Command::AddEffect { clip: a.clone(), effect: "blur".into(), params: Default::default(), index: None }).unwrap_err().to_string().contains("video effect"));
+    e.dispatch(Command::AddEffect { clip: a.clone(), effect: "compressor".into(), params: Default::default(), index: None }).unwrap();
+    let fx = audio_of(&e, &vid).effects[0].id.clone();
+    e.dispatch(Command::SetEffectParam { clip: a.clone(), effect_id: fx, param: "ratio".into(), value: 8.0 }).unwrap();
+    assert_eq!(audio_of(&e, &vid).effects[0].params["ratio"], 8.0);
+    assert!(e.dispatch(Command::SetEffectParam { clip: a, effect_id: audio_of(&e, &vid).effects[0].id.clone(), param: "ratio".into(), value: 99.0 }).is_err());
+}
+
+#[test]
+fn splitting_gives_the_fade_in_to_the_left_and_the_fade_out_to_the_right_and_trims_clamp_fades() {
+    let (mut e, vid) = engine();
+    let a = audio_of(&e, &vid).id;
+    e.dispatch(Command::SetClipFades { clip: a.clone(), fade_in: Some(secs(1)), fade_out: Some(secs(2)) }).unwrap();
+    e.dispatch(Command::SplitClip { clip: vid.clone(), at: secs(5) }).unwrap();
+    let seq = e.project.active().unwrap();
+    let at = seq.tracks.iter().find(|t| t.kind == TrackKind::Audio).unwrap();
+    assert_eq!((at.clips[0].fade_in, at.clips[0].fade_out), (secs(1), Rational::ZERO));
+    assert_eq!((at.clips[1].fade_in, at.clips[1].fade_out), (Rational::ZERO, secs(2)));
+    // shortening a clip below its fades shrinks them instead of failing
+    let left = at.clips[0].id.clone();
+    e.dispatch(Command::SetClipFades { clip: left.clone(), fade_in: None, fade_out: Some(secs(3)) }).unwrap();
+    e.dispatch(Command::TrimClip { clip: left.clone(), edge: Edge::End, to: Rational::new(3, 2) }).unwrap();
+    let c = e.project.active().unwrap().find_clip(&left).unwrap().1.clone();
+    assert!(c.fade_in + c.fade_out <= c.duration, "{:?} {:?} {:?}", c.fade_in, c.fade_out, c.duration);
+}
+
+#[test]
+fn solo_silences_other_audio_tracks_in_the_render_graph() {
+    let (mut e, vid) = engine();
+    let _ = vid;
+    e.dispatch(Command::AddTrack { kind: TrackKind::Audio, name: None }).unwrap();
+    let tracks: Vec<_> = e.project.active().unwrap().tracks.iter().filter(|t| t.kind == TrackKind::Audio).map(|t| t.id.clone()).collect();
+    e.dispatch(Command::PlaceClip { media: "m1".into(), track: tracks[1].clone(), start: secs(0), source_in: None, duration: Some(secs(4)), with_audio: false, audio_track: None }).unwrap();
+    assert_eq!(ffworks_core::render_graph::build(&e.project).unwrap().audio.len(), 2);
+    e.dispatch(Command::SetTrack { track: tracks[1].clone(), name: None, muted: None, locked: None, gain_db: None, pan: None, solo: Some(true) }).unwrap();
+    let g = ffworks_core::render_graph::build(&e.project).unwrap();
+    assert_eq!(g.audio.len(), 1, "only the soloed track is heard");
+    assert!(g.has_audio, "the output still carries an audio stream");
+    // a muted soloed track is not a solo
+    e.dispatch(Command::SetTrack { track: tracks[1].clone(), name: None, muted: Some(true), locked: None, gain_db: None, pan: None, solo: None }).unwrap();
+    assert_eq!(ffworks_core::render_graph::build(&e.project).unwrap().audio.len(), 1, "the other track plays again");
+}
+
+#[test]
+fn transitions_refuse_audio_with_effects_pan_or_fades() {
+    let (mut e, id) = engine();
+    e.dispatch(Command::TrimClip { clip: id.clone(), edge: Edge::End, to: secs(4) }).unwrap();
+    let v = e.project.active().unwrap().tracks[0].id.clone();
+    e.dispatch(Command::PlaceClip { media: "m1".into(), track: v, start: secs(4), source_in: Some(secs(2)), duration: Some(secs(4)), with_audio: true, audio_track: None }).unwrap();
+    let b = e.project.active().unwrap().tracks[0].clips[1].id.clone();
+    let a = audio_of(&e, &id).id;
+    e.dispatch(Command::SetClipParam { clip: a.clone(), param: "pan".into(), value: 0.5 }).unwrap();
+    let err = e.dispatch(Command::AddTransition { clip_a: id.clone(), clip_b: b.clone(), kind: "fade".into(), duration: Rational::new(1, 2) }).unwrap_err();
+    assert!(err.to_string().contains("audio"), "{err}");
+    e.dispatch(Command::SetClipParam { clip: a, param: "pan".into(), value: 0.0 }).unwrap();
+    e.dispatch(Command::AddTransition { clip_a: id, clip_b: b, kind: "fade".into(), duration: Rational::new(1, 2) }).unwrap();
+}

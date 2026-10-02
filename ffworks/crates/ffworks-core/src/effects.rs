@@ -23,6 +23,8 @@ pub struct ParamDef {
 pub struct EffectDef {
     pub id: &'static str,
     pub name: &'static str,
+    /// "video" or "audio": which kind of clip the effect applies to.
+    pub kind: &'static str,
     pub category: &'static str,
     /// FFmpeg filter names this effect needs (checked against the capability registry).
     pub requires: &'static [&'static str],
@@ -40,7 +42,8 @@ const fn pa(id: &'static str, name: &'static str, min: f64, max: f64, default: f
 }
 
 pub fn registry() -> Vec<EffectDef> {
-    let e = |id, name, category, requires: &'static [&'static str], params| EffectDef { id, name, category, requires, params, alpha: false };
+    let e = |id, name, category, requires: &'static [&'static str], params| EffectDef { id, name, kind: "video", category, requires, params, alpha: false };
+    let au = |id, name, category, requires: &'static [&'static str], params| EffectDef { id, name, kind: "audio", category, requires, params, alpha: false };
     vec![
         e("brightness", "Brightness", "Color", &["eq"], vec![pa("amount", "Amount", -1.0, 1.0, 0.0, 0.01, "")]),
         e("contrast", "Contrast", "Color", &["eq"], vec![pa("amount", "Amount", 0.0, 3.0, 1.0, 0.01, "×")]),
@@ -53,9 +56,19 @@ pub fn registry() -> Vec<EffectDef> {
         e("vignette", "Vignette", "Color", &["vignette"], vec![pa("angle", "Angle", 0.1, 1.5, 0.6, 0.01, "rad")]),
         e("flip_h", "Flip horizontal", "Transform", &["hflip"], vec![]),
         e("flip_v", "Flip vertical", "Transform", &["vflip"], vec![]),
+        au("eq", "Equalizer (3-band)", "EQ", &["bass", "equalizer", "treble"], vec![p("low", "Low shelf 120 Hz", -18.0, 18.0, 0.0, 0.5, "dB"), p("mid", "Mid", -18.0, 18.0, 0.0, 0.5, "dB"), p("mid_freq", "Mid frequency", 200.0, 5000.0, 1000.0, 10.0, "Hz"), p("high", "High shelf 8 kHz", -18.0, 18.0, 0.0, 0.5, "dB")]),
+        au("highpass", "High-pass filter", "EQ", &["highpass"], vec![p("freq", "Cutoff", 20.0, 2000.0, 80.0, 1.0, "Hz")]),
+        au("lowpass", "Low-pass filter", "EQ", &["lowpass"], vec![p("freq", "Cutoff", 1000.0, 20000.0, 12000.0, 50.0, "Hz")]),
+        au("compressor", "Compressor", "Dynamics", &["acompressor"], vec![p("threshold", "Threshold", -60.0, 0.0, -18.0, 0.5, "dB"), p("ratio", "Ratio", 1.0, 20.0, 4.0, 0.1, ":1"), p("attack", "Attack", 1.0, 200.0, 20.0, 1.0, "ms"), p("release", "Release", 20.0, 1000.0, 250.0, 5.0, "ms"), p("makeup", "Make-up gain", 0.0, 24.0, 0.0, 0.5, "dB")]),
+        au("limiter", "Limiter", "Dynamics", &["alimiter"], vec![p("ceiling", "Ceiling", -24.0, 0.0, -1.0, 0.5, "dB")]),
+        au("echo", "Echo", "Time", &["aecho"], vec![p("delay", "Delay", 20.0, 2000.0, 300.0, 10.0, "ms"), p("decay", "Decay", 0.0, 0.9, 0.4, 0.05, "")]),
+        au("denoise", "Noise reduction (FFT)", "Restoration", &["afftdn"], vec![p("amount", "Reduction", 0.0, 40.0, 12.0, 0.5, "dB")]),
+        au("normalizer", "Dynamic normalizer", "Dynamics", &["dynaudnorm"], vec![]),
+        au("mono", "Mono downmix", "Channels", &["pan"], vec![]),
         EffectDef {
             id: "crop",
             name: "Crop",
+            kind: "video",
             category: "Transform",
             requires: &["drawbox"],
             params: vec![p("left", "Left", 0.0, 95.0, 0.0, 0.5, "%"), p("top", "Top", 0.0, 95.0, 0.0, 0.5, "%"), p("right", "Right", 0.0, 95.0, 0.0, 0.5, "%"), p("bottom", "Bottom", 0.0, 95.0, 0.0, 0.5, "%")],
@@ -101,6 +114,10 @@ pub fn check_param(def: &EffectDef, param: &str, value: f64) -> Result<()> {
         return Err(Error::validation(format!("{} {} = {value} is outside {}..{}", def.name, d.name, d.min, d.max)));
     }
     Ok(())
+}
+
+fn db_to_lin(db: f64) -> f64 {
+    10f64.powf(db / 20.0)
 }
 
 /// Keyframes of one clip, keyed by parameter id (`fx:<effect id>:<param>` for effect parameters).
@@ -165,6 +182,28 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
             if b > 0.0 { parts.push(strip("0".into(), format!("ih*(1-{b})"), "iw".into(), format!("ih*{b}+1"))); }
             parts.join(",")
         }
+        "eq" => {
+            let (lo, mid, hi) = (g("low")?, g("mid")?, g("high")?);
+            let mut parts = vec![];
+            if lo != 0.0 { parts.push(format!("bass=g={lo}:f=120")); }
+            if mid != 0.0 { parts.push(format!("equalizer=f={}:t=q:w=1:g={mid}", g("mid_freq")?)); }
+            if hi != 0.0 { parts.push(format!("treble=g={hi}:f=8000")); }
+            if parts.is_empty() { return Ok(None); }
+            parts.join(",")
+        }
+        "highpass" => format!("highpass=f={}", g("freq")?),
+        "lowpass" => format!("lowpass=f={}", g("freq")?),
+        // acompressor takes linear thresholds/make-up; the UI speaks dB
+        "compressor" => format!("acompressor=threshold={:.6}:ratio={}:attack={}:release={}:makeup={:.6}", db_to_lin(g("threshold")?), g("ratio")?, g("attack")?, g("release")?, db_to_lin(g("makeup")?)),
+        "limiter" => format!("alimiter=limit={:.6}:attack=5:release=50:level=0", db_to_lin(g("ceiling")?)),
+        "echo" => format!("aecho=in_gain=0.8:out_gain=0.9:delays={}:decays={}", g("delay")?, g("decay")?),
+        "denoise" => {
+            let a = g("amount")?;
+            if a == 0.0 { return Ok(None); }
+            format!("afftdn=nr={a}")
+        }
+        "normalizer" => "dynaudnorm=f=150:g=15".into(),
+        "mono" => "pan=stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1".into(),
         other => return Err(Error::validation(format!("effect '{other}' has no FFmpeg mapping"))),
     }))
 }
@@ -209,8 +248,8 @@ mod tests {
     fn every_registered_effect_serialises_with_defaults() {
         for d in registry() {
             let e = EffectInstance::new("x".into(), d.id, &BTreeMap::new()).unwrap();
-            // crop with all-zero margins is a deliberate no-op
-            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), d.id != "crop", "{}", d.id);
+            // crop and eq at their defaults are deliberate no-ops
+            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq"].contains(&d.id), "{}", d.id);
         }
     }
 

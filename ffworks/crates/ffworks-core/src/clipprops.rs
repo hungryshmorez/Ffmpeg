@@ -37,10 +37,12 @@ pub struct ClipParamDef {
     pub default: f64,
     pub step: f64,
     pub unit: &'static str,
+    /// Can this parameter be keyframed? (Pan is a fixed filter coefficient in FFmpeg, so it cannot.)
+    pub animatable: bool,
 }
 
 const fn d(id: &'static str, name: &'static str, min: f64, max: f64, default: f64, step: f64, unit: &'static str) -> ClipParamDef {
-    ClipParamDef { id, name, min, max, default, step, unit }
+    ClipParamDef { id, name, min, max, default, step, unit, animatable: true }
 }
 
 /// Video clip parameters that live on the clip itself (not in an effect). All can be keyframed.
@@ -52,6 +54,11 @@ pub fn video_params() -> Vec<ClipParamDef> {
         d("scale", "Scale", 0.01, 16.0, 1.0, 0.01, "×"),
         d("rotation", "Rotation", -3600.0, 3600.0, 0.0, 0.5, "°"),
     ]
+}
+
+/// Audio clip parameters: volume (animatable as an envelope) and balance.
+pub fn audio_params() -> Vec<ClipParamDef> {
+    vec![d("gain_db", "Volume", -96.0, 24.0, 0.0, 0.1, "dB"), ClipParamDef { animatable: false, ..d("pan", "Pan", -1.0, 1.0, 0.0, 0.01, "") }]
 }
 
 /// FFmpeg `blend` modes offered in the UI (all exist in FFmpeg ≥ 4). "normal" uses the plain overlay path.
@@ -96,7 +103,12 @@ pub fn param_range(clip: &Clip, param: &str, for_keyframes: bool) -> Result<(Str
         }
         return Ok((format!("{} {}", def.name, pd.name), pd.min, pd.max));
     }
-    video_params().into_iter().find(|d| d.id == param).map(|d| (d.name.to_string(), d.min, d.max)).ok_or_else(|| Error::validation(format!("unknown parameter '{param}'")))
+    let defs = if clip.kind == crate::project::TrackKind::Audio { audio_params() } else { video_params() };
+    let d = defs.into_iter().find(|d| d.id == param).ok_or_else(|| Error::validation(format!("unknown parameter '{param}' for a {:?} clip", clip.kind)))?;
+    if for_keyframes && !d.animatable {
+        return Err(Error::validation(format!("{} cannot be animated (FFmpeg's filter takes a fixed value)", d.name)));
+    }
+    Ok((d.name.to_string(), d.min, d.max))
 }
 
 pub fn check_value(clip: &Clip, param: &str, value: f64, for_keyframes: bool) -> Result<()> {
@@ -116,6 +128,8 @@ impl Clip {
             "y" => self.transform.y,
             "scale" => self.transform.scale,
             "rotation" => self.transform.rotation,
+            "gain_db" => self.gain_db,
+            "pan" => self.pan,
             _ => return None,
         })
     }
@@ -127,6 +141,8 @@ impl Clip {
             "y" => self.transform.y = v,
             "scale" => self.transform.scale = v,
             "rotation" => self.transform.rotation = v,
+            "gain_db" => self.gain_db = v,
+            "pan" => self.pan = v,
             _ => {}
         }
     }

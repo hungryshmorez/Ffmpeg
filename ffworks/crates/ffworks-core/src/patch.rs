@@ -19,7 +19,7 @@ pub enum Patch {
     /// Insert a whole track (with its clips) at `index`.
     InsertTrack { seq: Id, index: usize, track: Track },
     RemoveTrack { seq: Id, track: Id },
-    SetTrackProps { seq: Id, track: Id, name: String, muted: bool, locked: bool, gain_db: f64 },
+    SetTrackProps { seq: Id, track: Id, name: String, muted: bool, locked: bool, gain_db: f64, pan: f64, solo: bool },
     InsertMedia { index: usize, asset: MediaAsset },
     RemoveMedia { media: Id },
     /// Replace an asset in place (same id), e.g. when relinking.
@@ -96,14 +96,16 @@ pub fn apply(p: &mut Project, patch: &Patch) -> Result<Patch> {
             let old = s.tracks.remove(idx);
             Ok(Patch::InsertTrack { seq: seq.clone(), index: idx, track: old })
         }
-        Patch::SetTrackProps { seq, track, name, muted, locked, gain_db } => {
+        Patch::SetTrackProps { seq, track, name, muted, locked, gain_db, pan, solo } => {
             let s = p.sequence_mut(seq)?;
             let t = s.tracks.iter_mut().find(|t| &t.id == track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
-            let inv = Patch::SetTrackProps { seq: seq.clone(), track: track.clone(), name: t.name.clone(), muted: t.muted, locked: t.locked, gain_db: t.gain_db };
+            let inv = Patch::SetTrackProps { seq: seq.clone(), track: track.clone(), name: t.name.clone(), muted: t.muted, locked: t.locked, gain_db: t.gain_db, pan: t.pan, solo: t.solo };
             t.name = name.clone();
             t.muted = *muted;
             t.locked = *locked;
             t.gain_db = *gain_db;
+            t.pan = *pan;
+            t.solo = *solo;
             Ok(inv)
         }
         Patch::InsertMedia { index, asset } => {

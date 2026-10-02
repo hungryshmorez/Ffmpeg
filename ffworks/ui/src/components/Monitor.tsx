@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { fpsOf, timecode, toSec } from "../time";
 import { clipAt, dbToGain, sourceTime, times, visibleVideoAt } from "../timeline/math";
+import { clipGainDb } from "../timeline/mixer";
 import { usePlayhead, useProject, useUi } from "../state/stores";
 import { fromSec } from "../time";
 import { hasMotion } from "../keyframes";
@@ -35,15 +36,15 @@ function useSyncedElement(ref: React.RefObject<HTMLMediaElement | null>, url: st
   });
 }
 
-function AudioLane({ track, seq, t, playing, silenced }: { track: Track; seq: Sequence; t: number; playing: boolean; silenced: boolean }) {
+function AudioLane({ track, seq, t, playing, silenced, anySolo }: { track: Track; seq: Sequence; t: number; playing: boolean; silenced: boolean; anySolo: boolean }) {
   const view = useProject((s) => s.view)!;
   const ref = useRef<HTMLAudioElement>(null);
   const clip = clipAt(track, t);
   const media = clip ? view.project.media.find((m) => m.id === clip.media) : undefined;
   const url = clip && media && !silenced ? convertFileSrc(media.path) : null;
   // Preview volume cannot exceed unity; export applies the full gain.
-  const vol = clip ? dbToGain(clip.gain_db + track.gain_db) : 0;
-  useSyncedElement(ref, url, clip ? sourceTime(clip, t) : 0, playing, vol, track.muted, clip && !clip.reverse ? toSec(clip.speed) : 1);
+  const vol = clip ? dbToGain(clipGainDb(clip, t - toSec(clip.start)) + track.gain_db) : 0;
+  useSyncedElement(ref, url, clip ? sourceTime(clip, t) : 0, playing, vol, track.muted || (anySolo && !track.solo), clip && !clip.reverse ? toSec(clip.speed) : 1);
   void seq;
   return <audio ref={ref} preload="auto" />;
 }
@@ -87,7 +88,8 @@ export function Monitor() {
     }
   };
   const c0 = vis?.clip;
-  const effectsActive = !!c0 && (c0.opacity < 1 || c0.effects.some((e) => e.enabled) || c0.blend !== "normal" || c0.speed !== "1" || c0.reverse || c0.freeze !== null || hasMotion(c0.keyframes) || c0.transform.x !== 0 || c0.transform.y !== 0 || c0.transform.scale !== 1 || c0.transform.rotation !== 0);
+  const audioActive = seq.tracks.some((tr) => tr.kind === "audio" && !tr.muted && ((clipAt(tr, t)?.effects.some((e) => e.enabled) ?? false) || tr.pan !== 0 || (() => { const c = clipAt(tr, t); return !!c && (c.pan !== 0 || toSec(c.fade_in) > 0 || toSec(c.fade_out) > 0); })()));
+  const effectsActive = audioActive || !!c0 && (c0.opacity < 1 || c0.effects.some((e) => e.enabled) || c0.blend !== "normal" || c0.speed !== "1" || c0.reverse || c0.freeze !== null || hasMotion(c0.keyframes) || c0.transform.x !== 0 || c0.transform.y !== 0 || c0.transform.scale !== 1 || c0.transform.rotation !== 0);
 
   // Playback clock: wall-clock driven so audio/video drift is corrected against it, not the other way round.
   const durRef = useRef(duration);
@@ -125,6 +127,7 @@ export function Monitor() {
 
   const { width, height } = view.project.settings;
   const audioTracks = seq.tracks.filter((x) => x.kind === "audio");
+  const anySolo = audioTracks.some((x) => x.solo && !x.muted);
   return (
     <div className="monitor" aria-label="Program monitor">
       <div className="monitor-screen" style={{ aspectRatio: `${width} / ${height}` }}>
@@ -132,10 +135,10 @@ export function Monitor() {
         {!vis && !usePreview && <div className="gap-label">{seq.tracks.some((x) => x.clips.length) ? "no video at playhead" : "Import media and add it to the timeline"}</div>}
         {usePreview && <div className="bypass-badge ok" role="status">Processed preview · 1/{preview.scaleDiv} resolution</div>}
         {!usePreview && preview !== null && !previewCurrent && <div className="bypass-badge" role="status">Preview out of date — render again</div>}
-        {!usePreview && effectsActive && (preview === null || previewCurrent) && <div className="bypass-badge" role="status">Effects, transform and retiming bypassed — render a preview or export to see them</div>}
+        {!usePreview && effectsActive && (preview === null || previewCurrent) && <div className="bypass-badge" role="status">Effects, transform, retiming, pan and fades bypassed — render a preview or export to hear/see them</div>}
         <div className="monitor-note">Source preview — edit decisions only (cuts, gaps, volume, mute). Effects, opacity, transform, blend and retiming appear only in a rendered preview; export is the authoritative render.</div>
       </div>
-      {audioTracks.map((tr) => <AudioLane key={tr.id} track={tr} seq={seq} t={t} playing={playing} silenced={usePreview} />)}
+      {audioTracks.map((tr) => <AudioLane key={tr.id} track={tr} seq={seq} t={t} playing={playing} silenced={usePreview} anySolo={anySolo} />)}
       <div className="transport" role="toolbar" aria-label="Transport">
         <span className="timecode" aria-live="off">{timecode(t, fps)}</span>
         <button title="Previous edit" onClick={prevEdit}>⏮</button>

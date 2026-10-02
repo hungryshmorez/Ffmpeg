@@ -13,22 +13,23 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
   const dispatch = useProject((s) => s.dispatch);
   const clipProps = useClipProps();
   const [defs, setDefs] = useState<EffectDef[]>(registryCache ?? []);
-  const [pick, setPick] = useState("saturation");
+  const [pick, setPick] = useState(clip.kind === "audio" ? "compressor" : "saturation");
   useEffect(() => {
     if (!registryCache) void api.listEffects().then((d) => { registryCache = d; setDefs(d); });
   }, []);
   const byId = (id: string) => defs.find((d) => d.id === id);
-  const groups = [...new Set(defs.map((d) => d.category))];
+  const mine = defs.filter((d) => d.kind === clip.kind);
+  const groups = [...new Set(mine.map((d) => d.category))];
 
   return (
-    <div className="effects" aria-label="Effects">
+    <div className="effects" aria-label="Effects" data-kind={clip.kind}>
       <div className="panel-title sub">Effects</div>
       <div className="field">
         <div className="row">
           <select aria-label="Effect to add" value={pick} onChange={(e) => setPick(e.target.value)}>
             {groups.map((g) => (
               <optgroup key={g} label={g}>
-                {defs.filter((d) => d.category === g).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {mine.filter((d) => d.category === g).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </optgroup>
             ))}
           </select>

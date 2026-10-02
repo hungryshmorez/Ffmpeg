@@ -69,6 +69,14 @@ A registry of `EffectDef`s (id, category, required FFmpeg filters, `ParamDef`s w
 * **Blend modes** (`normal` = overlay): the clip is placed on a full-length transparent canvas, both inputs are converted to planar RGB (`blend` multiplies raw planes: in YUV the result is wrong, a bug the first pixel test caught), blended, converted back and composited through the clip's own alpha. `crop` is an effect that clears alpha strips, so lower layers show through.
 * Transitions refuse clips with retiming, transform, blend or keyframes (handles/timing would be wrong); the reverse is refused too.
 
+## Audio mixing (`render_graph.rs`, `ffmpeg.rs`, `effects.rs`, `ui/src/timeline/mixer.ts`)
+
+Audio clips carry `pan`, `fade_in`, `fade_out` and a `gain_db` that can be keyframed (a volume envelope, `gain_db` param); tracks carry `gain_db`, `pan` and `solo`. Per clip the chain is: trim → `areverse` → `atempo` (exact length) → **effects** → clip balance → track balance → `afade` in/out → volume (static dB, or `pow(10,(curve+trackgain)/20)` evaluated per frame) → `adelay`. Balance is a `pan=stereo|c0=L*c0|c1=R*c1` with unity on the louder side (mono sources pan like a mono pan pot); pan itself cannot be keyframed (FFmpeg takes fixed coefficients). Solo: when any unmuted audio track is soloed the render graph drops all other audio tracks (the output keeps its audio stream). Splitting gives the fade-in to the left piece and the fade-out to the right; trims and speed changes shrink fades to fit.
+
+* **Audio effects** share the effect registry (`kind: "audio"`): 3-band EQ, high/low-pass, compressor (threshold/make-up in dB, converted to the linear values `acompressor` wants), limiter, echo, FFT denoise, dynamic normalizer, mono downmix. No reverb, pitch shift or de-esser (nothing in stock FFmpeg does them well; not faked).
+* Clips in a transition cannot have audio effects/pan/fades/envelope/retiming (the crossfade path ignores them) — refused with a message.
+* **Meters** are *predictions from analysis data*, not live audio: the peak of the media's analysed waveform at the playhead with clip gain/envelope, track gain, fades and both balances applied. Effects and the rest of the mix are not included; the Mixer says so. Source playback in the monitor applies volume, mute and solo only; pan, fades and effects are heard in a rendered preview/export (the monitor shows a badge). Tests measure real exported audio per channel with `volumedetect`.
+
 ## Preview (`preview.rs`)
 
 `preview::render` compiles the same render graph with a `range` and `scale_div` into a cached `previews/<key>.mp4`. The key is a SHA-256 of the project JSON (minus the display name) + range + quality, so any edit yields a new key and the UI compares `renderHash` to decide whether a preview is current. Cached hits skip FFmpeg. Not yet done: per-range invalidation, background pre-render, frame cache.

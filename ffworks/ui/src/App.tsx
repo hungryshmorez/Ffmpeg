@@ -10,6 +10,7 @@ import { Diagnostics } from "./components/Diagnostics";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
+import { Mixer } from "./components/Mixer";
 import { Monitor } from "./components/Monitor";
 import { Timeline } from "./components/Timeline";
 import { deleteSelected, openProject, saveProject, splitAtPlayhead, Toolbar } from "./components/Toolbar";
@@ -110,7 +111,7 @@ export default function App() {
   return (
     <div className="app">
       <Toolbar />
-      <MediaBrowser />
+      <div className="leftcol"><MediaBrowser /><Mixer /></div>
       <Monitor />
       <Inspector />
       <Timeline />

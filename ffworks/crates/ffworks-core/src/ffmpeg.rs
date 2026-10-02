@@ -148,6 +148,15 @@ fn transform_filter(seg: &crate::render_graph::VideoSegment, w: u32, h: u32, fps
     Some(format!("format=yuva420p,pad={}:{}:2:2:color=black@0,perspective={}:sense=destination:interpolation=linear{eval},crop={w}:{h}:2:2", w + 4, h + 4, coords.join(":")))
 }
 
+/// Balance as an FFmpeg `pan` filter: unity on the louder side, the other channel attenuated linearly. None at centre.
+fn balance_filter(pan: f64) -> Option<String> {
+    if pan == 0.0 {
+        return None;
+    }
+    let (l, r) = if pan > 0.0 { (1.0 - pan, 1.0) } else { (1.0, 1.0 + pan) };
+    Some(format!("pan=stereo|c0={}*c0|c1={}*c1", dec(l), dec(r)))
+}
+
 /// atempo accepts 0.5..2.0 per instance on older FFmpeg; chain instances for other factors.
 fn atempo_chain(speed: f64) -> String {
     let mut parts = vec![];
@@ -386,6 +395,7 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
             let s0 = seg.source_in.round_units(rate);
             let span = seg.duration.mul(seg.speed);
             let s1 = (seg.source_in + span).round_units(rate);
+            require(&seg.requires)?;
             let mut chain = achain(&label, s0, s1, 0.0);
             if seg.reverse {
                 chain.push_str(",areverse");
@@ -393,14 +403,35 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
             let retimed = seg.speed != Rational::from_int(1);
             if retimed {
                 chain.push_str(&format!(",{}", atempo_chain(seg.speed.as_f64())));
-            }
-            if retimed {
                 // atempo output length is only approximately span/speed; make it exactly the clip's length
                 let n = seg.duration.round_units(rate);
                 chain.push_str(&format!(",apad=whole_len={n},atrim=end_sample={n},asetpts=PTS-STARTPTS"));
             }
-            if seg.gain_db != 0.0 {
-                chain.push_str(&format!(",volume={:.4}dB", seg.gain_db));
+            for fx in &seg.filters {
+                chain.push(',');
+                chain.push_str(fx);
+            }
+            for p in [seg.pan, seg.track_pan] {
+                if let Some(b) = balance_filter(p) {
+                    chain.push(',');
+                    chain.push_str(&b);
+                }
+            }
+            if seg.fade_in > Rational::ZERO {
+                chain.push_str(&format!(",afade=t=in:st=0:d={}", secs(seg.fade_in)));
+            }
+            if seg.fade_out > Rational::ZERO {
+                chain.push_str(&format!(",afade=t=out:st={}:d={}", secs(seg.duration - seg.fade_out), secs(seg.fade_out)));
+            }
+            match &seg.gain_keyframes {
+                // volume envelope: dB curve -> linear, evaluated per frame (t = clip-relative seconds here)
+                Some(kfs) => chain.push_str(&format!(",volume='pow(10,({}+{})/20)':eval=frame:precision=float", crate::keyframes::to_expr(kfs, "t"), dec(seg.track_gain_db))),
+                None => {
+                    let total = seg.gain_db + seg.track_gain_db;
+                    if total != 0.0 {
+                        chain.push_str(&format!(",volume={total:.4}dB"));
+                    }
+                }
             }
             f.push(format!("{chain}{}[as{k}]", delay_of(seg.start)));
             labels.push(format!("[as{k}]"));

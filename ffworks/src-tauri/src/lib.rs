@@ -305,6 +305,7 @@ fn list_effects() -> Vec<ffworks_core::effects::EffectDef> {
 fn list_clip_props() -> serde_json::Value {
     serde_json::json!({
         "params": ffworks_core::clipprops::video_params(),
+        "audioParams": ffworks_core::clipprops::audio_params(),
         "blendModes": ffworks_core::clipprops::BLEND_MODES,
         "interps": ffworks_core::keyframes::INTERPS.iter().map(|(i, n)| serde_json::json!({ "id": i, "name": n })).collect::<Vec<_>>(),
     })

@@ -9,21 +9,23 @@ export interface MediaAsset { id: string; name: string; path: string; info: Medi
 
 export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number> }
 export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string; animatable: boolean }
-export interface EffectDef { id: string; name: string; category: string; requires: string[]; params: ParamDef[]; alpha: boolean }
+export interface EffectDef { id: string; name: string; kind: "video" | "audio"; category: string; requires: string[]; params: ParamDef[]; alpha: boolean }
 export type Interp = "linear" | "hold" | "ease_in" | "ease_out" | "ease_in_out";
 /** One key; `interp` is the curve from this key to the next. `t` is clip-relative seconds. */
 export interface Keyframe { t: Rational; v: number; interp: Interp }
 export interface Transform { x: number; y: number; scale: number; rotation: number }
-export interface ClipParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string }
-export interface ClipProps { params: ClipParamDef[]; blendModes: [string, string][]; interps: { id: Interp; name: string }[] }
+export interface ClipParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string; animatable: boolean }
+export interface ClipProps { params: ClipParamDef[]; audioParams: ClipParamDef[]; blendModes: [string, string][]; interps: { id: Interp; name: string }[] }
 export interface Clip {
   id: string; media: string; name: string; kind: TrackKind; start: Rational; source_in: Rational; duration: Rational; link: string | null; gain_db: number; opacity: number; effects: EffectInstance[];
   speed: Rational; reverse: boolean; freeze: Rational | null; transform: Transform; blend: string;
+  /** Audio clips: balance -1..1 and linear fades in seconds (rational). */
+  pan: number; fade_in: Rational; fade_out: Rational;
   /** Keyed by parameter id: `opacity`, `x`, `y`, `scale`, `rotation` or `fx:<effect id>:<param>`. */
   keyframes: Record<string, Keyframe[]>;
 }
 export interface Transition { id: string; clip_a: string; clip_b: string; kind: string; duration: Rational }
-export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; clips: Clip[]; transitions: Transition[] }
+export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; pan: number; solo: boolean; clips: Clip[]; transitions: Transition[] }
 export interface Sequence { id: string; name: string; tracks: Track[] }
 export interface ProjectSettings { width: number; height: number; fps: Rational; sample_rate: number }
 export interface Project { schema_version: number; name: string; settings: ProjectSettings; media: MediaAsset[]; sequences: Sequence[]; active_sequence: string }
@@ -51,7 +53,8 @@ export type Command =
   | { type: "split_clip"; clip: string; at: Rational }
   | { type: "delete_clip"; clip: string; ripple: boolean }
   | { type: "set_clip_gain"; clip: string; gain_db: number; relative: boolean }
-  | { type: "set_track"; track: string; name?: string | null; muted?: boolean | null; locked?: boolean | null; gain_db?: number | null }
+  | { type: "set_track"; track: string; name?: string | null; muted?: boolean | null; locked?: boolean | null; gain_db?: number | null; pan?: number | null; solo?: boolean | null }
+  | { type: "set_clip_fades"; clip: string; fade_in?: Rational | null; fade_out?: Rational | null }
   | { type: "add_track"; kind: TrackKind; name?: string | null }
   | { type: "remove_track"; track: string }
   | { type: "add_effect"; clip: string; effect: string; params?: Record<string, number>; index?: number | null }

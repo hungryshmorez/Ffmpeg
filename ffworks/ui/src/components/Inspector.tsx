@@ -2,7 +2,7 @@ import { fpsOf, timecode, toSec } from "../time";
 import { findClip, linkedIds, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
 import { useProject, useUi } from "../state/stores";
-import { CommitSlider } from "./CommitSlider";
+import { AudioPanel } from "./AudioPanel";
 import { ClipPropsPanel } from "./ClipPropsPanel";
 import { EffectsPanel } from "./EffectsPanel";
 import { TransitionPanel } from "./TransitionPanel";
@@ -12,7 +12,6 @@ export function Inspector() {
   const beats = useAnalysis((s) => s.beats);
   const ensureBeats = useAnalysis((s) => s.ensureBeats);
   const view = useProject((s) => s.view)!;
-  const dispatch = useProject((s) => s.dispatch);
   const selected = useUi((s) => s.selected);
   const seq = view.project.sequences.find((s) => s.id === view.project.active_sequence)!;
   const fps = fpsOf(view.project.settings.fps);
@@ -37,8 +36,6 @@ export function Inspector() {
   // Volume lives on the audio clip; a selected video clip edits its linked audio.
   const audioId = clip.kind === "audio" ? clip.id : linkedIds(seq, clip.id).find((id) => findClip(seq, id)?.clip.kind === "audio");
   const audio = audioId ? findClip(seq, audioId)?.clip : undefined;
-  const gain = audio?.gain_db ?? 0;
-  const set = (db: number, relative = false) => audio && dispatch({ type: "set_clip_gain", clip: audio.id, gain_db: db, relative });
 
   const videoClip = clip.kind === "video" ? clip : linkedIds(seq, clip.id).map((id) => findClip(seq, id)?.clip).find((c) => c?.kind === "video");
   return (
@@ -54,21 +51,7 @@ export function Inspector() {
         {(t.speed !== 1 || clip.reverse || clip.freeze) && <div><dt>Timing</dt><dd>{clip.freeze ? "frozen frame" : `${Math.round(t.speed * 1000) / 10}%${clip.reverse ? " reversed" : ""}`}</dd></div>}
         <div><dt>Linked</dt><dd>{clip.link ? `${linkedIds(seq, clip.id).length} clips` : "no"}</dd></div>
       </dl>
-      <div className="field">
-        <label>{clip.kind === "video" ? "Audio (linked clip)" : "Audio"}</label>
-        {audio ? (
-          <>
-            <CommitSlider label="Volume" unit="dB" value={gain} min={-60} max={12} step={0.5} onCommit={(v) => set(v)} />
-            <div className="row">
-              <button className="small" onClick={() => set(-1, true)}>−1 dB</button>
-              <button className="small" onClick={() => set(1, true)}>+1 dB</button>
-              <button className="small" onClick={() => set(0)}>Reset</button>
-            </div>
-          </>
-        ) : (
-          <p className="muted">This clip has no audio.</p>
-        )}
-      </div>
+      {audio ? <AudioPanel audio={audio} /> : <div className="field"><label>Audio</label><p className="muted">This clip has no audio.</p></div>}
       {audio && (
         <div className="field">
           <label>Beats</label>

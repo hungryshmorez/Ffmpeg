@@ -349,7 +349,7 @@ fn brightness_minus_one_darkens_white_to_black() {
 fn every_registered_effect_renders_in_real_ffmpeg() {
     let dir = tempfile::tempdir().unwrap();
     let (mut eng, clip) = single_clip_project(dir.path(), "green");
-    for def in ffworks_core::effects::registry() {
+    for def in ffworks_core::effects::registry().into_iter().filter(|d| d.kind == "video") {
         eng.dispatch(Command::AddEffect { clip: clip.clone(), effect: def.id.into(), params: Default::default(), index: None }).unwrap();
     }
     let out = dir.path().join("all.mp4");

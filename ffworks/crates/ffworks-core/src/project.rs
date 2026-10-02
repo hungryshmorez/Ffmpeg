@@ -63,6 +63,12 @@ pub struct Track {
     /// Track gain in dB (audio tracks).
     #[serde(default)]
     pub gain_db: f64,
+    /// Balance -1 (left) .. +1 (right) (audio tracks).
+    #[serde(default)]
+    pub pan: f64,
+    /// When any audio track is soloed, only soloed tracks are heard.
+    #[serde(default)]
+    pub solo: bool,
     /// Clips sorted by `start`, non-overlapping.
     #[serde(default)]
     pub clips: Vec<Clip>,
@@ -105,6 +111,14 @@ pub struct Clip {
     pub freeze: Option<Rational>,
     #[serde(default)]
     pub transform: Transform,
+    /// Audio clips: balance -1 (left) .. +1 (right); unity on the louder side.
+    #[serde(default)]
+    pub pan: f64,
+    /// Audio clips: linear fade-in / fade-out lengths in seconds.
+    #[serde(default)]
+    pub fade_in: Rational,
+    #[serde(default)]
+    pub fade_out: Rational,
     /// FFmpeg `blend` mode name, "normal" for plain compositing.
     #[serde(default = "normal_blend")]
     pub blend: String,
@@ -127,7 +141,7 @@ impl Clip {
     /// A plain clip: speed 1, no effects, identity transform.
     #[allow(clippy::too_many_arguments)]
     pub fn new(id: Id, media: Id, name: String, kind: TrackKind, start: Rational, source_in: Rational, duration: Rational, link: Option<Id>) -> Clip {
-        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), blend: normal_blend(), keyframes: BTreeMap::new() }
+        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, blend: normal_blend(), keyframes: BTreeMap::new() }
     }
 
     pub fn end(&self) -> Rational {
@@ -137,6 +151,12 @@ impl Clip {
     /// Length of source media this clip consumes (0 for a frozen frame).
     pub fn source_span(&self) -> Rational {
         if self.freeze.is_some() { Rational::ZERO } else { self.duration.mul(self.speed) }
+    }
+
+    /// Shrink fades so they fit the clip (fade-out first), e.g. after a trim or speed change.
+    pub fn clamp_fades(&mut self) {
+        self.fade_out = self.fade_out.min(self.duration);
+        self.fade_in = self.fade_in.min(self.duration - self.fade_out);
     }
 
     /// True when the clip plays the source unchanged in time (required for transitions).
@@ -158,8 +178,8 @@ impl Sequence {
             id: new_id("seq"),
             name: name.into(),
             tracks: vec![
-                Track { id: new_id("trk"), name: "V1".into(), kind: TrackKind::Video, muted: false, locked: false, gain_db: 0.0, clips: vec![], transitions: vec![] },
-                Track { id: new_id("trk"), name: "A1".into(), kind: TrackKind::Audio, muted: false, locked: false, gain_db: 0.0, clips: vec![], transitions: vec![] },
+                Track { id: new_id("trk"), name: "V1".into(), kind: TrackKind::Video, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
+                Track { id: new_id("trk"), name: "A1".into(), kind: TrackKind::Audio, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
             ],
         }
     }
@@ -253,6 +273,12 @@ impl Project {
                         }
                     }
                     crate::clipprops::check_blend(&c.blend)?;
+                    if c.fade_in < Rational::ZERO || c.fade_out < Rational::ZERO || c.fade_in + c.fade_out > c.duration {
+                        return Err(Error::validation(format!("clip '{}': fades must be non-negative and fit inside the clip", c.name)));
+                    }
+                    if !(-1.0..=1.0).contains(&c.pan) {
+                        return Err(Error::validation(format!("clip '{}': pan must be between -1 and 1", c.name)));
+                    }
                     for (param, kfs) in &c.keyframes {
                         crate::keyframes::validate(param, kfs)?;
                         for k in kfs {

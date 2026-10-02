@@ -6,14 +6,14 @@ import type { Clip, Sequence } from "../types";
 
 const clip = (id: string, start: string, dur: string, kind: "video" | "audio", link: string | null = null, sourceIn = "0"): Clip => ({
   id, media: "m", name: id, kind, start, source_in: sourceIn, duration: dur, link, gain_db: 0, opacity: 1, effects: [],
-  speed: "1", reverse: false, freeze: null, transform: { x: 0, y: 0, scale: 1, rotation: 0 }, blend: "normal", keyframes: {},
+  pan: 0, fade_in: "0", fade_out: "0", speed: "1", reverse: false, freeze: null, transform: { x: 0, y: 0, scale: 1, rotation: 0 }, blend: "normal", keyframes: {},
 });
 const seq: Sequence = {
   id: "s", name: "Main",
   tracks: [
-    { id: "v1", name: "V1", kind: "video", muted: false, locked: false, gain_db: 0, transitions: [], clips: [clip("a", "0", "4", "video", "L1"), clip("b", "6", "2", "video")] },
-    { id: "v2", name: "V2", kind: "video", muted: false, locked: false, gain_db: 0, transitions: [], clips: [clip("top", "1", "1", "video")] },
-    { id: "a1", name: "A1", kind: "audio", muted: false, locked: false, gain_db: 0, transitions: [], clips: [clip("aa", "0", "4", "audio", "L1")] },
+    { id: "v1", name: "V1", kind: "video", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, transitions: [], clips: [clip("a", "0", "4", "video", "L1"), clip("b", "6", "2", "video")] },
+    { id: "v2", name: "V2", kind: "video", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, transitions: [], clips: [clip("top", "1", "1", "video")] },
+    { id: "a1", name: "A1", kind: "audio", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, transitions: [], clips: [clip("aa", "0", "4", "audio", "L1")] },
   ],
 };
 
@@ -31,7 +31,7 @@ describe("time", () => {
 describe("beat points", () => {
   it("maps source-relative beats into timeline time, honouring the clip range", () => {
     const c = { ...clip("aa", "10", "2", "audio", null, "1"), media: "m" };
-    const sq: Sequence = { id: "s", name: "s", tracks: [{ id: "a1", name: "A1", kind: "audio", muted: false, locked: false, gain_db: 0, transitions: [], clips: [c] }] };
+    const sq: Sequence = { id: "s", name: "s", tracks: [{ id: "a1", name: "A1", kind: "audio", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, transitions: [], clips: [c] }] };
     // source beats at 0.5 (before range), 1.0, 2.0, 3.0 (== end of range), 3.5 (after)
     expect(beatPoints(sq, { m: [0.5, 1, 2, 3, 3.5] })).toEqual([10, 11, 12]);
     expect(beatPoints(sq, {})).toEqual([]);

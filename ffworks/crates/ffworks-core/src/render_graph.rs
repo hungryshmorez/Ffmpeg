@@ -64,10 +64,21 @@ pub struct AudioSegment {
     pub start: Rational,
     pub source_in: Rational,
     pub duration: Rational,
-    /// Clip gain + track gain.
+    /// Static clip gain (dB); ignored while `gain_keyframes` is set.
     pub gain_db: f64,
+    pub track_gain_db: f64,
+    /// Volume envelope: keyframed clip gain in dB, clip-relative seconds.
+    pub gain_keyframes: Option<Vec<Keyframe>>,
     pub speed: Rational,
     pub reverse: bool,
+    /// Serialised audio effects (stack order) and the FFmpeg filters they need.
+    pub filters: Vec<String>,
+    pub requires: Vec<String>,
+    /// Clip balance, then track balance (-1..1).
+    pub pan: f64,
+    pub track_pan: f64,
+    pub fade_in: Rational,
+    pub fade_out: Rational,
 }
 
 /// One side of a video transition: a source range with the clip's effects applied.
@@ -235,6 +246,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
         let dur = c.duration - front - back;
         (dur > Rational::ZERO).then_some((c.start + front, c.source_in + front.mul(c.speed), dur))
     };
+    let any_solo = seq.tracks.iter().any(|t| t.kind == TrackKind::Audio && t.solo && !t.muted);
     let mut layer = 0;
     for t in &seq.tracks {
         match t.kind {
@@ -269,12 +281,30 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
             TrackKind::Audio => {
                 for c in &t.clips {
                     g.has_audio = true;
-                    if t.muted {
+                    // muted, or not soloed while another track is: silent (the output keeps its audio stream)
+                    if t.muted || (any_solo && !t.solo) {
                         continue;
                     }
                     let Some((start, source_in, duration)) = trimmed(c) else { continue };
                     let input = input_index(&mut g, &c.media, &main_key(c))?;
-                    g.audio.push(AudioSegment { input, start, source_in, duration, gain_db: c.gain_db + t.gain_db, speed: c.speed, reverse: c.reverse });
+                    let (filters, requires, _) = effect_filters(c)?;
+                    g.audio.push(AudioSegment {
+                        input,
+                        start,
+                        source_in,
+                        duration,
+                        gain_db: c.gain_db,
+                        track_gain_db: t.gain_db,
+                        gain_keyframes: c.keyframes.get("gain_db").filter(|k| !k.is_empty()).cloned(),
+                        speed: c.speed,
+                        reverse: c.reverse,
+                        filters,
+                        requires,
+                        pan: c.pan,
+                        track_pan: t.pan,
+                        fade_in: c.fade_in,
+                        fade_out: c.fade_out,
+                    });
                 }
             }
         }

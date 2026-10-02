@@ -104,6 +104,12 @@ pub fn check_kind(kind: &str) -> Result<()> {
     }
 }
 
+/// Audio clips linked to `c` (none when it is unlinked).
+fn linked_audio<'a>(p: &'a Project, c: &Clip) -> Vec<&'a Clip> {
+    let Some(link) = &c.link else { return vec![] };
+    p.sequences.iter().flat_map(|s| s.tracks.iter()).flat_map(|t| t.clips.iter()).filter(|x| x.kind == TrackKind::Audio && x.link.as_ref() == Some(link)).collect()
+}
+
 /// Validate every transition on `track` against its clips and media handles.
 pub fn validate_track(p: &Project, track: &Track) -> Result<()> {
     if track.transitions.is_empty() {
@@ -132,6 +138,11 @@ pub fn validate_track(p: &Project, track: &Track) -> Result<()> {
         for c in [a, b] {
             if !c.is_plain_timing() {
                 return Err(Error::validation(format!("'{}' has speed, reverse or freeze applied; transitions need normal playback (remove the transition or reset the clip's timing)", c.name)));
+            }
+            for ac in linked_audio(p, c) {
+                if !ac.effects.is_empty() || ac.pan != 0.0 || ac.fade_in != Rational::ZERO || ac.fade_out != Rational::ZERO || !ac.keyframes.is_empty() || !ac.is_plain_timing() {
+                    return Err(Error::validation(format!("the audio of '{}' has effects, pan, fades, keyframes or retiming; transitions cannot be combined with those yet", c.name)));
+                }
             }
             if !c.transform.is_identity() || c.blend != "normal" || !c.keyframes.is_empty() {
                 return Err(Error::validation(format!("'{}' has a transform, blend mode or keyframes; transitions cannot be combined with those yet", c.name)));
