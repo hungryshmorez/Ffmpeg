@@ -80,6 +80,9 @@ fn builtin_registry() -> Vec<EffectDef> {
         e("edges", "Edge detect", "Stylize", &["edgedetect"], vec![]),
         e("rgb_split", "RGB split (glitch)", "Glitch", &["rgbashift"], vec![p("amount", "Shift", 0.0, 60.0, 8.0, 1.0, "px")]),
         e("trails", "Motion trails", "Glitch", &["tmix"], vec![p("frames", "Frames mixed", 2.0, 30.0, 6.0, 1.0, "")]),
+        e("shuffle_pixels", "Pixel shuffle (scramble blocks)", "Glitch", &["shufflepixels"], vec![p("size", "Block size", 2.0, 200.0, 24.0, 1.0, "px"), p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, "")]),
+        e("chroma_shift", "Chroma shift (colour bleed)", "Glitch", &["chromashift"], vec![p("amount", "Shift", -40.0, 40.0, 8.0, 1.0, "px")]),
+        e("scroll", "Scroll (wrap around)", "Glitch", &["scroll"], vec![p("speed", "Horizontal speed", -0.1, 0.1, 0.02, 0.005, "/frame")]),
         e("ghost", "Ghosting (slow update)", "Glitch", &["lagfun"], vec![p("decay", "Decay", 0.5, 0.99, 0.95, 0.01, "")]),
         e("deband", "Remove banding", "Restoration", &["deband"], vec![]),
         e("deinterlace", "Deinterlace", "Restoration", &["kerndeint"], vec![]),
@@ -276,6 +279,20 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
             format!("rgbashift=rh={a}:bh=-{a}:edge=smear")
         }
         "trails" => format!("tmix=frames={}", g("frames")?.round() as i64),
+        "shuffle_pixels" => {
+            let n = g("size")?.round() as i64;
+            format!("shufflepixels=direction=forward:mode=horizontal:width={n}:height={n}:seed={}", g("seed")?.round() as i64)
+        }
+        "chroma_shift" => {
+            let a = g("amount")?.round() as i64;
+            if a == 0 { return Ok(None); }
+            format!("chromashift=cbh={a}:crh={}", -a)
+        }
+        "scroll" => {
+            let v = g("speed")?;
+            if v == 0.0 { return Ok(None); }
+            format!("scroll=horizontal={v}")
+        }
         "ghost" => format!("lagfun=decay={}", g("decay")?),
         "deband" => "deband".into(),
         // kerndeint rather than yadif/bwdif: those change the stream time base, which makes xfade (transitions) refuse the clip

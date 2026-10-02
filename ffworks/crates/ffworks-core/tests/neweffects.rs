@@ -198,3 +198,32 @@ fn tremolo_gate_and_volume_change_the_sound() {
     assert!(render("tremolo", &[("freq", 5.0), ("depth", 1.0)]) < base - 1.0, "tremolo lowers the average level");
     assert!(render("gate", &[("threshold", -5.0), ("ratio", 20.0)]) < base - 3.0, "a high threshold gates the quiet sine");
 }
+
+fn frame_bytes(video: &Path, t: f64) -> Vec<u8> {
+    Proc::new(tools().ffmpeg).args(["-v", "error", "-ss", &t.to_string(), "-i"]).arg(video).args(["-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]).output().unwrap().stdout
+}
+
+#[test]
+fn glitch_effects_really_change_the_picture_but_keep_its_size() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = seasons(dir.path());
+    let (eng, _, _) = one_clip(&src);
+    // a busier picture than flat colours: a test pattern
+    let busy = dir.path().join("busy.mp4");
+    ffmpeg(&["-f", "lavfi", "-i", "testsrc2=s=320x240:r=25:d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", busy.to_str().unwrap()]);
+    let _ = eng;
+    let (plain_eng, _, _) = one_clip(&busy);
+    let base = dir.path().join("base.mp4");
+    export(&plain_eng, &base);
+    let want = frame_bytes(&base, 1.0);
+    for (fx, params) in [("shuffle_pixels", vec![("size", 32.0)]), ("chroma_shift", vec![("amount", 12.0)]), ("scroll", vec![("speed", 0.05)])] {
+        let (mut e, c, _) = one_clip(&busy);
+        add(&mut e, &c, fx, &params);
+        let out = dir.path().join(format!("{fx}.mp4"));
+        export(&e, &out);
+        let got = frame_bytes(&out, 1.0);
+        assert_eq!(got.len(), want.len(), "{fx} keeps the frame size");
+        let differing = got.iter().zip(&want).filter(|(a, b)| (**a as i32 - **b as i32).abs() > 12).count();
+        assert!(differing > want.len() / 50, "{fx} changed only {differing} of {} bytes", want.len());
+    }
+}
