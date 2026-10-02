@@ -36,16 +36,6 @@ fn halves(dir: &Path, name: &str, left: &str, right: &str, secs_: u32) -> PathBu
     p
 }
 
-fn rgb_at(video: &Path, t: f64, x: u32, y: u32) -> (i32, i32, i32) {
-    let out = Proc::new(tools().ffmpeg)
-        .args(["-v", "error", "-ss", &format!("{t}"), "-i"])
-        .arg(video)
-        .args(["-frames:v", "1", "-vf", &format!("crop=2:2:{x}:{y},scale=1:1"), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
-        .output()
-        .unwrap();
-    assert_eq!(out.stdout.len(), 3, "no frame at t={t}");
-    (out.stdout[0] as i32, out.stdout[1] as i32, out.stdout[2] as i32)
-}
 
 fn export(eng: &Engine, out: &Path) {
     let t = tools();
@@ -104,7 +94,7 @@ fn same_seed_gives_the_same_stack_and_a_batch_is_one_undo_step() {
 fn pool_restricts_the_choice_and_unusable_pools_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     let src = halves(dir.path(), "h.mp4", "red", "blue", 2);
-    let (mut eng, id, _) = one_clip(&src);
+    let (eng, id, _) = one_clip(&src);
     let clip = eng.project.active().unwrap().find_clip(&id).unwrap().1.clone();
     let pool = vec!["blur".to_string(), "hue".to_string()];
     for seed in 0..10 {
