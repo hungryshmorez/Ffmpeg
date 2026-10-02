@@ -137,3 +137,40 @@ fn a_band_listens_only_to_its_frequencies() {
     let e = eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: "opacity".into(), source: None, low: 0.0, high: 1.0, smooth: 0.0, band: Some("ultra".into()) }).unwrap_err();
     assert!(e.to_string().contains("unknown band"), "{e}");
 }
+
+/// 4 s white video whose sound is a 60 ms burst at 0.4, 1.4, 2.4 and 3.4 s (frame-aligned at 25 fps).
+fn clicks(dir: &Path) -> PathBuf {
+    let p = dir.join("clicks.mp4");
+    let st = Proc::new(tools().ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=white:s=64x64:r=25:d=4", "-f", "lavfi", "-i"])
+        .arg("aevalsrc='0.8*sin(2*PI*1000*t)*between(mod(t,1),0.4,0.46)':s=48000:d=4")
+        .args(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "pcm_s16le", "-shortest"])
+        .arg(&p)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    p
+}
+
+#[test]
+fn opacity_pulses_on_each_beat_in_the_export() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut eng, v, _) = project(&clicks(dir.path()));
+    eng.dispatch(Command::AnimateFromBeats { clip: v.clone(), param: "opacity".into(), source: None, low: 0.1, high: 1.0, decay: 0.3 }).unwrap();
+    assert_eq!(eng.undo_label(), Some("Pulse opacity on beats"));
+    let k = eng.project.active().unwrap().find_clip(&v).unwrap().1.keyframes["opacity"].clone();
+    let at = |t: f64| ffworks_core::keyframes::eval(&k, t).unwrap();
+    for b in [1.4, 2.4, 3.4] {
+        // the detector may place an onset a frame or two early
+        let peak = (-3..=3).map(|f| at(b + f as f64 * 0.04)).fold(0.0, f64::max);
+        assert!(peak > 0.95, "pulse near {b}: {peak} ({k:?})");
+        assert!(at(b + 0.5) < 0.15, "back down after {b}: {}", at(b + 0.5));
+    }
+    let out = dir.path().join("o.mp4");
+    export(&eng, &out);
+    let between = luma_at(&out, 2.0);
+    let on = (-2..=2).map(|f| luma_at(&out, 2.4 + f as f64 * 0.04)).fold(0.0, f64::max);
+    assert!(on > between + 100.0, "the frame on the beat is bright, between beats dim: {on} vs {between}");
+    eng.undo().unwrap();
+    assert!(!eng.project.active().unwrap().find_clip(&v).unwrap().1.keyframes.contains_key("opacity"));
+}

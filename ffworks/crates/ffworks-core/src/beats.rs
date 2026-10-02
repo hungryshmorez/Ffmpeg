@@ -147,6 +147,13 @@ pub fn detect(tools: &Tools, media: &Path, cache_dir: &Path, key: &str) -> Resul
     if let Some(a) = std::fs::read_to_string(&cache_file).ok().and_then(|t| serde_json::from_str::<BeatAnalysis>(&t).ok()) {
         return Ok(a);
     }
+    let a = analyse(tools, media)?;
+    let _ = std::fs::write(&cache_file, serde_json::to_vec(&a)?);
+    Ok(a)
+}
+
+/// Decode the first audio stream of `media` and find its beats (no cache).
+pub fn analyse(tools: &Tools, media: &Path) -> Result<BeatAnalysis> {
     let mut cmd = Command::new(&tools.ffmpeg);
     cmd.args(["-v", "error", "-nostdin", "-i"]).arg(media).args(["-map", "0:a:0", "-ac", "1", "-ar", &SR.to_string(), "-f", "f32le", "-"]);
     cmd.stdout(Stdio::piped()).stderr(Stdio::null()).stdin(Stdio::null());
@@ -160,9 +167,7 @@ pub fn detect(tools: &Tools, media: &Path, cache_dir: &Path, key: &str) -> Resul
     }
     let samples: Vec<f32> = bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
     let beats = onsets(&samples);
-    let a = BeatAnalysis { bpm: estimate_bpm(&beats), beats, duration: samples.len() as f64 / SR as f64 };
-    let _ = std::fs::write(&cache_file, serde_json::to_vec(&a)?);
-    Ok(a)
+    Ok(BeatAnalysis { bpm: estimate_bpm(&beats), beats, duration: samples.len() as f64 / SR as f64 })
 }
 
 #[cfg(test)]

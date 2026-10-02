@@ -4,9 +4,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 W=$(mktemp -d "/tmp/ffworks-reactive.XXXXXX"); mkdir -p "$W/cache"
 ffmpeg -v error -y -f lavfi -i "color=c=gray:s=160x120:r=25:d=4" -f lavfi -i "sine=f=440:r=48000:d=4,volume='if(lt(t,2),0.01,1)':eval=frame" -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$W/f.mp4"
+ffmpeg -v error -y -f lavfi -i "color=c=white:s=160x120:r=25:d=4" -f lavfi -i "aevalsrc='0.8*sin(2*PI*1000*t)*between(mod(t,1),0.4,0.46)':s=48000:d=4" -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$W/clicks.mp4"
 (cd ui && VITE_UITEST=1 npx vite build >/dev/null); touch src-tauri/src/lib.rs
 cargo build -p ffworks-app --features custom-protocol,uitest 2>&1 | tail -1
-sed "s|__SRC__|$W/f.mp4|g" scripts/uitest/reactive.js > "$W/t.js"
+sed "s|__SRC__|$W/f.mp4|g; s|__CLICKS__|$W/clicks.mp4|g" scripts/uitest/reactive.js > "$W/t.js"
 export DISPLAY=:99 XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/cfg" WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1
 pgrep Xvfb >/dev/null || { Xvfb :99 -screen 0 1600x1000x24 >/dev/null 2>&1 & sleep 2; }
 FFWORKS_UITEST_SCRIPT="$W/t.js" FFWORKS_UITEST_OUT="$W/r.json" target/debug/ffworks-app >"$W/app.log" 2>&1 & P=$!

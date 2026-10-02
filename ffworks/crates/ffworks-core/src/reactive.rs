@@ -107,6 +107,41 @@ pub fn keys(levels: &[f64], offset: f64, map: Mapping, fps: Fps, clip_dur: f64) 
         .collect()
 }
 
+/// Most keys a beat pulse curve may have (two per beat).
+pub const MAX_PULSE_KEYS: usize = 300;
+
+/// Keyframes that jump to `high` on each beat (clip-relative seconds) and ease back to `low` over `decay` seconds (or
+/// until shortly before the next beat), holding `low` in between. Errors when the clip has more beats than fit.
+pub fn pulse_keys(beats: &[f64], low: f64, high: f64, decay: f64, fps: Fps, clip_dur: f64) -> Result<Vec<Keyframe>> {
+    let fpsf = fps.as_f64();
+    let frame = 1.0 / fpsf;
+    let snap = |t: f64| (t * fpsf).round() / fpsf;
+    let mut bs: Vec<f64> = beats.iter().copied().filter(|t| *t >= 0.0 && *t <= clip_dur).map(snap).collect();
+    bs.dedup();
+    if bs.is_empty() {
+        return Err(Error::validation("no beats were found under this clip"));
+    }
+    let mut pts: Vec<(f64, f64, Interp)> = vec![];
+    if bs[0] > 0.0 {
+        pts.push((0.0, low, Interp::Hold));
+    }
+    for (i, &t) in bs.iter().enumerate() {
+        let next = bs.get(i + 1).copied().unwrap_or(f64::INFINITY);
+        // the pulse needs at least one frame to fall; a beat on the very next frame just restarts it
+        let end = snap((t + decay.max(frame)).min(next - frame).min(clip_dur));
+        if end > t {
+            pts.push((t, high, Interp::EaseOut));
+            pts.push((end, low, Interp::Hold));
+        } else {
+            pts.push((t, high, Interp::Hold));
+        }
+    }
+    if pts.len() > MAX_PULSE_KEYS {
+        return Err(Error::validation(format!("{} beats under this clip is too many for one curve (at most {}); split the clip first", bs.len(), MAX_PULSE_KEYS / 2)));
+    }
+    Ok(pts.into_iter().map(|(t, v, interp)| Keyframe { t: Rational::new((t * fpsf).round() as i64 * fps.den(), fps.num()), v, interp }).collect())
+}
+
 /// Ramer–Douglas–Peucker: the fewest points whose straight lines stay within `tol` of every point.
 fn thin(pts: &[(f64, f64)], tol: f64) -> Vec<(f64, f64)> {
     if pts.len() <= 2 {
@@ -175,6 +210,24 @@ mod tests {
         let lv: Vec<f64> = (0..20 * 120).map(|i| -30.0 + 20.0 * ((i * 7919 % 101) as f64 / 101.0)).collect();
         let k = keys(&lv, 0.0, Mapping { low: 0.0, high: 100.0, smooth: 0.0 }, fps(), 120.0);
         assert!(k.len() <= MAX_KEYS && k.len() > 20, "{}", k.len());
+    }
+
+    #[test]
+    fn pulses_jump_on_beats_and_fall_back() {
+        // beats on frame boundaries at 25 fps; 1.40 and 1.44 are one frame apart
+        let k = pulse_keys(&[0.4, 1.4, 1.44, 3.0], 0.0, 1.0, 0.3, fps(), 4.0).unwrap();
+        let at = |t: f64| crate::keyframes::eval(&k, t).unwrap();
+        assert_eq!(at(0.2), 0.0);
+        assert_eq!(at(0.4), 1.0);
+        assert!(at(0.55) > 0.0 && at(0.55) < 1.0);
+        assert_eq!(at(1.0), 0.0);
+        assert_eq!(at(1.44), 1.0, "a beat one frame after another restarts the pulse");
+        assert_eq!(at(3.0), 1.0);
+        assert_eq!(at(3.5), 0.0);
+        assert!(k.windows(2).all(|w| w[0].t < w[1].t));
+        assert!(pulse_keys(&[], 0.0, 1.0, 0.3, fps(), 4.0).is_err());
+        let many: Vec<f64> = (0..400).map(|i| i as f64 * 0.25).collect();
+        assert!(pulse_keys(&many, 0.0, 1.0, 0.1, fps(), 100.0).is_err());
     }
 
     #[test]

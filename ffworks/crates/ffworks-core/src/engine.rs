@@ -134,6 +134,10 @@ impl Engine {
                 Ok(())
             }
             Command::RemoveRanges { clip, ranges } => self.remove_ranges(clip, ranges, fwd, inv),
+            Command::AnimateFromBeats { clip, param, source, low, high, decay } => {
+                let keys = self.beat_keys(clip, param, source.as_deref(), *low, *high, *decay)?;
+                self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
+            }
             Command::AnimateFromAudio { clip, param, source, low, high, smooth, band } => {
                 let keys = self.audio_keys(clip, param, source.as_deref(), *low, *high, *smooth, band.as_deref().unwrap_or("all"))?;
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
@@ -149,20 +153,14 @@ impl Engine {
         }
     }
 
-    /// Keyframes making `param` of `clip` follow the loudness of an audio clip over the part of the timeline both cover.
-    #[allow(clippy::too_many_arguments)]
-    fn audio_keys(&self, clip: &str, param: &str, source: Option<&str>, low: f64, high: f64, smooth: f64, band: &str) -> Result<Vec<crate::keyframes::Keyframe>> {
+    /// The audio a parameter of `clip` should react to: the media file, the media time where the overlap starts, the
+    /// overlap's offset into `clip` and its length (seconds). Also checks `param` can be animated to `low` and `high`.
+    fn reaction_source(&self, clip: &str, param: &str, source: Option<&str>, low: f64, high: f64) -> Result<(PathBuf, f64, f64, f64)> {
         let seq = self.project.active()?;
         let (_, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
         // check the parameter can be animated and both values are allowed before running FFmpeg
         crate::clipprops::check_value(c, param, low, true)?;
         crate::clipprops::check_value(c, param, high, true)?;
-        if !(0.0..=10.0).contains(&smooth) {
-            return Err(Error::validation("smoothing must be 0-10 seconds"));
-        }
-        if !crate::reactive::BANDS.iter().any(|b| b.0 == band) {
-            return Err(Error::validation(format!("unknown band '{band}' (all, bass, mid, treble)")));
-        }
         let src_id = match source {
             Some(s) => s.to_string(),
             None if c.kind == TrackKind::Audio => c.id.clone(),
@@ -192,9 +190,35 @@ impl Engine {
             return Err(Error::validation("the audio clip does not overlap this clip on the timeline"));
         }
         let media_from = s.source_in + (from - s.start);
-        let levels = crate::reactive::envelope(&self.tools, std::path::Path::new(&media.path), media_from.as_f64(), (to - from).as_f64(), band)?;
-        let map = crate::reactive::Mapping { low, high, smooth };
-        Ok(crate::reactive::keys(&levels, (from - c.start).as_f64(), map, self.project.settings.fps, c.duration.as_f64()))
+        Ok((PathBuf::from(&media.path), media_from.as_f64(), (from - c.start).as_f64(), (to - from).as_f64()))
+    }
+
+    /// Keyframes making `param` of `clip` follow the loudness of an audio clip over the part of the timeline both cover.
+    #[allow(clippy::too_many_arguments)]
+    fn audio_keys(&self, clip: &str, param: &str, source: Option<&str>, low: f64, high: f64, smooth: f64, band: &str) -> Result<Vec<crate::keyframes::Keyframe>> {
+        if !(0.0..=10.0).contains(&smooth) {
+            return Err(Error::validation("smoothing must be 0-10 seconds"));
+        }
+        if !crate::reactive::BANDS.iter().any(|b| b.0 == band) {
+            return Err(Error::validation(format!("unknown band '{band}' (all, bass, mid, treble)")));
+        }
+        let (path, media_from, offset, len) = self.reaction_source(clip, param, source, low, high)?;
+        let levels = crate::reactive::envelope(&self.tools, &path, media_from, len, band)?;
+        let dur = self.project.active()?.find_clip(clip).map(|(_, c)| c.duration.as_f64()).unwrap_or(0.0);
+        Ok(crate::reactive::keys(&levels, offset, crate::reactive::Mapping { low, high, smooth }, self.project.settings.fps, dur))
+    }
+
+    /// Keyframes pulsing `param` of `clip` on the beats of an audio clip.
+    fn beat_keys(&self, clip: &str, param: &str, source: Option<&str>, low: f64, high: f64, decay: f64) -> Result<Vec<crate::keyframes::Keyframe>> {
+        if !(0.0..=10.0).contains(&decay) {
+            return Err(Error::validation("decay must be 0-10 seconds"));
+        }
+        let (path, media_from, offset, len) = self.reaction_source(clip, param, source, low, high)?;
+        let beats = crate::beats::analyse(&self.tools, &path)?.beats;
+        // media time → clip time, keeping only beats inside the overlap
+        let rel: Vec<f64> = beats.iter().filter(|b| **b >= media_from && **b < media_from + len).map(|b| b - media_from + offset).collect();
+        let dur = self.project.active()?.find_clip(clip).map(|(_, c)| c.duration.as_f64()).unwrap_or(0.0);
+        crate::reactive::pulse_keys(&rel, low, high, decay, self.project.settings.fps, dur)
     }
 
     /// Cut `ranges` (timeline time) out of `clip`'s linked group, latest range first so earlier ones keep their positions.

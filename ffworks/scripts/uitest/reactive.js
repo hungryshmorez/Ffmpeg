@@ -11,7 +11,8 @@
   const setNum = (input, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, String(v)); input.dispatchEvent(new Event("input", { bubbles: true })); };
   const vclip = () => view().project.sequences[0].tracks.find((t) => t.kind === "video").clips[0];
   const rat = (x) => { const [n, d] = String(x).split("/"); return Number(n) / (d === undefined ? 1 : Number(d)); };
-  const evalK = (ks, t) => { if (t <= rat(ks[0].t)) return ks[0].v; for (let i = 1; i < ks.length; i++) { const a = ks[i - 1], b = ks[i]; if (t <= rat(b.t)) return a.v + (b.v - a.v) * (t - rat(a.t)) / (rat(b.t) - rat(a.t)); } return ks[ks.length - 1].v; };
+  const shape = (i, p) => (i === "hold" ? 0 : i === "ease_in" ? p * p : i === "ease_out" ? p * (2 - p) : i === "ease_in_out" ? p * p * (3 - 2 * p) : p);
+  const evalK = (ks, t) => { if (t <= rat(ks[0].t)) return ks[0].v; for (let i = 1; i < ks.length; i++) { const a = ks[i - 1], b = ks[i]; if (t < rat(b.t)) return a.v + (b.v - a.v) * shape(a.interp, (t - rat(a.t)) / (rat(b.t) - rat(a.t))); } return ks[ks.length - 1].v; };
   try {
     await waitFor(() => $(".app") && view());
     await window.__ffworks.importPaths(["__SRC__"]); await waitFor(() => $$(".media-item").length === 1);
@@ -41,6 +42,26 @@
     step("Ctrl+Z removes the curve", !vclip().keyframes[param]);
     const err = await P().dispatch({ type: "animate_from_audio", clip: vclip().id, param, source: null, low: -5, high: 0.4, smooth: 0 }); await sleep(300);
     step("an out-of-range value is refused with a message", err === false && $$(".toast").some((t) => /outside/.test(t.textContent)), $$(".toast").map((t) => t.textContent).join(" | "));
+    // beats: a second clip whose sound is a click every second at x.4 s
+    await window.__ffworks.importPaths(["__CLICKS__"]); await waitFor(() => $$(".media-item").length === 2);
+    const m2 = view().project.media[1].id;
+    await P().dispatch({ type: "place_clip", media: m2, track: v1, start: "4", source_in: "0", duration: "4", with_audio: true }); await sleep(400);
+    const c2 = () => view().project.sequences[0].tracks.find((t) => t.kind === "video").clips.find((c) => c.media === m2);
+    window.__ffworks.useUi.getState().select(c2().id); window.__ffworks.usePlayhead.getState().setT(5); await sleep(400);
+    const of = await waitFor(() => $("[data-param='opacity'] button[aria-label^='Follow audio']"));
+    of.click(); await sleep(300);
+    const f2 = $("[data-param='opacity'] .kf-follow");
+    const sel = f2.querySelector("[aria-label='Follow what']");
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(sel, "beats"); sel.dispatchEvent(new Event("change", { bubbles: true })); await sleep(200);
+    step("beats mode swaps smoothing/band for a decay time", !!f2.querySelector("[aria-label='Decay in seconds']") && !f2.querySelector("[aria-label='Frequency band']") && !f2.querySelector("[aria-label='Smoothing in seconds']"));
+    setNum(f2.querySelector("[aria-label='Value when quiet']"), 0.1);
+    setNum(f2.querySelector("[aria-label='Value when loud']"), 1);
+    setNum(f2.querySelector("[aria-label='Decay in seconds']"), 0.3); await sleep(150);
+    [...f2.querySelectorAll("button")].find((b) => /Apply/.test(b.textContent)).click();
+    const pk = await waitFor(() => c2().keyframes.opacity, 30000);
+    const peak = (b) => Math.max(...[-3, -2, -1, 0, 1, 2, 3].map((f) => evalK(pk, b + f * 0.04)));
+    step("opacity pulses on the clicks and falls back between them", pk && peak(1.4) > 0.95 && peak(2.4) > 0.95 && evalK(pk, 2.0) < 0.15, pk && `${peak(1.4)} ${peak(2.4)} ${evalK(pk, 2.0)}`);
+    step("it is one undo step", /Pulse opacity on beats/.test(view().undoLabel || ""), view().undoLabel);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await window.__TAURI_INTERNALS__.invoke("uitest_report", { report: JSON.stringify(R) });
 })();
