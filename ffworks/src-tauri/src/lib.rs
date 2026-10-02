@@ -302,7 +302,7 @@ fn available_transitions(state: &AppState) -> Vec<(String, String)> {
         _ => ffworks_core::transitions::KINDS.iter().map(|(k, l)| (k.to_string(), l.to_string())).collect(),
     };
     if c.is_some_and(|c| c.xfade_custom) {
-        list.extend(ffworks_core::glx::all().iter().map(|(n, _)| (n.to_string(), ffworks_core::glx::label(n))));
+        list.extend(ffworks_core::glx::all().iter().map(|(n, _)| (n.to_string(), format!("{} (slow to render)", ffworks_core::glx::label(n)))));
     }
     list
 }
