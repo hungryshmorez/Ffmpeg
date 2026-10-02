@@ -57,6 +57,7 @@ jobs:
             $caps += ("- {0}: {1}" -f $f, ($filters -match "\b$f\b"))
           }
           $caps | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          Write-Host ("::notice title=bundled FFmpeg::" + ($caps -join " ") + " sha256=" + $got)
           if ($filters -notmatch "\bfrei0r\b") { Write-Warning "bundled FFmpeg has no frei0r filter" }
       - name: Fetch frei0r plugins (Win64) to bundle
         shell: pwsh
@@ -72,6 +73,7 @@ jobs:
             $dlls = Get-ChildItem frei0r-extract -Recurse -Filter *.dll
             $dlls | Copy-Item -Destination src-tauri/frei0r-bin/
             Get-ChildItem frei0r-extract -Recurse -Include COPYING*,LICENSE*,README* | Copy-Item -Destination src-tauri/frei0r-bin/ -ErrorAction SilentlyContinue
+            Write-Host "::notice title=frei0r bundle::$($dlls.Count) dlls, release $($rel.tag_name), asset $($asset.name)"
             "frei0r plugins bundled: $($dlls.Count); glitch0r present: $([bool]($dlls | Where-Object Name -eq 'glitch0r.dll'))" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
           } catch {
             Write-Warning "frei0r plugins NOT bundled: $_"
