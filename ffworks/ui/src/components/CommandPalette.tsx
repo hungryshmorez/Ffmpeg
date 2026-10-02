@@ -1,4 +1,4 @@
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
@@ -21,6 +21,17 @@ function buildActions(): PaletteAction[] {
       const dir = await open({ directory: true, title: "Folder to collect the project and its media into" });
       if (typeof dir !== "string") return;
       try { proj.toast("info", `Packaged: ${await api.packageProject(dir)}`); } catch (e) { proj.toast("error", String(e)); }
+    })() },
+    ui.recording
+      ? { id: "rec-stop", label: "Stop recording and save macro…", keywords: "macro script", run: () => void (async () => {
+          const p = await save({ title: "Save macro", defaultPath: "macro.json", filters: [{ name: "Macro", extensions: ["json"] }] });
+          try { const n = await api.stopRecording(p ?? null); ui.setRecording(false); proj.toast("info", p ? `Macro saved (${n} commands)` : "Recording discarded"); } catch (e) { ui.setRecording(false); proj.toast("error", String(e)); }
+        })() }
+      : { id: "rec-start", label: "Start recording a macro", keywords: "macro script record", run: () => void api.startRecording().then(() => { ui.setRecording(true); proj.toast("info", "Recording: do the edits, then choose “Stop recording and save macro…”"); }) },
+    { id: "rec-run", label: "Run a macro on the selected clip…", keywords: "macro script replay", run: () => void (async () => {
+      const p = await open({ title: "Macro to run", filters: [{ name: "Macro", extensions: ["json"] }] });
+      if (typeof p !== "string") return;
+      try { proj.setView(await api.runMacro(p, ui.selected)); proj.toast("info", "Macro applied (one undo step)"); } catch (e) { proj.toast("error", String(e)); }
     })() },
     { id: "saveas", label: "Save project as…", hint: "Ctrl+Shift+S", run: () => void saveProject(true) },
     { id: "import", label: "Import media…", run: () => void importViaDialog() },

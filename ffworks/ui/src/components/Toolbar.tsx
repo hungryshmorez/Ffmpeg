@@ -71,6 +71,7 @@ export function Toolbar() {
   const setExportOpen = useUi((s) => s.setExportOpen);
   const setDiagOpen = useUi((s) => s.setDiagOpen);
   const run = useProject((s) => s.run);
+  const recording = useUi((s) => s.recording);
   const activeJobs = useJobs((s) => Object.values(s.jobs).filter((j) => j.state === "queued" || j.state === "rendering").length);
   const setQueueOpen = useJobs((s) => s.setQueueOpen);
   return (
@@ -90,6 +91,7 @@ export function Toolbar() {
       <button onClick={() => deleteSelected(false)} title="Delete (Del)">Delete</button>
       <button onClick={() => deleteSelected(true)} title="Ripple delete (Shift+Del)">Ripple delete</button>
       <span className="grow" />
+      {recording && <span className="rec" role="status" aria-label="Recording a macro">● REC</span>}
       <span className="muted">{view.path ? view.path : "unsaved project"}</span>
       <button onClick={() => setQueueOpen(true)} title="Render queue">Queue{activeJobs ? ` (${activeJobs})` : ""}</button>
       <button onClick={() => useUi.getState().setDemoOpen(true)}>Demo mode</button>

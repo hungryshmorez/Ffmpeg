@@ -24,6 +24,7 @@ pub mod imgseq;
 pub mod jobs;
 pub mod glx;
 pub mod keyframes;
+pub mod macros;
 pub mod migrate;
 pub mod package;
 pub mod patch;

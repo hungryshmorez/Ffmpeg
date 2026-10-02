@@ -5,7 +5,7 @@
 //!   ffworks probe <media>                                     media info as JSON
 //!   ffworks command <project> [preset] [out]                  print the FFmpeg command (Command Inspector)
 //!   ffworks render <project> <out> [preset]                   export a project with progress
-//!   ffworks run <project|new> <commands.json> [--dry-run] [--save <out.ffworks>]
+//!   ffworks run <project|new> <commands.json> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]
 //!                                                             apply a JSON list of commands (one undo step each, all or nothing)
 //!   ffworks detect <media> <silence|black|freeze> [level] [min-seconds]
 //!   ffworks sync <reference-media> <other-media>              how much later the second recording is
@@ -101,7 +101,8 @@ fn run() -> ffworks_core::Result<()> {
             let save = args.iter().position(|a| a == "--save").and_then(|i| args.get(i + 1)).cloned();
             let mut eng = if project == "new" { Engine::new("Untitled", ProjectSettings::default(), tools.clone()) } else { Engine::load(Path::new(project), tools.clone())? };
             let text = std::fs::read_to_string(script).map_err(|e| Error::io(Path::new(script), e))?;
-            let cmds: Vec<Command> = serde_json::from_str(&text).map_err(|e| Error::validation(format!("{script}: not a JSON list of commands: {e}")))?;
+            let selected = args.iter().position(|a| a == "--selected").and_then(|i| args.get(i + 1)).cloned();
+            let cmds = ffworks_core::macros::instantiate(&text, selected.as_deref()).map_err(|e| Error::validation(format!("{script}: {e}")))?;
             // all or nothing: apply as one batch, so a failing command changes nothing
             let label = format!("script ({} commands)", cmds.len());
             let n = cmds.len();
