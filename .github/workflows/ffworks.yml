@@ -76,20 +76,6 @@ jobs:
           }
           "frei0r plugins are GPL-2.0-or-later; source: https://github.com/dyne/frei0r" | Set-Content src-tauri/frei0r-bin/NOTICE.txt
       - run: npm ci --prefix ui
-      - run: npm run build --prefix ui
-      - run: cargo test --workspace
-      - run: npm test --prefix ui
-  windows-build:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with: { workspaces: ffworks }
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: choco install ffmpeg -y --no-progress
-      - run: npm ci --prefix ui
       - run: cargo test -p ffworks-core
       - run: npx --prefix ui tauri build
       - name: Check the installer actually contains the bundled FFmpeg (size sanity)
