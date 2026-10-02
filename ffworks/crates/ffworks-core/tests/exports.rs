@@ -1,12 +1,12 @@
 //! Every export preset the installed FFmpeg can encode is rendered for real and the output codec is read back with ffprobe.
 use ffworks_core::commands::Command;
 use ffworks_core::engine::Engine;
-use ffworks_core::ffmpeg::{compile, ExportSettings, RenderOptions};
+use ffworks_core::ffmpeg::{compile_project, ExportSettings, RenderOptions};
 use ffworks_core::ffprobe::probe;
 use ffworks_core::jobs::{run_job, CancelToken};
 use ffworks_core::process::{Capabilities, Tools};
 use ffworks_core::project::ProjectSettings;
-use ffworks_core::{render_graph, Rational};
+use ffworks_core::Rational;
 use std::process::Command as Proc;
 
 fn tools() -> Tools {
@@ -24,7 +24,6 @@ fn every_available_preset_renders_with_the_right_codec() {
     let v = eng.project.active().unwrap().tracks[0].id.clone();
     eng.dispatch(Command::PlaceClip { media: m, track: v, start: Rational::ZERO, source_in: None, duration: None, with_audio: true, audio_track: None }).unwrap();
     let caps = Capabilities::discover(&tools()).unwrap();
-    let g = render_graph::build(&eng.project).unwrap();
     let mut done = vec![];
     for st in ExportSettings::builtin() {
         let usable = st.video_codec.as_ref().is_none_or(|c| caps.has_encoder(c)) && st.audio_codec.as_ref().is_none_or(|c| caps.has_encoder(c));
@@ -32,7 +31,7 @@ fn every_available_preset_renders_with_the_right_codec() {
             continue;
         }
         let out = dir.path().join(format!("{}.{}", st.id, st.extension));
-        let mut job = compile(&g, &RenderOptions { output: out.clone(), settings: st.clone(), range: None, scale_div: 1 }, Some(&caps)).unwrap_or_else(|e| panic!("{}: {e}", st.id));
+        let mut job = compile_project(&eng.project, &RenderOptions { output: out.clone(), settings: st.clone(), range: None, scale_div: 1 }, Some(&caps)).unwrap_or_else(|e| panic!("{}: {e}", st.id));
         job.program = tools().ffmpeg;
         run_job(&tools(), &job, "t", "export", &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("{} failed: {e}", st.id));
         let info = probe(&tools(), &out).unwrap();

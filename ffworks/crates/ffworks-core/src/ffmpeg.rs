@@ -36,6 +36,7 @@ impl ExportSettings {
             ExportSettings { id: "ffv1_mkv".into(), name: "FFV1 lossless MKV".into(), extension: "mkv".into(), video_codec: Some("ffv1".into()), crf: None, encoder_preset: None, pix_fmt: None, audio_codec: Some("flac".into()), audio_bitrate: None, extra: s(&["-level", "3", "-coder", "1"]) },
             ExportSettings { id: "gif".into(), name: "Animated GIF (no audio)".into(), extension: "gif".into(), video_codec: Some("gif".into()), crf: None, encoder_preset: None, pix_fmt: None, audio_codec: None, audio_bitrate: None, extra: s(&["-loop", "0"]) },
             ExportSettings { id: "flac".into(), name: "FLAC (audio only)".into(), extension: "flac".into(), video_codec: None, crf: None, encoder_preset: None, pix_fmt: None, audio_codec: Some("flac".into()), audio_bitrate: None, extra: vec![] },
+            ExportSettings { id: crate::quick::PRESET.into(), name: "Quick export, no re-encode (single untouched clip, MKV)".into(), extension: "mkv".into(), video_codec: None, crf: None, encoder_preset: None, pix_fmt: None, audio_codec: None, audio_bitrate: None, extra: vec![] },
             ExportSettings { id: "wav".into(), name: "WAV (audio only)".into(), extension: "wav".into(), video_codec: None, crf: None, encoder_preset: None, pix_fmt: None, audio_codec: Some("pcm_s16le".into()), audio_bitrate: None, extra: vec![] },
             ExportSettings { id: "mp3".into(), name: "MP3 (audio only)".into(), extension: "mp3".into(), video_codec: None, crf: None, encoder_preset: None, pix_fmt: None, audio_codec: Some("libmp3lame".into()), audio_bitrate: Some("192k".into()), extra: vec![] },
         ]
@@ -83,6 +84,11 @@ impl FfmpegJob {
     /// Full argv. With `script` the filter graph is read from that file using the syntax `style` names; otherwise it is inlined.
     pub fn argv(&self, script: Option<(&Path, FilterFileStyle)>) -> Vec<String> {
         let mut a = self.pre.clone();
+        if self.filter_graph.is_empty() {
+            // stream-copy job (see `quick`): nothing to filter
+            a.extend(self.post.iter().cloned());
+            return a;
+        }
         match script {
             Some((p, FilterFileStyle::Legacy)) => {
                 a.push("-filter_complex_script".into());
@@ -554,4 +560,12 @@ fn same_path(a: &Path, b: &Path) -> bool {
     } else {
         a == b
     }
+}
+
+/// Compile a project for export: the normal renderer, or the stream-copy path for the quick-export preset.
+pub fn compile_project(project: &crate::project::Project, opts: &RenderOptions, caps: Option<&Capabilities>) -> Result<FfmpegJob> {
+    if opts.settings.id == crate::quick::PRESET {
+        return crate::quick::compile(project, opts);
+    }
+    compile(&crate::render_graph::build(project)?, opts, caps)
 }

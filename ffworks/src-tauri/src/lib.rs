@@ -4,12 +4,12 @@
 use ffworks_core::analysis;
 use ffworks_core::commands::Command;
 use ffworks_core::engine::{prepare_asset, Engine};
-use ffworks_core::ffmpeg::{compile, ExportSettings, FfmpegJob, RenderOptions};
+use ffworks_core::ffmpeg::{ExportSettings, FfmpegJob, RenderOptions};
 use ffworks_core::jobs::{CancelToken, JobLog};
 use ffworks_core::queue::{JobQueue, JobSnapshot, PRIORITY_BACKGROUND, PRIORITY_EXPORT};
 use ffworks_core::process::{Capabilities, Tools};
 use ffworks_core::project::{Project, ProjectSettings};
-use ffworks_core::{render_graph, Rational};
+use ffworks_core::Rational;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -695,8 +695,7 @@ fn build_job(state: &AppState, preset: &str, output: &str, range: Option<(String
         Some((a, b)) => Some((a.parse::<Rational>()?, b.parse::<Rational>()?)),
         None => None,
     };
-    let g = render_graph::build(&project).map_err(s)?;
-    let mut job = compile(&g, &RenderOptions { output: PathBuf::from(output), settings: ExportSettings::find(preset).map_err(s)?, range, scale_div }, other_caps.or_else(|| caps(state)).as_ref()).map_err(s)?;
+    let mut job = ffworks_core::ffmpeg::compile_project(&project, &RenderOptions { output: PathBuf::from(output), settings: ExportSettings::find(preset).map_err(s)?, range, scale_div }, other_caps.or_else(|| caps(state)).as_ref()).map_err(s)?;
     job.program = tools.ffmpeg;
     Ok(job)
 }
