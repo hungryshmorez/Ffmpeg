@@ -69,15 +69,17 @@ fn every_bundled_gl_transition_runs_and_goes_from_a_to_b() {
             problems.push(format!("{name}: ffmpeg failed: {}", String::from_utf8_lossy(&r.stderr).lines().next().unwrap_or("")));
             continue;
         }
-        let (start, mid, end) = (mean_rgb(&out, 0.2), mean_rgb(&out, 1.0), mean_rgb(&out, 1.9));
+        let (start, end) = (mean_rgb(&out, 0.2), mean_rgb(&out, 1.9));
+        // some shaders (bounce) are nearly finished by the midpoint, so look at several moments inside the transition
+        let mids: Vec<_> = [0.7, 1.0, 1.3].iter().map(|t| mean_rgb(&out, *t)).collect();
         if far(start, RED, 40) {
             problems.push(format!("{name}: before the transition the picture should be A (red), got {start:?}"));
         }
         if far(end, BLUE, 40) {
             problems.push(format!("{name}: after the transition the picture should be B (blue), got {end:?}"));
         }
-        if !far(mid, RED, 25) || !far(mid, BLUE, 25) {
-            problems.push(format!("{name}: halfway it looks like a plain A or B: {mid:?}"));
+        if !mids.iter().any(|m| far(*m, RED, 25) && far(*m, BLUE, 25)) {
+            problems.push(format!("{name}: during the transition it only ever looks like plain A or B: {mids:?}"));
         }
     }
     assert!(problems.is_empty(), "{} of {} GL transitions misbehave:\n{}", problems.len(), glx::all().len(), problems.join("\n"));
