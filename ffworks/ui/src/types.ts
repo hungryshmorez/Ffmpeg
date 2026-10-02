@@ -32,7 +32,8 @@ export interface Clip {
 }
 export interface Transition { id: string; clip_a: string; clip_b: string; kind: string; duration: Rational }
 export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; pan: number; solo: boolean; clips: Clip[]; transitions: Transition[] }
-export interface Sequence { id: string; name: string; tracks: Track[] }
+export interface Marker { id: string; time: Rational; name: string; color: string; note: string }
+export interface Sequence { id: string; name: string; tracks: Track[]; markers: Marker[] }
 export interface ProjectSettings { width: number; height: number; fps: Rational; sample_rate: number }
 export interface Project { schema_version: number; name: string; settings: ProjectSettings; media: MediaAsset[]; sequences: Sequence[]; active_sequence: string }
 
@@ -60,6 +61,9 @@ export type Command =
   | { type: "delete_clip"; clip: string; ripple: boolean }
   | { type: "set_clip_gain"; clip: string; gain_db: number; relative: boolean }
   | { type: "set_track"; track: string; name?: string | null; muted?: boolean | null; locked?: boolean | null; gain_db?: number | null; pan?: number | null; solo?: boolean | null }
+  | { type: "add_marker"; time: Rational; name: string; color?: string | null; note?: string | null }
+  | { type: "set_marker"; marker: string; time?: Rational | null; name?: string | null; color?: string | null; note?: string | null }
+  | { type: "remove_marker"; marker: string }
   | { type: "add_title"; track: string; start: Rational; duration: Rational; text: string }
   | { type: "set_title"; clip: string; title: Title }
   | { type: "add_solid"; track: string; start: Rational; duration: Rational; color: string }
@@ -107,3 +111,5 @@ export interface RelinkResult { state: StateView; relinked: string[]; unresolved
 export interface BeatAnalysis { beats: number[]; bpm: number; duration: number }
 export interface SceneAnalysis { cuts: number[]; scenes: [number, number][]; threshold: number }
 export interface Loudness { integrated_lufs: number | null; range_lu: number; true_peak_dbtp: number | null }
+
+export interface ProxyStatus { mediaId: string; eligible: boolean; ready: boolean; path: string | null; bytes: number | null }

@@ -4,7 +4,8 @@ import { api } from "../api";
 import { fpsOf, timecode, toSec } from "../time";
 import { clipAt, dbToGain, sourceTime, times, visibleVideoAt } from "../timeline/math";
 import { clipGainDb } from "../timeline/mixer";
-import { usePlayhead, useProject, useUi } from "../state/stores";
+import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
+import { playbackPath, useProxies } from "../state/proxies";
 import { fromSec } from "../time";
 import { hasMotion } from "../keyframes";
 import type { Sequence, Track } from "../types";
@@ -41,12 +42,28 @@ function AudioLane({ track, seq, t, playing, silenced, anySolo }: { track: Track
   const ref = useRef<HTMLAudioElement>(null);
   const clip = clipAt(track, t);
   const media = clip ? view.project.media.find((m) => m.id === clip.media) : undefined;
-  const url = clip && media && !silenced ? convertFileSrc(media.path) : null;
+  const proxyStatus = useProxies((s) => (media ? s.status[media.id] : undefined));
+  const useProxy = useProxies((s) => s.enabled);
+  const url = clip && media && !silenced && !media.generator ? convertFileSrc(playbackPath(media.path, proxyStatus, useProxy).path) : null;
   // Preview volume cannot exceed unity; export applies the full gain.
   const vol = clip ? dbToGain(clipGainDb(clip, t - toSec(clip.start)) + track.gain_db) : 0;
   useSyncedElement(ref, url, clip ? sourceTime(clip, t) : 0, playing, vol, track.muted || (anySolo && !track.solo), clip && !clip.reverse ? toSec(clip.speed) : 1);
   void seq;
   return <audio ref={ref} preload="auto" />;
+}
+
+/** Shown only after the preview player really failed to decode the file. */
+function UndecodableNotice({ mediaId, playingProxy, eligible }: { mediaId: string; playingProxy: boolean; eligible: boolean }) {
+  const jobs = useJobs((s) => s.jobs);
+  const toast = useProject((s) => s.toast);
+  const working = Object.values(jobs).some((j) => j.operation === `proxy:${mediaId}` && (j.state === "queued" || j.state === "rendering"));
+  return (
+    <div className="decode-notice" role="alert" data-undecodable={mediaId}>
+      {playingProxy ? "The proxy cannot be decoded here either — the monitor can't show this clip. Editing, rendered previews and export are unaffected."
+        : eligible ? <>This file can't be decoded by the preview player (the codec isn't supported by this system's webview). <button className="small" disabled={working} onClick={() => void api.createProxy(mediaId).catch((e) => toast("error", String(e)))}>{working ? "Making proxy…" : "Make a proxy"}</button></>
+        : "This file can't be decoded by the preview player."}
+    </div>
+  );
 }
 
 export function Monitor() {
@@ -68,7 +85,11 @@ export function Monitor() {
   const [div, setDiv] = useState(2);
   const previewCurrent = preview !== null && preview.renderHash === view.renderHash;
   const usePreview = previewCurrent && t >= toSec(preview.start) && t < toSec(preview.end);
-  const videoUrl = usePreview ? convertFileSrc(preview.path) : vis && media && !media.generator ? convertFileSrc(media.path) : null;
+  const proxyStatuses = useProxies((s) => s.status);
+  const proxiesOn = useProxies((s) => s.enabled);
+  const undecodable = useProxies((s) => s.undecodable);
+  const play = vis && media && !media.generator ? playbackPath(media.path, proxyStatuses[media.id], proxiesOn) : null;
+  const videoUrl = usePreview ? convertFileSrc(preview.path) : play ? convertFileSrc(play.path) : null;
   const videoTime = usePreview ? t - toSec(preview.start) : vis ? sourceTime(vis.clip, t) : 0;
   // The preview file carries the mixed audio, so it plays unmuted and the per-track source audio is silenced.
   useSyncedElement(videoRef, videoUrl, videoTime, playing, 1, !usePreview, usePreview || !vis || vis.clip.reverse || vis.clip.freeze ? 1 : toSec(vis.clip.speed));
@@ -131,7 +152,15 @@ export function Monitor() {
   return (
     <div className="monitor" aria-label="Program monitor">
       <div className="monitor-screen" style={{ aspectRatio: `${width} / ${height}` }}>
-        <video ref={videoRef} playsInline preload="auto" style={{ visibility: vis || usePreview ? "visible" : "hidden" }} />
+        <video
+          ref={videoRef}
+          playsInline
+          preload="auto"
+          style={{ visibility: vis || usePreview ? "visible" : "hidden" }}
+          onError={() => { if (!usePreview && vis) useProxies.getState().markUndecodable(vis.clip.media); }}
+          onLoadedData={() => { if (!usePreview && vis) useProxies.getState().clearUndecodable(vis.clip.media); }}
+        />
+        {!usePreview && vis && media && undecodable[media.id] && <UndecodableNotice mediaId={media.id} playingProxy={!!play?.proxy} eligible={!!proxyStatuses[media.id]?.eligible} />}
         {vis && media?.generator && !usePreview && <div className="gap-label">Generated clip ({vis.clip.title ? "title" : "solid colour"}) — render a preview to see it</div>}
         {!vis && !usePreview && <div className="gap-label">{seq.tracks.some((x) => x.clips.length) ? "no video at playhead" : "Import media and add it to the timeline"}</div>}
         {usePreview && <div className="bypass-badge ok" role="status">Processed preview · 1/{preview.scaleDiv} resolution</div>}
@@ -149,6 +178,7 @@ export function Monitor() {
         <button title="Next frame (→)" onClick={() => step(1)}>▸</button>
         <button title="Next edit" onClick={nextEdit}>⏭</button>
         <label className="check"><input type="checkbox" onChange={(e) => (loop.current = e.target.checked)} /> Loop</label>
+        <label className="check" title="Play low-resolution proxies in the monitor when they exist (exports use the originals)"><input type="checkbox" aria-label="Use proxies" checked={proxiesOn} onChange={(e) => useProxies.getState().setEnabled(e.target.checked)} /> Proxies</label>
         <span className="timecode dim">{timecode(duration, fps)}</span>
         <span className="sep" />
         <select aria-label="Preview quality" value={div} onChange={(e) => setDiv(Number(e.target.value))}>

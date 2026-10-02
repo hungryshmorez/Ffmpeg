@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { fpsOf, formatBytes, timecode, toSec } from "../time";
 import { useAnalysis } from "../state/analysis";
-import { usePlayhead, useProject, useUi } from "../state/stores";
+import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
+import { useProxies } from "../state/proxies";
 import type { MediaAsset } from "../types";
 
 export async function importViaDialog() {
@@ -68,11 +69,24 @@ export function MediaBrowser() {
   useEffect(() => media.forEach((m) => m.info.video.length && ensure(m.id)), [media, ensure]);
   const selected = media.find((m) => m.id === sel) ?? null;
   const fps = fpsOf(view.project.settings.fps);
+  const proxies = useProxies((s) => s.status);
+  const refreshProxies = useProxies((s) => s.refresh);
+  const jobs = useJobs((s) => s.jobs);
+  const toast = useProject((s) => s.toast);
+  useEffect(() => { void refreshProxies(); }, [media.length, refreshProxies]);
+  // a finished (or failed/canceled) proxy job changes what exists on disk
+  const finished = Object.values(jobs).filter((j) => j.operation.startsWith("proxy:") && ["completed", "failed", "canceled"].includes(j.state)).map((j) => `${j.jobId}:${j.state}`).join(",");
+  useEffect(() => { void refreshProxies(); }, [finished, refreshProxies]);
+  const proxyJob = (id: string) => Object.values(jobs).find((j) => j.operation === `proxy:${id}` && (j.state === "queued" || j.state === "rendering"));
+  const make = async (id: string) => { try { await api.createProxy(id); } catch (e) { toast("error", String(e)); } };
+  const makeAll = () => media.filter((m) => proxies[m.id]?.eligible && !proxies[m.id]?.ready && !proxyJob(m.id)).forEach((m) => void make(m.id));
 
   return (
     <div className="panel media" aria-label="Media browser">
       <div className="panel-title">
         Media <button className="small" onClick={() => void importViaDialog()}>Import…</button>
+        <button className="small" title="Make low-resolution H.264 copies of every video for smooth, universally playable preview (exports always use the originals)" onClick={makeAll}>Make proxies</button>
+        <button className="small" title="Delete all proxy files (they can be made again)" onClick={() => void api.clearProxies().then((b) => { toast("info", `Deleted proxies (${formatBytes(b)})`); return refreshProxies(); })}>Clear</button>
       </div>
       {view.offlineMedia.length > 0 && (
         <div className="offline-banner" role="alert">
@@ -102,6 +116,17 @@ export function MediaBrowser() {
               <div className="media-meta">
                 <div className="name">{m.name}{offline && <em> — offline</em>}{offline && <button className="small" onClick={(e) => { e.stopPropagation(); void locateMedia(m.id); }} onPointerDown={(e) => e.stopPropagation()}>Locate…</button>}</div>
                 <div className="muted">{m.info.still ? "still image" : timecode(toSec(m.info.duration), fps)} · {v ? `${v.width}×${v.height}` : "audio"} {v?.fps ? `· ${toSec(v.fps).toFixed(3)} fps` : ""}</div>
+                {proxies[m.id]?.eligible && (
+                  <div className="proxy-line">
+                    {(() => {
+                      const job = proxyJob(m.id);
+                      const p = proxies[m.id]!;
+                      if (job) return <span className="muted" data-proxy-state="working">proxy {job.state === "rendering" && job.fraction != null ? `${Math.round(job.fraction * 100)}%` : "queued"}…</span>;
+                      if (p.ready) return <span className="proxy-ok" data-proxy-state="ready">proxy ✓ {formatBytes(p.bytes)}</span>;
+                      return <button className="small" data-proxy-state="none" onClick={(e) => { e.stopPropagation(); void make(m.id); }} onPointerDown={(e) => e.stopPropagation()}>Make proxy</button>;
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -4,7 +4,7 @@
 
 use crate::error::{Error, Result};
 use crate::patch::Patch;
-use crate::project::{new_id, Clip, Id, MediaAsset, Project, ProjectSettings, Track, TrackKind};
+use crate::project::{new_id, Clip, Id, Marker, MediaAsset, Project, ProjectSettings, Track, TrackKind};
 use crate::time::{snap_to_frame, Rational};
 use crate::transitions::{self, Transition};
 use crate::clipprops;
@@ -86,6 +86,10 @@ pub enum Command {
     AddSolid { track: Id, start: Rational, duration: Rational, color: String },
     /// Change the colour of a solid-colour clip.
     SetSolidColor { clip: Id, color: String },
+    /// A marker at `time` (snapped to the frame grid).
+    AddMarker { time: Rational, name: String, color: Option<String>, note: Option<String> },
+    SetMarker { marker: Id, time: Option<Rational>, name: Option<String>, color: Option<String>, note: Option<String> },
+    RemoveMarker { marker: Id },
     /// Several commands applied as one undo step (spec §112).
     Batch { label: String, commands: Vec<Command> },
 }
@@ -121,6 +125,9 @@ impl Command {
             Command::SetClipParam { param, .. } => format!("Set {param}"),
             Command::SetClipBlend { blend, .. } => format!("Blend mode {blend}"),
             Command::SetClipFades { .. } => "Fades".into(),
+            Command::AddMarker { .. } => "Add marker".into(),
+            Command::SetMarker { .. } => "Edit marker".into(),
+            Command::RemoveMarker { .. } => "Remove marker".into(),
             Command::AddTitle { .. } => "Add title".into(),
             Command::SetTitle { .. } => "Edit title".into(),
             Command::AddSolid { .. } => "Add solid colour".into(),
@@ -561,6 +568,32 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(vec![Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 }])
         }
+        Command::AddMarker { time, name, color, note } => {
+            let m = Marker { id: new_id("mrk"), time: snap_to_frame(*time, fps), name: name.clone(), color: color.clone().unwrap_or_else(|| "#ffb020".into()), note: note.clone().unwrap_or_default() };
+            check_marker(&m)?;
+            Ok(vec![Patch::PutMarker { seq: sid, marker: m }])
+        }
+        Command::SetMarker { marker, time, name, color, note } => {
+            let mut m = seq.markers.iter().find(|m| &m.id == marker).cloned().ok_or_else(|| Error::NotFound(format!("marker {marker}")))?;
+            if let Some(t) = time {
+                m.time = snap_to_frame(*t, fps);
+            }
+            if let Some(n) = name {
+                m.name = n.clone();
+            }
+            if let Some(c) = color {
+                m.color = c.clone();
+            }
+            if let Some(n) = note {
+                m.note = n.clone();
+            }
+            check_marker(&m)?;
+            Ok(vec![Patch::PutMarker { seq: sid, marker: m }])
+        }
+        Command::RemoveMarker { marker } => {
+            seq.markers.iter().find(|m| &m.id == marker).ok_or_else(|| Error::NotFound(format!("marker {marker}")))?;
+            Ok(vec![Patch::RemoveMarker { seq: sid, id: marker.clone() }])
+        }
         Command::AddTitle { track, start, duration, text } => {
             let t = seq.track(track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
             ensure_unlocked(t)?;
@@ -773,6 +806,16 @@ fn set_param_value(c: &mut Clip, param: &str, value: f64) -> Result<()> {
         None => c.set_static_param(param, value),
     }
     Ok(())
+}
+
+fn check_marker(m: &Marker) -> Result<()> {
+    if m.time < Rational::ZERO {
+        return Err(Error::validation("a marker cannot be placed before 00:00:00"));
+    }
+    if m.name.chars().count() > 100 || m.note.chars().count() > 2000 {
+        return Err(Error::validation("marker name is limited to 100 characters and its note to 2000"));
+    }
+    crate::titles::check_hex(&m.color, 6)
 }
 
 /// Clip name for a title: its first line, shortened.

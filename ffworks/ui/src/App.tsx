@@ -16,6 +16,8 @@ import { Timeline } from "./components/Timeline";
 import { deleteSelected, openProject, saveProject, splitAtPlayhead, Toolbar } from "./components/Toolbar";
 import { useJobs, usePlayhead, useProject, useUi } from "./state/stores";
 import { fpsOf } from "./time";
+import { neighbourMarkers } from "./timeline/math";
+import { addMarkerAtPlayhead } from "./components/MarkerPanel";
 
 function Toasts() {
   const toasts = useProject((s) => s.toasts);
@@ -101,6 +103,12 @@ export default function App() {
       else if (e.key === "ArrowLeft") { e.preventDefault(); ph.setT(Math.max(0, Math.round(ph.t * fps) / fps - (e.shiftKey ? 10 : 1) / fps)); }
       else if (e.key === "ArrowRight") { e.preventDefault(); ph.setT(Math.round(ph.t * fps) / fps + (e.shiftKey ? 10 : 1) / fps); }
       else if (e.key === "Home") ph.setT(0);
+      else if (e.key.toLowerCase() === "m" && !mod) { e.preventDefault(); void addMarkerAtPlayhead(v.project.sequences.find((q) => q.id === v.project.active_sequence)!); }
+      else if (e.key === "[" || e.key === "]") {
+        const n = neighbourMarkers(v.project.sequences.find((q) => q.id === v.project.active_sequence)!, ph.t);
+        const to = e.key === "[" ? n.prev : n.next;
+        if (to !== null) ph.setT(to);
+      }
       else if (e.key === "Escape") useUi.getState().select(null);
     };
     window.addEventListener("keydown", onKey);

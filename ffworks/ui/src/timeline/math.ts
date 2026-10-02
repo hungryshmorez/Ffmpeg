@@ -39,7 +39,7 @@ export function sourceTime(clip: Clip, t: number): number {
 
 /** Candidate snap points: 0, playhead and every clip edge except those of `exclude`. */
 export function snapPoints(seq: Sequence, playhead: number, exclude: ReadonlySet<string>): number[] {
-  const pts = [0, playhead];
+  const pts = [0, playhead, ...(seq.markers ?? []).map((m) => toSec(m.time))];
   for (const tr of seq.tracks)
     for (const c of tr.clips) {
       if (exclude.has(c.id)) continue;
@@ -47,6 +47,14 @@ export function snapPoints(seq: Sequence, playhead: number, exclude: ReadonlySet
       pts.push(start, end);
     }
   return pts;
+}
+
+/** Marker times strictly before / after `t` (for jump-to-previous/next). */
+export function neighbourMarkers(seq: Sequence, t: number): { prev: number | null; next: number | null } {
+  const times_ = (seq.markers ?? []).map((m) => toSec(m.time)).sort((a, b) => a - b);
+  const prev = [...times_].reverse().find((x) => x < t - 1e-6) ?? null;
+  const next = times_.find((x) => x > t + 1e-6) ?? null;
+  return { prev, next };
 }
 
 /** Snap `t` to the nearest candidate within `thresholdSec`; otherwise return `t` unchanged. */

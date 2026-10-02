@@ -6,7 +6,7 @@ use ffworks_core::commands::Command;
 use ffworks_core::engine::{prepare_asset, Engine};
 use ffworks_core::ffmpeg::{compile, ExportSettings, FfmpegJob, RenderOptions};
 use ffworks_core::jobs::{CancelToken, JobLog};
-use ffworks_core::queue::{JobQueue, JobSnapshot, PRIORITY_EXPORT};
+use ffworks_core::queue::{JobQueue, JobSnapshot, PRIORITY_BACKGROUND, PRIORITY_EXPORT};
 use ffworks_core::process::{Capabilities, Tools};
 use ffworks_core::project::{Project, ProjectSettings};
 use ffworks_core::{render_graph, Rational};
@@ -303,6 +303,35 @@ fn list_effects() -> Vec<ffworks_core::effects::EffectDef> {
     ffworks_core::effects::registry()
 }
 
+/// Proxy state of every media item (proxies are a cache next to the thumbnails, never part of the project).
+#[tauri::command]
+fn proxy_status(state: State<AppState>) -> Vec<ffworks_core::proxy::ProxyStatus> {
+    let e = state.engine.lock().unwrap();
+    e.project.media.iter().map(|m| ffworks_core::proxy::status(&state.cache_dir, m)).collect()
+}
+
+/// Queue a proxy render for one media item (background priority); progress arrives as `job-state` events with
+/// operation `proxy:<media id>`.
+#[tauri::command]
+fn create_proxy(app: AppHandle, state: State<AppState>, media_id: String) -> Result<String, String> {
+    let m = state.engine.lock().unwrap().project.media(&media_id).map_err(s)?.clone();
+    let out = ffworks_core::proxy::proxy_path(&state.cache_dir, &m);
+    let job = ffworks_core::proxy::build_job(&m, &out, caps(&state).as_ref()).map_err(s)?;
+    let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
+    Ok(state.queue.submit(job, &format!("proxy:{media_id}"), PRIORITY_BACKGROUND))
+}
+
+/// Delete every proxy file (they are regenerated on demand).
+#[tauri::command]
+fn clear_proxies(state: State<AppState>) -> Result<u64, String> {
+    let dir = state.cache_dir.join("proxies");
+    let bytes = std::fs::read_dir(&dir).map(|r| r.filter_map(|e| e.ok()).filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum()).unwrap_or(0);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(s)?;
+    }
+    Ok(bytes)
+}
+
 /// Bundled and installed fonts usable for titles.
 #[tauri::command]
 fn list_fonts() -> Vec<ffworks_core::fonts::FontEntry> {
@@ -478,12 +507,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

@@ -179,11 +179,25 @@ impl Clip {
     }
 }
 
+/// A named point on the sequence timeline (chapter, note, to-do). Kept sorted by time.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Marker {
+    pub id: Id,
+    pub time: Rational,
+    pub name: String,
+    /// `#RRGGBB`.
+    pub color: String,
+    #[serde(default)]
+    pub note: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Sequence {
     pub id: Id,
     pub name: String,
     pub tracks: Vec<Track>,
+    #[serde(default)]
+    pub markers: Vec<Marker>,
 }
 
 impl Sequence {
@@ -191,6 +205,7 @@ impl Sequence {
         Sequence {
             id: new_id("seq"),
             name: name.into(),
+            markers: vec![],
             tracks: vec![
                 Track { id: new_id("trk"), name: "V1".into(), kind: TrackKind::Video, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
                 Track { id: new_id("trk"), name: "A1".into(), kind: TrackKind::Audio, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
@@ -262,6 +277,12 @@ impl Project {
     pub fn validate(&self) -> Result<()> {
         self.sequence(&self.active_sequence)?;
         for seq in &self.sequences {
+            for m in &seq.markers {
+                if m.time < Rational::ZERO || m.name.chars().count() > 100 || m.note.chars().count() > 2000 {
+                    return Err(Error::validation(format!("marker '{}' is invalid (negative time, name over 100 or note over 2000 characters)", m.name)));
+                }
+                crate::titles::check_hex(&m.color, 6)?;
+            }
             for t in &seq.tracks {
                 let mut prev_end: Option<Rational> = None;
                 for c in &t.clips {

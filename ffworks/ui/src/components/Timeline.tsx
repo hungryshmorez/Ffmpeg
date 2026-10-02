@@ -4,7 +4,8 @@ import { beatPoints, dbToGain, linkedIds, snap, snapPoints, tickStep, times } fr
 import { useAnalysis } from "../state/analysis";
 import { addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
 import { usePlayhead, useProject, useUi } from "../state/stores";
-import type { Clip, Sequence, Track, Transition } from "../types";
+import type { Clip, Marker, Sequence, Track, Transition } from "../types";
+import { addMarkerAtPlayhead } from "./MarkerPanel";
 
 const HEADER_W = 132;
 const ROW_H: Record<string, number> = { video: 54, audio: 48 };
@@ -52,6 +53,7 @@ export function Timeline() {
         <span className="muted">Zoom</span>
         <input aria-label="Timeline zoom" type="range" min={4} max={600} value={px} onChange={(e) => setZoom(Number(e.target.value))} />
         <button title="Add video track" onClick={() => dispatch({ type: "add_track", kind: "video" })}>+ Video track</button>
+        <button title="Add a marker at the playhead (M)" onClick={() => void addMarkerAtPlayhead(seq)}>+ Marker</button>
         <button title="Add a title at the playhead (5 s) on the topmost free video track" onClick={() => void addTitleAtPlayhead()}>+ Title</button>
         <button title="Add a solid colour clip at the playhead (5 s)" onClick={() => void addSolidAtPlayhead()}>+ Solid</button>
         <button title="Add audio track" onClick={() => dispatch({ type: "add_track", kind: "audio" })}>+ Audio track</button>
@@ -60,7 +62,7 @@ export function Timeline() {
       </div>
       <div className="timeline-scroll" ref={scrollRef} onWheel={onWheel}>
         <div className="timeline-inner" style={{ width: width + HEADER_W }}>
-          <Ruler px={px} width={width} fps={fps} onScrub={scrub} />
+          <Ruler px={px} width={width} fps={fps} onScrub={scrub} markers={seq.markers} />
           {tracks.map((t) => (
             <TrackRow key={t.id} seq={seq} track={t} px={px} fps={fps} width={width} />
           ))}
@@ -71,7 +73,7 @@ export function Timeline() {
   );
 }
 
-function Ruler({ px, width, fps, onScrub }: { px: number; width: number; fps: number; onScrub: (x: number) => void }) {
+function Ruler({ px, width, fps, onScrub, markers }: { px: number; width: number; fps: number; onScrub: (x: number) => void; markers: Marker[] }) {
   const step = tickStep(px);
   const ticks: number[] = [];
   for (let t = 0; t * px <= width; t += step) ticks.push(t);
@@ -89,6 +91,16 @@ function Ruler({ px, width, fps, onScrub }: { px: number; width: number; fps: nu
       onPointerUp={() => (dragging.current = false)}
     >
       <div className="ruler-corner" style={{ width: HEADER_W }} />
+      {markers.map((m) => (
+        <div
+          key={m.id}
+          className="marker-flag"
+          data-marker-flag={m.id}
+          style={{ left: HEADER_W + toSec(m.time) * px, background: m.color }}
+          title={`${m.name}${m.note ? `\n${m.note}` : ""}`}
+          onPointerDown={(e) => { e.stopPropagation(); usePlayhead.getState().setT(toSec(m.time)); }}
+        ><span>{m.name}</span></div>
+      ))}
       {ticks.map((t) => (
         <div key={t} className="tick" style={{ left: HEADER_W + t * px }}>
           <span>{timecode(t, fps)}</span>

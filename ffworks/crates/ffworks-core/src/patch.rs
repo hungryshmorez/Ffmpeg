@@ -3,7 +3,7 @@
 //! transactions and automation recording with predictable state transitions (spec §111).
 
 use crate::error::{Error, Result};
-use crate::project::{Clip, Id, MediaAsset, Project, ProjectSettings, Track};
+use crate::project::{Clip, Id, Marker, MediaAsset, Project, ProjectSettings, Track};
 use crate::transitions::Transition;
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +26,9 @@ pub enum Patch {
     RemoveMedia { media: Id },
     /// Replace an asset in place (same id), e.g. when relinking.
     ReplaceMedia { asset: MediaAsset },
+    /// Insert or replace (by id) a marker, keeping the list sorted by time.
+    PutMarker { seq: Id, marker: Marker },
+    RemoveMarker { seq: Id, id: Id },
     SetSettings { settings: ProjectSettings },
     SetName { name: String },
 }
@@ -124,6 +127,21 @@ pub fn apply(p: &mut Project, patch: &Patch) -> Result<Patch> {
             let slot = p.media.iter_mut().find(|m| m.id == asset.id).ok_or_else(|| Error::NotFound(format!("media {}", asset.id)))?;
             let old = std::mem::replace(slot, asset.clone());
             Ok(Patch::ReplaceMedia { asset: old })
+        }
+        Patch::PutMarker { seq, marker } => {
+            let s = p.sequence_mut(seq)?;
+            let inverse = match s.markers.iter().position(|m| m.id == marker.id) {
+                Some(i) => Patch::PutMarker { seq: seq.clone(), marker: s.markers.remove(i) },
+                None => Patch::RemoveMarker { seq: seq.clone(), id: marker.id.clone() },
+            };
+            let at = s.markers.partition_point(|m| m.time <= marker.time);
+            s.markers.insert(at, marker.clone());
+            Ok(inverse)
+        }
+        Patch::RemoveMarker { seq, id } => {
+            let s = p.sequence_mut(seq)?;
+            let i = s.markers.iter().position(|m| &m.id == id).ok_or_else(|| Error::NotFound(format!("marker {id}")))?;
+            Ok(Patch::PutMarker { seq: seq.clone(), marker: s.markers.remove(i) })
         }
         Patch::SetSettings { settings } => {
             let old = std::mem::replace(&mut p.settings, settings.clone());

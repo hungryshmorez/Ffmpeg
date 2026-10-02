@@ -113,3 +113,10 @@ button.small.on.solo { background: #d19a1e; color: #fff; }
 .gen-fill.title span { font-weight: 800; background: #fff; color: #222; border-radius: 3px; padding: 0 4px; margin-right: 4px; }
 .media-list { flex: 1; } textarea { background: #0f1218; color: var(--fg, #e6e8ee); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; resize: vertical; font: inherit; }
 input[type=color] { width: 56px; height: 24px; padding: 0; border: 1px solid var(--line); background: none; }
+
+.marker-flag { position: absolute; top: 0; height: 14px; min-width: 6px; border-radius: 0 3px 3px 0; cursor: pointer; z-index: 3; font-size: 10px; color: #111; padding: 0 4px 0 2px; max-width: 120px; overflow: hidden; white-space: nowrap; }
+.marker-flag span { pointer-events: none; }
+.marker-row { margin: 4px 8px; padding: 4px 0; border-bottom: 1px solid var(--line); } .marker-row textarea { width: calc(100% - 4px); margin-top: 4px; }
+
+.proxy-line { margin-top: 2px; font-size: 11px; } .proxy-ok { color: #3fbf71; }
+.decode-notice { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgba(20,24,34,.92); border: 1px solid #ff5a36; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display: flex; gap: 8px; align-items: center; z-index: 4; }

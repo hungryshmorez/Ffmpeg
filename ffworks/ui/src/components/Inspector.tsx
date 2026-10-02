@@ -3,6 +3,7 @@ import { findClip, linkedIds, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
 import { useProject, useUi } from "../state/stores";
 import { AudioPanel } from "./AudioPanel";
+import { MarkerPanel } from "./MarkerPanel";
 import { ClipPropsPanel } from "./ClipPropsPanel";
 import { SolidPanel, TitlePanel } from "./GeneratedPanel";
 import { EffectsPanel } from "./EffectsPanel";
@@ -29,6 +30,7 @@ export function Inspector() {
           <div><dt>Frame rate</dt><dd>{view.project.settings.fps} ({toSec(view.project.settings.fps).toFixed(3)} fps)</dd></div>
           <div><dt>Sample rate</dt><dd>{view.project.settings.sample_rate} Hz</dd></div>
         </dl>
+        <MarkerPanel seq={seq} />
       </div>
     );
   }

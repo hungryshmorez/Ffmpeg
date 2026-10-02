@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cutsInsideClip } from "../components/AnalysisPanel";
-import { beatPoints, dbToGain, linkedIds, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
+import { beatPoints, dbToGain, linkedIds, neighbourMarkers, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
 import { fromSec, snapToFrame, timecode, toSec } from "../time";
 import type { Clip, Sequence } from "../types";
 
@@ -9,7 +9,7 @@ const clip = (id: string, start: string, dur: string, kind: "video" | "audio", l
   pan: 0, fade_in: "0", fade_out: "0", title: null, speed: "1", reverse: false, freeze: null, transform: { x: 0, y: 0, scale: 1, rotation: 0 }, blend: "normal", keyframes: {},
 });
 const seq: Sequence = {
-  id: "s", name: "Main",
+  id: "s", name: "Main", markers: [{ id: "mk", time: "3", name: "m", color: "#ffb020", note: "" }],
   tracks: [
     { id: "v1", name: "V1", kind: "video", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, transitions: [], clips: [clip("a", "0", "4", "video", "L1"), clip("b", "6", "2", "video")] },
     { id: "v2", name: "V2", kind: "video", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, transitions: [], clips: [clip("top", "1", "1", "video")] },
@@ -31,7 +31,7 @@ describe("time", () => {
 describe("beat points", () => {
   it("maps source-relative beats into timeline time, honouring the clip range", () => {
     const c = { ...clip("aa", "10", "2", "audio", null, "1"), media: "m" };
-    const sq: Sequence = { id: "s", name: "s", tracks: [{ id: "a1", name: "A1", kind: "audio", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, transitions: [], clips: [c] }] };
+    const sq: Sequence = { id: "s", name: "s", markers: [], tracks: [{ id: "a1", name: "A1", kind: "audio", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, transitions: [], clips: [c] }] };
     // source beats at 0.5 (before range), 1.0, 2.0, 3.0 (== end of range), 3.5 (after)
     expect(beatPoints(sq, { m: [0.5, 1, 2, 3, 3.5] })).toEqual([10, 11, 12]);
     expect(beatPoints(sq, {})).toEqual([]);
@@ -60,6 +60,12 @@ describe("timeline math", () => {
     expect(sourceTime({ ...base, reverse: true }, 10)).toBe(6);
     expect(sourceTime({ ...base, reverse: true }, 11)).toBe(5);
     expect(sourceTime({ ...base, freeze: "7/2" }, 12)).toBe(3.5);
+  });
+  it("markers are snap points and can be jumped between", () => {
+    expect(snapPoints(seq, 10, new Set())).toContain(3);
+    expect(neighbourMarkers(seq, 5)).toEqual({ prev: 3, next: null });
+    expect(neighbourMarkers(seq, 1)).toEqual({ prev: null, next: 3 });
+    expect(neighbourMarkers(seq, 3)).toEqual({ prev: null, next: null });
   });
   it("snaps within threshold only", () => {
     const pts = snapPoints(seq, 2.5, new Set(["top"]));
