@@ -38,6 +38,11 @@ Toolbar "Filters" opens a searchable list of every filter in the installed FFmpe
 * **Slow:** they are evaluated per pixel by FFmpeg's expression engine. Measured on this 4-core sandbox at 1080p: about 2.3 s/frame (gl_angular) to 5.5 s/frame (gl_crosswarp); at 960x540 about 0.6–1.4 s/frame; gl_linearblur is ~4× slower still. A 1 s transition at 25 fps therefore costs roughly 1–2.5 minutes of export at 1080p. Use the preview scale while editing. The transition lists mark them "(slow to render)"; native transitions stay instant.
 * Not available: ~75 other gl-transitions shaders (textures, loops, multi-pass), 14 of which xfade-easing only supports in its patched FFmpeg. Not faked.
 
+## Multiple FFmpeg builds (done)
+* Toolbar "FFmpeg builds": register any number of FFmpeg installs (scan a folder for ffmpeg+ffprobe pairs, or add one by path); each is run to show version, licence (from its configure line), filter/encoder counts, GL-transition support and notable encoders (x264/x265/AV1/NVENC/QSV/AMF). One build is "in use" for everything (falls back to the old path settings / bundled / PATH); the export dialog can pick another build for a single export, compiled against that build's own capabilities.
+* Tests: 4 real-FFmpeg tests (probe, broken entries, scan, settings), UI unit test, `engines.sh` 14 GUI checks (scan, add, refuse bad/duplicate, switch, export with another build, remove active). Windows CI skips running the scanned copies (package-manager shims).
+* Not done: FFglitch (separate `ffedit`/`ffgac` tools, not a drop-in FFmpeg) gets its own slot in the glitch phase; per-feature routing (e.g. "GL transitions always use the build that supports them") is manual for now; previews and proxies always use the in-use build.
+
 ## Requested additions (still to do: demo mode)
 * **GL Transitions library** (gl-transitions.com, MIT). Stock Windows FFmpeg has no `gl-transition` filter, so plan is to port shaders to `xfade` custom expressions (approach of the MIT `xfade-easing` project) — only shaders expressible that way; the rest are listed as unsupported, not faked.
 * **Transition demo mode**: button that cycles random transitions through the timeline continuously (preview/playback only, nothing written to the project unless "Keep").
