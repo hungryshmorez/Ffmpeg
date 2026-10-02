@@ -455,6 +455,75 @@ fn apply_tools(state: &AppState, st: &ffworks_core::settings::Settings) -> Resul
     Ok(ff)
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DemoRequest {
+    use_transitions: bool,
+    use_effects: bool,
+    /// `all`, `favourites` or a group name, separately for the two boards.
+    transition_pool: String,
+    effect_pool: String,
+    effect_stack: usize,
+    include_gl: bool,
+    segments: usize,
+    segment_secs: f64,
+    scale_div: u32,
+    seed: Option<u64>,
+}
+
+/// Demo mode: build a throwaway timeline of random transitions/effects from one of the project's clips and render it as a
+/// preview. The project itself is not changed.
+#[tauri::command]
+async fn demo_batch(app: AppHandle, state: State<'_, AppState>, req: DemoRequest) -> Result<serde_json::Value, String> {
+    let favs = ffworks_core::settings::Settings::load(&state.settings_file).favourites;
+    let seed = req.seed.unwrap_or_else(ffworks_core::random::fresh_seed);
+    let transitions = if req.use_transitions {
+        let group = favs.pool(&req.transition_pool).map_err(s)?;
+        if group.is_some_and(|g| g.transitions.is_empty()) {
+            return Err(format!("No favourite transitions in '{}' yet: star some first.", req.transition_pool));
+        }
+        let kinds: Vec<String> = available_transitions(&state)
+            .into_iter()
+            .map(|(k, _)| k)
+            .filter(|k| req.include_gl || !ffworks_core::glx::is_gl(k))
+            .filter(|k| group.is_none_or(|g| g.transitions.contains(k)))
+            .collect();
+        if kinds.is_empty() {
+            return Err("none of the chosen transitions can be used (GL transitions are off or unsupported by this FFmpeg)".into());
+        }
+        Some(kinds)
+    } else {
+        None
+    };
+    let effects = if req.use_effects {
+        let group = favs.pool(&req.effect_pool).map_err(s)?;
+        if group.is_some_and(|g| g.effects.is_empty()) {
+            return Err(format!("No favourite effects in '{}' yet: star some first.", req.effect_pool));
+        }
+        Some((req.effect_stack.clamp(1, 6), group.map(|g| g.effects.clone())))
+    } else {
+        None
+    };
+    let (project, tools) = {
+        let e = state.engine.lock().unwrap();
+        (e.project.clone(), e.tools.clone())
+    };
+    let caps = caps(&state);
+    let cache = state.cache_dir.clone();
+    let opts = ffworks_core::demo::DemoOptions { media: None, segments: req.segments, segment_secs: req.segment_secs, transition_secs: 0.5, transitions, effects, seed };
+    let scale_div = req.scale_div.clamp(1, 8);
+    let (rendered, steps, duration) = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+        let (demo, steps) = ffworks_core::demo::build(&project, &tools, &opts).map_err(s)?;
+        let dur = demo.active().map_err(s)?.duration();
+        let r = ffworks_core::preview::render(&tools, caps.as_ref(), &demo, Rational::from_int(0), dur, scale_div, &cache, &CancelToken::new(), &mut |_| {}).map_err(s)?;
+        Ok((r, steps, dur.as_f64()))
+    })
+    .await
+    .map_err(s)??;
+    let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
+    Ok(serde_json::json!({ "path": rendered.path.to_string_lossy(), "steps": steps, "seed": seed, "duration": duration }))
+}
+
 /// Starred effects/transitions and named favourite groups.
 #[tauri::command]
 fn get_favourites(state: State<AppState>) -> ffworks_core::settings::Favourites {
@@ -702,12 +771,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

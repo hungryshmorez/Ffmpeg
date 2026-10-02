@@ -82,6 +82,7 @@ export function Toolbar() {
       <span className="grow" />
       <span className="muted">{view.path ? view.path : "unsaved project"}</span>
       <button onClick={() => setQueueOpen(true)} title="Render queue">Queue{activeJobs ? ` (${activeJobs})` : ""}</button>
+      <button onClick={() => useUi.getState().setDemoOpen(true)}>Demo mode</button>
       <button onClick={() => useUi.getState().setFiltersOpen(true)}>Filters</button>
       <button onClick={() => useUi.getState().setEnginesOpen(true)}>FFmpeg builds</button>
       <button onClick={() => setDiagOpen(true)}>Diagnostics</button>

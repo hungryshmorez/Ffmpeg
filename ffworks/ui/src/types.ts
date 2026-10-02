@@ -128,3 +128,6 @@ export interface RandomResult { state: StateView; seed: number; applied?: number
 
 export interface EngineInfo { id: string; name: string; ffmpeg_path: string; ffprobe_path: string; ok: boolean; error: string | null; version: string; license: string; filters: number; encoders: number; xfade_custom: boolean; hwaccels: string[]; notable: string[] }
 export interface FoundEngine { ffmpeg_path: string; ffprobe_path: string; suggested_name: string }
+
+export interface DemoStep { index: number; start: number; transition: string | null; effects: string[] }
+export interface DemoBatch { path: string; steps: DemoStep[]; seed: number; duration: number }

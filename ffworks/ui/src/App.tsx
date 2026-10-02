@@ -11,6 +11,7 @@ import { FilterBrowser } from "./components/FilterBrowser";
 import { GraphEditor } from "./components/GraphEditor";
 import { FavouritesDialog } from "./components/FavouritesDialog";
 import { EnginesDialog } from "./components/EnginesDialog";
+import { DemoDialog } from "./components/DemoDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -135,6 +136,7 @@ export default function App() {
       <GraphEditor />
       <FavouritesDialog />
       <EnginesDialog />
+      <DemoDialog />
       <QueuePanel />
       <RecoveryDialog />
       <Toasts />
