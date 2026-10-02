@@ -36,6 +36,7 @@ Toolbar "Filters" opens a searchable list of every filter in the installed FFmpe
 * 48 gl-transitions shaders appear as "GL …" in the transition list (also in random picks, favourites, saved projects) when the installed FFmpeg's `xfade` supports custom expressions (`Capabilities.xfade_custom`; true for the Linux 6.1 test build and the pinned Windows 7.1.1 build in CI).
 * Verified: `tests/glx.rs` runs every one through real FFmpeg (starts on A, ends on B, differs from both during the transition; a hang fails after 60 s) and three go through project → export → save/load.
 * **Slow:** they are evaluated per pixel by FFmpeg's expression engine. Measured on this 4-core sandbox at 1080p: about 2.3 s/frame (gl_angular) to 5.5 s/frame (gl_crosswarp); at 960x540 about 0.6–1.4 s/frame; gl_linearblur is ~4× slower still. A 1 s transition at 25 fps therefore costs roughly 1–2.5 minutes of export at 1080p. Use the preview scale while editing. The transition lists mark them "(slow to render)"; native transitions stay instant.
+* **12 more wipes** written by hand for FFWORKS (`assets/glx/ffworks_wipes.tsv`, listed as "GL Wipe …": radial in/out, diamond, clock, barn doors, square iris, blinds, slices, dissolve, pixel blocks, spiral) go through the same per-pixel path and the same all-transitions test; they are FFWORKS originals, not gl-transitions code.
 * Not available: ~75 other gl-transitions shaders (textures, loops, multi-pass), 14 of which xfade-easing only supports in its patched FFmpeg. Not faked.
 
 ## Multiple FFmpeg builds (done)

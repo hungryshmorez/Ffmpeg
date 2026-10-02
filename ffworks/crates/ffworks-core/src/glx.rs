@@ -10,10 +10,12 @@
 use std::sync::OnceLock;
 
 const DATA: &str = include_str!("../assets/glx/transitions.tsv");
+/// FFWORKS's own wipes (radial, clock, blinds, dissolve...), written as xfade expressions in the same style.
+const WIPES: &str = include_str!("../assets/glx/ffworks_wipes.tsv");
 
 fn table() -> &'static Vec<(&'static str, &'static str)> {
     static T: OnceLock<Vec<(&'static str, &'static str)>> = OnceLock::new();
-    T.get_or_init(|| DATA.lines().filter_map(|l| l.split_once('\t')).collect())
+    T.get_or_init(|| DATA.lines().chain(WIPES.lines()).filter_map(|l| l.split_once('\t')).collect())
 }
 
 /// `(name, expression)` for every bundled GL transition, e.g. `gl_angular`.
