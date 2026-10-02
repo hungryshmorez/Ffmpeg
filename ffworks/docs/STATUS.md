@@ -22,6 +22,8 @@ Effects (11, with parameter metadata registry) + opacity · processed preview (c
 * **Transition demo mode**: button that cycles random transitions through the timeline continuously (preview/playback only, nothing written to the project unless "Keep").
 * **Effects demo mode**: same for effects; two separate boards (transitions / effects) that can run combined.
 * **Random transition** and **Random effect** buttons; **stacking**: choose N (e.g. 1 or 3) and apply that many random effects (or chained transitions) in one undoable command.
+* **Favourites**: star any effect or transition; favourites form groups (one for effects, one for transitions, user can also name extra groups) saved in user settings. Demo mode and the random buttons can be limited to "favourites only" or a chosen group, or use everything.
+* **Stacking both ways**: stack several effects on a clip, and stack several transitions (chained back-to-back or layered on one cut where FFmpeg allows) — random buttons take a stack count for each.
 * Ordering: after the filter-graph editor (needs the same effect/preset registry); random picks are seeded so a result can be reproduced.
 
 ## Unverified / known gaps
