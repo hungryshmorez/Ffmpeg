@@ -24,6 +24,18 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
   const shown = animated ? (evalKeyframes(kfs, Math.min(Math.max(rel, 0), dur)) ?? spec.value) : spec.value;
   const near = keyNear(kfs, rel, fps);
   const [open, setOpen] = useState(false);
+  const [follow, setFollow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const span = spec.max - spec.min;
+  const [low, setLow] = useState(spec.value);
+  const [high, setHigh] = useState(Math.min(spec.max, spec.value + span * 0.25));
+  const [smooth, setSmooth] = useState(0.1);
+  const applyFollow = async () => {
+    setBusy(true);
+    try {
+      if (await dispatch({ type: "animate_from_audio", clip: clip.id, param: spec.param, source: null, low, high, smooth })) { setFollow(false); setOpen(true); }
+    } finally { setBusy(false); }
+  };
   useEffect(() => { if (!animated) setOpen(false); }, [animated]);
 
   const key = (time: number, value: number, interp?: Interp) => dispatch({ type: "set_keyframe", clip: clip.id, param: spec.param, time: fromSec(Math.min(Math.max(time, 0), dur)), value, interp: interp ?? null });
@@ -46,8 +58,20 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
             onClick={() => void toggle()}
           >◆</button>
         )}
+        {spec.animatable && (
+          <button className={`small ${follow ? "on" : ""}`} aria-label={`Follow audio for ${spec.label}`} aria-pressed={follow} title="Make this parameter follow the loudness of the clip's audio (creates keyframes)" onClick={() => setFollow(!follow)}>♪</button>
+        )}
         {animated && <button className="small" aria-label={`${open ? "Hide" : "Show"} keyframes for ${spec.label}`} title="Keyframe list" onClick={() => setOpen(!open)}>{kfs.length}</button>}
       </div>
+      {follow && (
+        <div className="kf-follow" aria-label={`Follow audio for ${spec.label}`}>
+          <span className="muted">{clip.kind === "audio" ? "Follow this clip's loudness" : "Follow the linked audio's loudness"}</span>
+          <label>quiet <input aria-label="Value when quiet" className="num" type="number" min={spec.min} max={spec.max} step={spec.step} value={low} onChange={(e) => setLow(e.currentTarget.valueAsNumber)} /></label>
+          <label>loud <input aria-label="Value when loud" className="num" type="number" min={spec.min} max={spec.max} step={spec.step} value={high} onChange={(e) => setHigh(e.currentTarget.valueAsNumber)} /></label>
+          <label>smooth <input aria-label="Smoothing in seconds" className="num" type="number" min={0} max={10} step={0.05} value={smooth} onChange={(e) => setSmooth(e.currentTarget.valueAsNumber)} />s</label>
+          <button className="small primary" disabled={busy || !Number.isFinite(low) || !Number.isFinite(high) || !Number.isFinite(smooth)} onClick={() => void applyFollow()}>{busy ? "Measuring…" : animated ? "Replace keyframes" : "Apply"}</button>
+        </div>
+      )}
       {animated && open && (
         <div className="kf-list" aria-label={`Keyframes for ${spec.label}`}>
           {kfs.map((k) => (

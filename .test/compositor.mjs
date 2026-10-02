@@ -131,6 +131,13 @@ try {
   });
 
   const near = (v, t, tol = 60) => Math.abs(v - t) <= tol;
+  // After a change the canvas can still show the previous state or one black frame before the layers repaint (seen on CI
+  // and locally, a different check each time), so give each check up to ~2 s to show its colour. A compositor that
+  // never draws, or draws the wrong blend, still fails.
+  const settle = async (want) => { let p = await readCentre(); for (let i = 0; i < 15 && !want(p); i++) p = await readCentre(); return p; };
+  const isYellow = (p) => near(p[0], 255) && near(p[1], 255) && p[2] < 90;
+  const isGreen = (p) => p[0] < 90 && near(p[1], 255) && p[2] < 90;
+  const isRed = (p) => near(p[0], 255) && p[1] < 90 && p[2] < 90;
 
   // 1) SCREEN blend of red over green → yellow (R high, G high, B low).
   await page.evaluate(() => {
@@ -139,29 +146,29 @@ try {
     c.layers[1].opacity = 1; c.layers[1].blendMode = 'screen'; c.layers[1].solo = c.layers[1].mute = false;
     c.masterOpacity = 1;
   });
-  let px = await readCentre();
-  ok('screen blend → yellow', near(px[0], 255) && near(px[1], 255) && px[2] < 90, `rgb(${px})`);
+  let px = await settle(isYellow);
+  ok('screen blend → yellow', isYellow(px), `rgb(${px})`);
 
   // 2) Solo layer 1 (green) → green only.
   await page.evaluate(() => { window.FFComp.compositor.layers[1].solo = true; });
-  px = await readCentre();
-  ok('solo L2 → green', px[0] < 90 && near(px[1], 255) && px[2] < 90, `rgb(${px})`);
+  px = await settle(isGreen);
+  ok('solo L2 → green', isGreen(px), `rgb(${px})`);
 
   // 3) Clear solo, mute layer 1 → red only shows.
   await page.evaluate(() => {
     const c = window.FFComp.compositor;
     c.layers[1].solo = false; c.layers[1].mute = true;
   });
-  px = await readCentre();
-  ok('mute L2 → red', near(px[0], 255) && px[1] < 90 && px[2] < 90, `rgb(${px})`);
+  px = await settle(isRed);
+  ok('mute L2 → red', isRed(px), `rgb(${px})`);
 
   // 4) Unmute, drop layer-1 opacity to 0 → red only (faded out, blend irrelevant).
   await page.evaluate(() => {
     const c = window.FFComp.compositor;
     c.layers[1].mute = false; c.layers[1].opacity = 0;
   });
-  px = await readCentre();
-  ok('L2 opacity 0 → red', near(px[0], 255) && px[1] < 90 && px[2] < 90, `rgb(${px})`);
+  px = await settle(isRed);
+  ok('L2 opacity 0 → red', isRed(px), `rgb(${px})`);
 
   // 5) Crossfade A(0)→B(1) with normal blend: x=0 is red, x=1 is green.
   await page.evaluate(() => {
@@ -169,9 +176,9 @@ try {
     c.layers[1].blendMode = 'normal';
     c.crossfade(0, 1, 0);   // full A (red)
   });
-  const pxA = await readCentre();
+  const pxA = await settle((p) => near(p[0], 255) && p[1] < 90);
   await page.evaluate(() => window.FFComp.compositor.crossfade(0, 1, 1)); // full B (green)
-  const pxB = await readCentre();
+  const pxB = await settle((p) => p[0] < 90 && near(p[1], 255));
   ok('crossfade red→green',
     near(pxA[0], 255) && pxA[1] < 90 && pxB[0] < 90 && near(pxB[1], 255),
     `A rgb(${pxA}) → B rgb(${pxB})`);

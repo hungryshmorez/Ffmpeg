@@ -134,6 +134,10 @@ impl Engine {
                 Ok(())
             }
             Command::RemoveRanges { clip, ranges } => self.remove_ranges(clip, ranges, fwd, inv),
+            Command::AnimateFromAudio { clip, param, source, low, high, smooth } => {
+                let keys = self.audio_keys(clip, param, source.as_deref(), *low, *high, *smooth)?;
+                self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
+            }
             other => {
                 for patch in plan(&self.project, other)? {
                     let undo_patch = apply(&mut self.project, &patch)?;
@@ -143,6 +147,50 @@ impl Engine {
                 Ok(())
             }
         }
+    }
+
+    /// Keyframes making `param` of `clip` follow the loudness of an audio clip over the part of the timeline both cover.
+    fn audio_keys(&self, clip: &str, param: &str, source: Option<&str>, low: f64, high: f64, smooth: f64) -> Result<Vec<crate::keyframes::Keyframe>> {
+        let seq = self.project.active()?;
+        let (_, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+        // check the parameter can be animated and both values are allowed before running FFmpeg
+        crate::clipprops::check_value(c, param, low, true)?;
+        crate::clipprops::check_value(c, param, high, true)?;
+        if !(0.0..=10.0).contains(&smooth) {
+            return Err(Error::validation("smoothing must be 0-10 seconds"));
+        }
+        let src_id = match source {
+            Some(s) => s.to_string(),
+            None if c.kind == TrackKind::Audio => c.id.clone(),
+            None => seq
+                .tracks
+                .iter()
+                .filter(|t| t.kind == TrackKind::Audio)
+                .flat_map(|t| t.clips.iter())
+                .find(|a| a.link.is_some() && a.link == c.link)
+                .map(|a| a.id.clone())
+                .ok_or_else(|| Error::validation("this clip has no linked audio; pick an audio clip to follow"))?,
+        };
+        let (st, s) = seq.find_clip(&src_id).ok_or_else(|| Error::NotFound(format!("clip {src_id}")))?;
+        if st.kind != TrackKind::Audio {
+            return Err(Error::validation("the clip to follow must be an audio clip"));
+        }
+        if s.speed != Rational::from_int(1) || s.reverse || s.freeze.is_some() {
+            return Err(Error::validation("following a retimed audio clip is not supported (speed must be 100%, not reversed or frozen)"));
+        }
+        let media = self.project.media.iter().find(|m| m.id == s.media).ok_or_else(|| Error::NotFound(format!("media {}", s.media)))?;
+        if media.generator.is_some() {
+            return Err(Error::validation("that clip has no audio file to measure"));
+        }
+        let from = c.start.max(s.start);
+        let to = c.end().min(s.end());
+        if from >= to {
+            return Err(Error::validation("the audio clip does not overlap this clip on the timeline"));
+        }
+        let media_from = s.source_in + (from - s.start);
+        let levels = crate::reactive::envelope(&self.tools, std::path::Path::new(&media.path), media_from.as_f64(), (to - from).as_f64())?;
+        let map = crate::reactive::Mapping { low, high, smooth };
+        Ok(crate::reactive::keys(&levels, (from - c.start).as_f64(), map, self.project.settings.fps, c.duration.as_f64()))
     }
 
     /// Cut `ranges` (timeline time) out of `clip`'s linked group, latest range first so earlier ones keep their positions.

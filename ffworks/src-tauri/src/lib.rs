@@ -122,8 +122,9 @@ async fn import_media(app: AppHandle, state: State<'_, AppState>, paths: Vec<Str
     Ok(serde_json::json!({ "state": view(&e), "errors": errors }))
 }
 
+/// Async so a command that runs FFmpeg (e.g. "follow audio" measuring loudness) does not block the window.
 #[tauri::command]
-fn dispatch(state: State<AppState>, command: Command) -> Result<StateView, String> {
+async fn dispatch(state: State<'_, AppState>, command: Command) -> Result<StateView, String> {
     let mut e = state.engine.lock().unwrap();
     e.dispatch(command).map_err(s)?;
     Ok(view(&e))

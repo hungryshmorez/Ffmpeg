@@ -71,6 +71,12 @@ pub enum Command {
     SetClipFades { clip: Id, fade_in: Option<Rational>, fade_out: Option<Rational> },
     /// Insert or update the keyframe of `param` at clip-relative `time` (snapped to the frame grid). `interp` keeps the existing curve shape when omitted.
     SetKeyframe { clip: Id, param: String, time: Rational, value: f64, #[serde(default)] interp: Option<Interp> },
+    /// Replace every keyframe of `param` with `keys` (clip-relative times, snapped to frames). An empty list removes the
+    /// animation and keeps the parameter's current static value.
+    SetKeyframes { clip: Id, param: String, keys: Vec<Keyframe> },
+    /// Make `param` follow the loudness of `source` (an audio clip; default: the clip itself if it is audio, else its linked
+    /// audio): quiet → `low`, loud → `high`, smoothed over `smooth` seconds. Measured with FFmpeg, stored as keyframes. One undo step.
+    AnimateFromAudio { clip: Id, param: String, #[serde(default)] source: Option<Id>, low: f64, high: f64, #[serde(default)] smooth: f64 },
     RemoveKeyframe { clip: Id, param: String, time: Rational },
     /// Remove all keyframes of `param`; the static value becomes the first key's value.
     ClearKeyframes { clip: Id, param: String },
@@ -152,6 +158,8 @@ impl Command {
             Command::AddSolid { .. } => "Add solid colour".into(),
             Command::SetSolidColor { .. } => "Solid colour".into(),
             Command::SetKeyframe { param, .. } => format!("Keyframe {param}"),
+            Command::SetKeyframes { param, keys, .. } => format!("Set {} keyframes on {param}", keys.len()),
+            Command::AnimateFromAudio { param, .. } => format!("Animate {param} from audio"),
             Command::RemoveKeyframe { param, .. } => format!("Remove keyframe {param}"),
             Command::ClearKeyframes { param, .. } => format!("Clear keyframes {param}"),
             Command::SetClipSpeed { .. } => "Clip speed".into(),
@@ -177,7 +185,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
     let sid = seq.id.clone();
     let fps = p.settings.fps;
     match cmd {
-        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } => Err(Error::validation("batch is handled by the engine")),
         Command::RenameProject { name } => {
             if name.trim().is_empty() {
                 return Err(Error::validation("project name cannot be empty"));
@@ -474,9 +482,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(out)
         }
-        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
+        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::SetKeyframes { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
             let clip_id = match cmd {
-                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::SetEffectGraph { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
+                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::SetEffectGraph { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::SetKeyframes { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
                 _ => unreachable!(),
             };
             let (t, c) = seq.find_clip(clip_id).ok_or_else(|| Error::NotFound(format!("clip {clip_id}")))?;
@@ -580,6 +588,25 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                     let list = c2.keyframes.entry(param.clone()).or_default();
                     let keep = list.iter().find(|k| k.t == tt).map(|k| k.interp).unwrap_or_default();
                     keyframes::upsert(list, Keyframe { t: tt, v: *value, interp: interp.unwrap_or(keep) });
+                }
+                Command::SetKeyframes { param, keys, .. } => {
+                    if keys.len() > 2000 {
+                        return Err(Error::validation("too many keyframes (2000 at most)"));
+                    }
+                    let mut list: Vec<Keyframe> = vec![];
+                    for k in keys {
+                        clipprops::check_value(&c2, param, k.v, true)?;
+                        let tt = snap_to_frame(k.t, fps);
+                        if tt < Rational::ZERO || tt > c2.duration {
+                            return Err(Error::validation(format!("keyframe time {}s is outside the clip (0..{}s)", tt.as_f64(), c2.duration.as_f64())));
+                        }
+                        keyframes::upsert(&mut list, Keyframe { t: tt, ..*k });
+                    }
+                    if !list.is_empty() {
+                        c2.keyframes.insert(param.clone(), list);
+                    } else if let Some(first) = c2.keyframes.remove(param).and_then(|old| old.first().copied()) {
+                        set_param_value(&mut c2, param, first.v)?;
+                    }
                 }
                 Command::RemoveKeyframe { param, time, .. } => {
                     let tt = snap_to_frame(*time, fps);
