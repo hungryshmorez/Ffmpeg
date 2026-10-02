@@ -13,7 +13,7 @@ A native desktop nonlinear editor built around FFmpeg. Authority order: project 
 cargo test --workspace            # ~250 tests incl. real-FFmpeg e2e (slow: run in the background; CARGO_INCREMENTAL=0 saves disk) (needs ffmpeg+ffprobe on PATH)
 cargo clippy --workspace --all-targets   # keep at 0 warnings
 (cd ui && npx tsc --noEmit && npx vitest run)
-scripts/uitest/run.sh | recovery.sh | relink.sh | beats.sh | transitions.sh | analysis.sh | filters.sh | graph.sh | random.sh | engines.sh | demo.sh | detect.sh | fxcopy.sh | subs.sh | sync.sh | palette.sh | seq.sh | scopes.sh | addfilter.sh | multi.sh | macro.sh | snapshots.sh | variations.sh | shortcuts.sh | reactive.sh | exportname.sh   # GUI tests (more: clipfx audio generated markers proxy), see below
+scripts/uitest/run.sh | recovery.sh | relink.sh | beats.sh | transitions.sh | analysis.sh | filters.sh | graph.sh | random.sh | engines.sh | demo.sh | detect.sh | fxcopy.sh | subs.sh | sync.sh | palette.sh | seq.sh | scopes.sh | addfilter.sh | multi.sh | macro.sh | snapshots.sh | variations.sh | shortcuts.sh | reactive.sh | exportname.sh | unfinished.sh   # GUI tests (more: clipfx audio generated markers proxy), see below
 ```
 GUI tests build the UI with `VITE_UITEST=1`, build the Tauri app with `--features custom-protocol,uitest`, run it under Xvfb (`DISPLAY=:99`) in a real WebKitGTK webview and drive the real UI through an injected script. Linux sandbox needs `libwebkit2gtk-4.1-dev` etc. (apt) and `xvfb`.
 

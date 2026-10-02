@@ -5,13 +5,30 @@
 use crate::ffmpeg::FfmpegJob;
 use crate::jobs::{run_job_logged, CancelToken, JobLog, JobState};
 use crate::process::Tools;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const PRIORITY_BACKGROUND: i32 = 0;
 pub const PRIORITY_EXPORT: i32 = 10;
+
+/// An export that had not finished when the journal was last written (the app closed or crashed). It can be queued again.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedJob {
+    pub operation: String,
+    pub priority: i32,
+    pub enqueued_unix: u64,
+    /// True when it was rendering (not just waiting) at the time; it starts again from the beginning.
+    pub was_running: bool,
+    pub job: FfmpegJob,
+}
+
+/// Unfinished jobs recorded in `path` by an earlier session (empty when there is none or it is unreadable).
+pub fn read_journal(path: &std::path::Path) -> Vec<SavedJob> {
+    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +64,8 @@ struct Shared {
     listener: Mutex<Option<Listener>>,
     tools: Mutex<Tools>,
     temp_dir: PathBuf,
+    /// Where unfinished jobs of the journalled operations are recorded after every change.
+    journal: Mutex<Option<(PathBuf, Vec<String>)>>,
 }
 
 #[derive(Clone)]
@@ -61,7 +80,7 @@ fn now() -> u64 {
 impl JobQueue {
     /// `workers` is the concurrency limit (renders are CPU/GPU heavy; 1 is the sensible default).
     pub fn new(tools: Tools, temp_dir: PathBuf, workers: usize) -> JobQueue {
-        let shared = Arc::new(Shared { inner: Mutex::new(Inner { jobs: vec![], next_seq: 0, shutdown: false }), cv: Condvar::new(), listener: Mutex::new(None), tools: Mutex::new(tools), temp_dir });
+        let shared = Arc::new(Shared { inner: Mutex::new(Inner { jobs: vec![], next_seq: 0, shutdown: false }), cv: Condvar::new(), listener: Mutex::new(None), tools: Mutex::new(tools), temp_dir, journal: Mutex::new(None) });
         for _ in 0..workers.max(1) {
             let s = Arc::clone(&shared);
             std::thread::spawn(move || worker(s));
@@ -71,6 +90,13 @@ impl JobQueue {
 
     pub fn set_listener(&self, f: impl Fn(&JobSnapshot) + Send + Sync + 'static) {
         *self.shared.listener.lock().unwrap() = Some(Box::new(f));
+    }
+
+    /// Record unfinished jobs whose operation is in `operations` (e.g. `["export"]`) in `path` after every change, so they
+    /// can be offered again after a crash or close. Read an earlier journal with [`read_journal`] before calling this.
+    pub fn set_journal(&self, path: PathBuf, operations: &[&str]) {
+        *self.shared.journal.lock().unwrap() = Some((path, operations.iter().map(|s| s.to_string()).collect()));
+        write_journal(&self.shared);
     }
 
     /// Use new tool paths for jobs that have not started yet.
@@ -146,6 +172,34 @@ impl JobQueue {
 fn notify(s: &Shared, snap: &JobSnapshot) {
     if let Some(l) = s.listener.lock().unwrap().as_ref() {
         l(snap);
+    }
+    // progress updates do not change what is unfinished; only arrivals and state changes do
+    if !matches!(&snap.state, JobState::Rendering { fraction: Some(_), .. }) {
+        write_journal(s);
+    }
+}
+
+fn write_journal(s: &Shared) {
+    let Some((path, ops)) = s.journal.lock().unwrap().clone() else { return };
+    let g = s.inner.lock().unwrap();
+    // jobs canceled by shutdown were not finished: keep the journal as it was when shutdown began
+    if g.shutdown {
+        return;
+    }
+    let saved: Vec<SavedJob> = g
+        .jobs
+        .iter()
+        .filter(|r| ops.contains(&r.snap.operation) && matches!(r.snap.state, JobState::Queued | JobState::Rendering { .. }))
+        .map(|r| SavedJob { operation: r.snap.operation.clone(), priority: r.snap.priority, enqueued_unix: r.snap.enqueued_unix, was_running: matches!(r.snap.state, JobState::Rendering { .. }), job: r.job.clone() })
+        .collect();
+    drop(g);
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    // write-then-rename so a crash mid-write never leaves half a journal
+    let tmp = path.with_extension("tmp");
+    if serde_json::to_vec_pretty(&saved).ok().is_some_and(|b| std::fs::write(&tmp, b).is_ok()) {
+        let _ = std::fs::rename(&tmp, &path);
     }
 }
 

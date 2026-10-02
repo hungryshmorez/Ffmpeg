@@ -27,6 +27,9 @@ struct AppState {
     bundled_dir: Option<PathBuf>,
     /// frei0r plugins shipped with the installer (<resources>/frei0r), searched after the user's folders.
     bundled_frei0r: Option<PathBuf>,
+    /// Exports that had not finished when FFWORKS last closed or crashed, until the user queues or discards them.
+    unfinished: Mutex<Vec<ffworks_core::queue::SavedJob>>,
+    unfinished_file: PathBuf,
 }
 
 #[derive(Serialize)]
@@ -890,6 +893,30 @@ fn start_export(state: State<AppState>, preset: String, output: String, engine: 
     Ok(state.queue.submit(job, "export", PRIORITY_EXPORT))
 }
 
+/// Exports that did not finish last time (output path, whether it was rendering, when it was queued).
+#[tauri::command]
+fn unfinished_exports(state: State<AppState>) -> Vec<serde_json::Value> {
+    state.unfinished.lock().unwrap().iter().map(|j| serde_json::json!({ "output": j.job.output, "wasRunning": j.was_running, "enqueuedUnix": j.enqueued_unix })).collect()
+}
+
+/// Queue last session's unfinished exports again (`requeue`) or forget them. Returns the new job ids.
+#[tauri::command]
+fn resolve_unfinished(state: State<AppState>, requeue: bool) -> Vec<String> {
+    let jobs = std::mem::take(&mut *state.unfinished.lock().unwrap());
+    let _ = std::fs::remove_file(&state.unfinished_file);
+    if !requeue {
+        return vec![];
+    }
+    let tools = state.engine.lock().unwrap().tools.clone();
+    jobs.into_iter()
+        .map(|mut j| {
+            // the FFmpeg in use now runs it (the saved path may be from another build)
+            j.job.program = tools.ffmpeg.clone();
+            state.queue.submit(j.job, &j.operation, j.priority)
+        })
+        .collect()
+}
+
 /// File stem for an export named by `template` (tokens: see `naming::TOKENS`); `date`/`time` come from the user's clock.
 #[tauri::command]
 fn export_name(state: State<AppState>, template: String, preset: String, date: String, time: String) -> Result<String, String> {
@@ -987,6 +1014,14 @@ pub fn run() {
             ffworks_core::ladspa::configure(&[]);
             let tools = loaded.tools_with_bundled(bundled_dir.as_deref());
             let queue = JobQueue::new(tools.clone(), base.join("tmp"), 1);
+            // last session's journal is kept aside until the user decides; this session journals afresh
+            let journal = base.join("jobs.json");
+            let unfinished_file = base.join("jobs.previous.json");
+            if journal.exists() && !ffworks_core::queue::read_journal(&journal).is_empty() {
+                let _ = std::fs::rename(&journal, &unfinished_file);
+            }
+            let unfinished = ffworks_core::queue::read_journal(&unfinished_file);
+            queue.set_journal(journal, &["export"]);
             let emitter = app.handle().clone();
             queue.set_listener(move |snap| {
                 let _ = emitter.emit("job-state", snap);
@@ -1001,6 +1036,8 @@ pub fn run() {
                 settings_file,
                 bundled_dir,
                 bundled_frei0r,
+                unfinished: Mutex::new(unfinished),
+                unfinished_file,
             });
             // Autosave unsaved work periodically (spec §47). Never touches the saved project file.
             let secs = std::env::var("FFWORKS_AUTOSAVE_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20).max(1);
@@ -1029,12 +1066,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

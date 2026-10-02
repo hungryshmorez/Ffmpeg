@@ -65,7 +65,7 @@ pub struct RenderOptions {
     pub scale_div: u32,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FfmpegJob {
     pub program: PathBuf,
     /// Arguments before `-filter_complex`.

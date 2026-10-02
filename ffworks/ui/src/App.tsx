@@ -12,6 +12,7 @@ import { GraphEditor } from "./components/GraphEditor";
 import { FavouritesDialog } from "./components/FavouritesDialog";
 import { EnginesDialog } from "./components/EnginesDialog";
 import { DemoDialog } from "./components/DemoDialog";
+import { UnfinishedExportsDialog } from "./components/UnfinishedExportsDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { actionFor, chordOf, hasCtrl } from "./state/keymap";
 import { CommandPalette } from "./components/CommandPalette";
@@ -166,6 +167,7 @@ export default function App() {
       <VariationsDialog />
       <QueuePanel />
       <RecoveryDialog />
+      <UnfinishedExportsDialog />
       <Toasts />
     </div>
   );

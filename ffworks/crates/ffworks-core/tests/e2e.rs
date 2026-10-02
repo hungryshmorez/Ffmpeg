@@ -522,6 +522,42 @@ mod queue_tests {
     }
 
     #[test]
+    fn unfinished_exports_survive_in_the_journal_and_can_be_requeued() {
+        let dir = tempfile::tempdir().unwrap();
+        let (eng, _) = single_clip_project(dir.path(), "red");
+        let journal = dir.path().join("jobs.json");
+        let q = JobQueue::new(tools(), dir.path().join("tmp"), 1);
+        q.set_journal(journal.clone(), &["export"]);
+        let out = |n: &str| dir.path().join(n);
+        let running = q.submit(job_for(&eng, out("a.mp4"), true), "export", PRIORITY_EXPORT);
+        assert!(wait_until(&q, &running, |s| matches!(s, JobState::Rendering { .. }), 10));
+        q.submit(job_for(&eng, out("b.mp4"), false), "export", PRIORITY_EXPORT);
+        q.submit(job_for(&eng, out("bg.mp4"), false), "background", PRIORITY_BACKGROUND);
+        let canceled = q.submit(job_for(&eng, out("c.mp4"), false), "export", PRIORITY_EXPORT);
+        assert!(q.cancel(&canceled));
+        let saved = ffworks_core::queue::read_journal(&journal);
+        let outs: Vec<String> = saved.iter().map(|j| j.job.output.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(outs, ["a.mp4", "b.mp4"], "only unfinished exports: not background work, not a canceled job");
+        assert!(saved[0].was_running && !saved[1].was_running);
+        // closing the app cancels what is running, but the journal keeps it to offer next time
+        q.shutdown();
+        std::thread::sleep(Duration::from_millis(500));
+        assert_eq!(ffworks_core::queue::read_journal(&journal).len(), 2);
+
+        // next session: queue them again; once they finish the journal is empty
+        let q2 = JobQueue::new(tools(), dir.path().join("tmp2"), 1);
+        let again = ffworks_core::queue::read_journal(&journal);
+        q2.set_journal(journal.clone(), &["export"]);
+        let ids: Vec<String> = again.into_iter().map(|j| q2.submit(j.job, &j.operation, j.priority)).collect();
+        for id in &ids {
+            assert!(wait_until(&q2, id, finished, 120));
+        }
+        assert!(out("a.mp4").exists() && out("b.mp4").exists());
+        assert!(ffworks_core::queue::read_journal(&journal).is_empty());
+        assert!(ffworks_core::queue::read_journal(&dir.path().join("missing.json")).is_empty());
+    }
+
+    #[test]
     fn priority_order_cancel_queued_cancel_running_and_logs() {
         let dir = tempfile::tempdir().unwrap();
         let (eng, _) = single_clip_project(dir.path(), "red");
