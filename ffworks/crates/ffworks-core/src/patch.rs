@@ -3,7 +3,7 @@
 //! transactions and automation recording with predictable state transitions (spec §111).
 
 use crate::error::{Error, Result};
-use crate::project::{Clip, Id, Marker, MediaAsset, Project, ProjectSettings, Track};
+use crate::project::{Clip, Id, Marker, MediaAsset, Project, ProjectSettings, Sequence, Track};
 use crate::transitions::Transition;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,11 @@ pub enum Patch {
     RemoveMarker { seq: Id, id: Id },
     SetSettings { settings: ProjectSettings },
     SetName { name: String },
+    /// Insert a whole sequence (a snapshot) at `index`.
+    InsertSequence { index: usize, sequence: Sequence },
+    RemoveSequence { id: Id },
+    /// Replace a sequence's tracks and markers (restoring a snapshot).
+    SetSequenceContent { seq: Id, tracks: Vec<Track>, markers: Vec<Marker> },
 }
 
 fn find_clip_pos(p: &Project, seq: &str, clip: &str) -> Result<Option<(usize, usize)>> {
@@ -146,6 +151,25 @@ pub fn apply(p: &mut Project, patch: &Patch) -> Result<Patch> {
         Patch::SetSettings { settings } => {
             let old = std::mem::replace(&mut p.settings, settings.clone());
             Ok(Patch::SetSettings { settings: old })
+        }
+        Patch::InsertSequence { index, sequence } => {
+            let at = (*index).min(p.sequences.len());
+            p.sequences.insert(at, sequence.clone());
+            Ok(Patch::RemoveSequence { id: sequence.id.clone() })
+        }
+        Patch::RemoveSequence { id } => {
+            if *id == p.active_sequence {
+                return Err(Error::validation("the active sequence cannot be removed"));
+            }
+            let i = p.sequences.iter().position(|s| &s.id == id).ok_or_else(|| Error::NotFound(format!("sequence {id}")))?;
+            let old = p.sequences.remove(i);
+            Ok(Patch::InsertSequence { index: i, sequence: old })
+        }
+        Patch::SetSequenceContent { seq, tracks, markers } => {
+            let s = p.sequence_mut(seq)?;
+            let old_tracks = std::mem::replace(&mut s.tracks, tracks.clone());
+            let old_markers = std::mem::replace(&mut s.markers, markers.clone());
+            Ok(Patch::SetSequenceContent { seq: seq.clone(), tracks: old_tracks, markers: old_markers })
         }
         Patch::SetName { name } => {
             let old = std::mem::replace(&mut p.name, name.clone());

@@ -22,6 +22,9 @@ pub enum Edge {
     End,
 }
 
+/// Sequences whose name starts with this are snapshots, not timelines to edit.
+pub const SNAPSHOT_PREFIX: &str = "Snapshot: ";
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
@@ -92,6 +95,11 @@ pub enum Command {
     AddMarker { time: Rational, name: String, color: Option<String>, note: Option<String> },
     SetMarker { marker: Id, time: Option<Rational>, name: Option<String>, color: Option<String>, note: Option<String> },
     RemoveMarker { marker: Id },
+    /// Save the active sequence (tracks, clips, markers) as a named snapshot; the project keeps it alongside the live timeline.
+    TakeSnapshot { name: String },
+    /// Put the active sequence back to how a snapshot was. The state it replaces can be recovered with undo (or a snapshot taken first).
+    RestoreSnapshot { snapshot: Id },
+    DeleteSnapshot { snapshot: Id },
     /// Add one FFmpeg filter (with `options`) to a video clip as a custom-graph effect: `in -> filter -> out`. One undo step.
     AddFilterEffect { clip: Id, filter: String, #[serde(default)] options: Vec<(String, String)> },
     /// Put subtitle cues (`start`, `end`, text) on a new video track named `track` as title clips, `offset` seconds later than the
@@ -152,6 +160,9 @@ impl Command {
             Command::AddTransition { kind, .. } => format!("Add {kind} transition"),
             Command::RemoveTransition { .. } => "Remove transition".into(),
             Command::SetTransition { .. } => "Edit transition".into(),
+            Command::TakeSnapshot { name } => format!("Snapshot '{name}'"),
+            Command::RestoreSnapshot { .. } => "Restore snapshot".into(),
+            Command::DeleteSnapshot { .. } => "Delete snapshot".into(),
             Command::AddFilterEffect { filter, .. } => format!("Add filter {filter}"),
             Command::ImportCues { cues, .. } => format!("Import {} subtitles", cues.len()),
             Command::RemoveRanges { ranges, .. } => format!("Cut out {} ranges", ranges.len()),
@@ -589,6 +600,26 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 _ => unreachable!(),
             }
             Ok(vec![Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 }])
+        }
+        Command::TakeSnapshot { name } => {
+            let n = name.trim();
+            if n.is_empty() || n.chars().count() > 60 {
+                return Err(Error::validation("snapshot names must be 1-60 characters"));
+            }
+            let mut copy = seq.clone();
+            copy.id = new_id("snap");
+            copy.name = format!("{SNAPSHOT_PREFIX}{n}");
+            Ok(vec![Patch::InsertSequence { index: p.sequences.len(), sequence: copy }])
+        }
+        Command::RestoreSnapshot { snapshot } => {
+            let snap = p.sequences.iter().find(|s| &s.id == snapshot && s.name.starts_with(SNAPSHOT_PREFIX)).ok_or_else(|| Error::NotFound(format!("snapshot {snapshot}")))?;
+            Ok(vec![Patch::SetSequenceContent { seq: sid, tracks: snap.tracks.clone(), markers: snap.markers.clone() }])
+        }
+        Command::DeleteSnapshot { snapshot } => {
+            if !p.sequences.iter().any(|s| &s.id == snapshot && s.name.starts_with(SNAPSHOT_PREFIX)) {
+                return Err(Error::NotFound(format!("snapshot {snapshot}")));
+            }
+            Ok(vec![Patch::RemoveSequence { id: snapshot.clone() }])
         }
         Command::AddMarker { time, name, color, note } => {
             let m = Marker { id: new_id("mrk"), time: snap_to_frame(*time, fps), name: name.clone(), color: color.clone().unwrap_or_else(|| "#ffb020".into()), note: note.clone().unwrap_or_default() };

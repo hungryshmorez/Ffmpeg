@@ -13,6 +13,7 @@ import { FavouritesDialog } from "./components/FavouritesDialog";
 import { EnginesDialog } from "./components/EnginesDialog";
 import { DemoDialog } from "./components/DemoDialog";
 import { CommandPalette } from "./components/CommandPalette";
+import { SnapshotsDialog } from "./components/SnapshotsDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -145,6 +146,7 @@ export default function App() {
       <EnginesDialog />
       <DemoDialog />
       <CommandPalette />
+      <SnapshotsDialog />
       <QueuePanel />
       <RecoveryDialog />
       <Toasts />

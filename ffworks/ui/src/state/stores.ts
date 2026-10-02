@@ -84,6 +84,8 @@ interface UiStore {
   filtersOpen: boolean;
   demoOpen: boolean;
   paletteOpen: boolean;
+  snapshotsOpen: boolean;
+  setSnapshotsOpen: (o: boolean) => void;
   recording: boolean;
   setRecording: (r: boolean) => void;
   /** Clips added to the selection with Shift/Ctrl+click (besides `selected`). */
@@ -117,6 +119,8 @@ export const useUi = create<UiStore>((set) => ({
   filtersOpen: false,
   demoOpen: false,
   paletteOpen: false,
+  snapshotsOpen: false,
+  setSnapshotsOpen: (snapshotsOpen) => set({ snapshotsOpen }),
   recording: false,
   setRecording: (recording) => set({ recording }),
   extra: [],

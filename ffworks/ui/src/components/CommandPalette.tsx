@@ -33,6 +33,7 @@ function buildActions(): PaletteAction[] {
       if (typeof p !== "string") return;
       try { proj.setView(await api.runMacro(p, ui.selected)); proj.toast("info", "Macro applied (one undo step)"); } catch (e) { proj.toast("error", String(e)); }
     })() },
+    { id: "snapshots", label: "Snapshots (save and restore the timeline)…", keywords: "version backup history", run: () => ui.setSnapshotsOpen(true) },
     { id: "saveas", label: "Save project as…", hint: "Ctrl+Shift+S", run: () => void saveProject(true) },
     { id: "import", label: "Import media…", run: () => void importViaDialog() },
     { id: "subs", label: "Import subtitles…", keywords: "srt vtt captions", run: () => void importSubtitlesViaDialog() },
