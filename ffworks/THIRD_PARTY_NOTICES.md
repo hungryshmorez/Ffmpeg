@@ -29,3 +29,7 @@ Titles use **DejaVu Sans** and **DejaVu Sans Bold** (embedded in the binary; use
 | Tauri, React, Zustand, Vite and their dependencies | application shell and UI | MIT / Apache-2.0 |
 
 Complete dependency licenses can be listed with `cargo license` and `npx license-checker` in `ffworks/` and `ffworks/ui/`.
+
+## Bundled in the Windows installer (added by CI)
+* **FFmpeg "full" build** (gyan.dev / GyanD/codexffmpeg, 7.1.1): GPL-3.0 build; licence and README ship next to ffmpeg.exe. Source: https://ffmpeg.org and https://github.com/GyanD/codexffmpeg.
+* **frei0r plugins** (https://github.com/dyne/frei0r): GPL-2.0-or-later. Shipped as separate DLL files in `frei0r/` and loaded by FFmpeg; FFWORKS does not link them. Source offer: the repository above.

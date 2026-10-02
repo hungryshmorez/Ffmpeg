@@ -32,6 +32,63 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: choco install ffmpeg -y --no-progress
+      - name: Fetch FFmpeg (full build, with plugin support) to bundle with the installer
+        shell: pwsh
+        run: |
+          $base = "https://github.com/GyanD/codexffmpeg/releases/download/7.1.1"
+          Invoke-WebRequest "$base/ffmpeg-7.1.1-full_build.zip" -OutFile ffmpeg.zip
+          # The publisher's own checksum file; the hash is logged so it can be pinned later.
+          $want = ((Invoke-WebRequest "$base/ffmpeg-7.1.1-full_build.zip.sha256").Content.ToString().Trim() -split '\s+')[0].ToLower()
+          $got = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
+          "ffmpeg full_build sha256: $got"
+          if ($got -ne $want) { throw "FFmpeg download checksum mismatch: $got vs $want" }
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-extract
+          $root = Get-ChildItem ffmpeg-extract -Directory | Select-Object -First 1
+          New-Item -ItemType Directory -Force src-tauri/ffmpeg-bin | Out-Null
+          Copy-Item "$($root.FullName)/bin/ffmpeg.exe","$($root.FullName)/bin/ffprobe.exe","$($root.FullName)/LICENSE","$($root.FullName)/README.txt" src-tauri/ffmpeg-bin/
+          Copy-Item THIRD_PARTY_NOTICES.md src-tauri/ffmpeg-bin/
+          $ff = "$($root.FullName)/bin/ffmpeg.exe"
+          $caps = @()
+          $caps += "## Bundled FFmpeg capabilities"
+          $filters = & $ff -hide_banner -filters 2>&1 | Out-String
+          foreach ($f in "frei0r","ladspa","lv2","libplacebo","zscale","xfade") {
+            $caps += ("- {0}: {1}" -f $f, ($filters -match "\b$f\b"))
+          }
+          $caps | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          if ($filters -notmatch "\bfrei0r\b") { Write-Warning "bundled FFmpeg has no frei0r filter" }
+      - name: Fetch frei0r plugins (Win64) to bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force src-tauri/frei0r-bin | Out-Null
+          try {
+            $rel = Invoke-RestMethod "https://api.github.com/repos/dyne/frei0r/releases/latest" -Headers @{ "User-Agent" = "ffworks-ci" }
+            $asset = $rel.assets | Where-Object { $_.name -match "win64" } | Select-Object -First 1
+            if (-not $asset) { throw "no win64 asset in release $($rel.tag_name)" }
+            Invoke-WebRequest $asset.browser_download_url -OutFile frei0r.zip
+            "frei0r $($rel.tag_name) $($asset.name) sha256: $((Get-FileHash frei0r.zip -Algorithm SHA256).Hash.ToLower())"
+            Expand-Archive frei0r.zip -DestinationPath frei0r-extract
+            $dlls = Get-ChildItem frei0r-extract -Recurse -Filter *.dll
+            $dlls | Copy-Item -Destination src-tauri/frei0r-bin/
+            Get-ChildItem frei0r-extract -Recurse -Include COPYING*,LICENSE*,README* | Copy-Item -Destination src-tauri/frei0r-bin/ -ErrorAction SilentlyContinue
+            "frei0r plugins bundled: $($dlls.Count); glitch0r present: $([bool]($dlls | Where-Object Name -eq 'glitch0r.dll'))" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          } catch {
+            Write-Warning "frei0r plugins NOT bundled: $_"
+          }
+          "frei0r plugins are GPL-2.0-or-later; source: https://github.com/dyne/frei0r" | Set-Content src-tauri/frei0r-bin/NOTICE.txt
+      - run: npm ci --prefix ui
+      - run: npm run build --prefix ui
+      - run: cargo test --workspace
+      - run: npm test --prefix ui
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: ffworks }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: choco install ffmpeg -y --no-progress
       - name: Fetch pinned FFmpeg to bundle with the installer
         shell: pwsh
         run: |

@@ -23,6 +23,8 @@ struct AppState {
     recovery_dir: PathBuf,
     settings_file: PathBuf,
     bundled_dir: Option<PathBuf>,
+    /// frei0r plugins shipped with the installer (<resources>/frei0r), searched after the user's folders.
+    bundled_frei0r: Option<PathBuf>,
 }
 
 #[derive(Serialize)]
@@ -337,12 +339,20 @@ fn frei0r_status(state: State<AppState>) -> serde_json::Value {
     })
 }
 
+fn with_bundled(dirs: &[String], bundled: Option<&std::path::Path>) -> Vec<String> {
+    let mut v = dirs.to_vec();
+    if let Some(b) = bundled {
+        v.push(b.to_string_lossy().into_owned());
+    }
+    v
+}
+
 #[tauri::command]
 fn set_frei0r_dirs(state: State<AppState>, dirs: Vec<String>) -> Result<(), String> {
     let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
     st.frei0r_dirs = dirs.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
     st.save(&state.settings_file).map_err(s)?;
-    ffworks_core::frei0r::configure(&st.frei0r_dirs);
+    ffworks_core::frei0r::configure(&with_bundled(&st.frei0r_dirs, state.bundled_frei0r.as_deref()));
     Ok(())
 }
 
@@ -767,7 +777,8 @@ pub fn run() {
             // Installer builds ship FFmpeg/FFprobe under <resources>/ffmpeg (see tauri.windows.conf.json).
             let bundled_dir = app.path().resource_dir().ok().map(|d| d.join("ffmpeg"));
             let loaded = ffworks_core::settings::Settings::load(&settings_file);
-            ffworks_core::frei0r::configure(&loaded.frei0r_dirs);
+            let bundled_frei0r = app.path().resource_dir().ok().map(|d| d.join("frei0r")).filter(|d| d.is_dir());
+            ffworks_core::frei0r::configure(&with_bundled(&loaded.frei0r_dirs, bundled_frei0r.as_deref()));
             let tools = loaded.tools_with_bundled(bundled_dir.as_deref());
             let queue = JobQueue::new(tools.clone(), base.join("tmp"), 1);
             let emitter = app.handle().clone();
@@ -782,6 +793,7 @@ pub fn run() {
                 recovery_dir: base.join("recovery"),
                 settings_file,
                 bundled_dir,
+                bundled_frei0r,
             });
             // Autosave unsaved work periodically (spec §47). Never touches the saved project file.
             let secs = std::env::var("FFWORKS_AUTOSAVE_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20).max(1);
