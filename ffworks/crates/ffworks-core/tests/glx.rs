@@ -41,11 +41,30 @@ fn every_bundled_gl_transition_runs_and_goes_from_a_to_b() {
     for (name, expr) in glx::all() {
         let out = dir.path().join(format!("{name}.mp4"));
         let graph = format!("[0][1]xfade=transition=custom:expr={}:duration=1:offset=0.5,format=yuv420p", escape_filter_value(expr));
-        let r = Proc::new(tools().ffmpeg)
+        let mut child = Proc::new(tools().ffmpeg)
             .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=128x96:r=25:d=2,format=yuv420p", "-f", "lavfi", "-i", "color=c=blue:s=128x96:r=25:d=2,format=yuv420p", "-filter_complex", &graph, "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
             .arg(&out)
-            .output()
+            .stderr(std::process::Stdio::piped())
+            .spawn()
             .unwrap();
+        // a pathological expression must fail the test, not hang it
+        let started = std::time::Instant::now();
+        let status = loop {
+            if let Some(st) = child.try_wait().unwrap() {
+                break Some(st);
+            }
+            if started.elapsed() > std::time::Duration::from_secs(60) {
+                child.kill().ok();
+                child.wait().ok();
+                break None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        let Some(status) = status else {
+            problems.push(format!("{name}: took more than 60 s for a 128x96 clip"));
+            continue;
+        };
+        let r = std::process::Output { status, stdout: vec![], stderr: vec![] };
         if !r.status.success() {
             problems.push(format!("{name}: ffmpeg failed: {}", String::from_utf8_lossy(&r.stderr).lines().next().unwrap_or("")));
             continue;
