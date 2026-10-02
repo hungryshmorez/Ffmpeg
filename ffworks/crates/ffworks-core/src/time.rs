@@ -75,10 +75,12 @@ impl Rational {
         Rational::new((s * 1_000_000.0).round() as i64, 1_000_000)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn mul(self, o: Rational) -> Rational {
         Self::from_i128(self.num as i128 * o.num as i128, self.den as i128 * o.den as i128)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn div(self, o: Rational) -> Rational {
         Self::from_i128(self.num as i128 * o.den as i128, self.den as i128 * o.num as i128)
     }

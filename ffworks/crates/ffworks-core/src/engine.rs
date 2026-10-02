@@ -61,7 +61,7 @@ impl Engine {
         inv.reverse();
         self.undo.push(Entry { label: cmd.label(), forward: fwd, inverse: inv });
         self.redo.clear();
-        if self.saved_at.map_or(false, |s| s >= self.undo.len()) {
+        if self.saved_at.is_some_and(|s| s >= self.undo.len()) {
             self.saved_at = None;
         }
         if let Some(rec) = &mut self.recording {
@@ -140,22 +140,16 @@ impl Engine {
 
     /// Probe a file and add it to the media library. The file itself is never modified.
     pub fn import_media(&mut self, path: &Path) -> Result<String> {
-        let abs = fs::canonicalize(path).map_err(|e| Error::io(path, e))?;
-        let abs = strip_verbatim(&abs);
-        if let Some(existing) = self.project.media.iter().find(|m| Path::new(&m.path) == abs) {
+        let asset = prepare_asset(&self.tools, path)?;
+        self.import_asset(asset)
+    }
+
+    /// Add an already-probed asset (so callers can run FFprobe without holding the engine lock).
+    /// Re-importing the same path returns the existing asset id.
+    pub fn import_asset(&mut self, asset: MediaAsset) -> Result<String> {
+        if let Some(existing) = self.project.media.iter().find(|m| m.path == asset.path) {
             return Ok(existing.id.clone());
         }
-        let info = probe(&self.tools, &abs)?;
-        if !info.has_video() && !info.has_audio() {
-            return Err(Error::validation(format!("'{}' contains no video or audio streams", abs.display())));
-        }
-        let asset = MediaAsset {
-            id: new_id("med"),
-            name: abs.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "media".into()),
-            path: abs.to_string_lossy().into_owned(),
-            fingerprint: fingerprint(&abs).ok(),
-            info,
-        };
         let id = asset.id.clone();
         self.dispatch(Command::ImportMedia { asset })?;
         Ok(id)
@@ -187,6 +181,23 @@ impl Engine {
         project.validate()?;
         Ok(Engine { project, tools, path: Some(path.to_path_buf()), undo: vec![], redo: vec![], saved_at: Some(0), recording: None })
     }
+}
+
+/// Probe `path` and build a media asset without touching any project state.
+pub fn prepare_asset(tools: &Tools, path: &Path) -> Result<MediaAsset> {
+    let abs = fs::canonicalize(path).map_err(|e| Error::io(path, e))?;
+    let abs = strip_verbatim(&abs);
+    let info = probe(tools, &abs)?;
+    if !info.has_video() && !info.has_audio() {
+        return Err(Error::validation(format!("'{}' contains no video or audio streams", abs.display())));
+    }
+    Ok(MediaAsset {
+        id: new_id("med"),
+        name: abs.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "media".into()),
+        path: abs.to_string_lossy().into_owned(),
+        fingerprint: fingerprint(&abs).ok(),
+        info,
+    })
 }
 
 /// Remove the `\\?\` prefix `canonicalize` adds on Windows so paths stay readable and portable.

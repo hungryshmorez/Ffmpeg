@@ -79,7 +79,7 @@ pub fn waveform(tools: &Tools, media: &Path, cache_dir: &Path, key: &str) -> Res
 pub fn thumbnails(tools: &Tools, media: &Path, cache_dir: &Path, key: &str, interval_secs: u32, height: u32) -> Result<Vec<PathBuf>> {
     let dir = cache_dir.join(format!("{key}.thumbs_{interval_secs}s_{height}"));
     let existing = |d: &Path| -> Vec<PathBuf> {
-        let mut v: Vec<PathBuf> = std::fs::read_dir(d).map(|r| r.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.extension().map_or(false, |x| x == "jpg")).collect()).unwrap_or_default();
+        let mut v: Vec<PathBuf> = std::fs::read_dir(d).map(|r| r.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "jpg")).collect()).unwrap_or_default();
         v.sort();
         v
     };

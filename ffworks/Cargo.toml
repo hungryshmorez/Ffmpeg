@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/ffworks-core", "crates/ffworks-cli"]
+members = ["crates/ffworks-core", "crates/ffworks-cli", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
