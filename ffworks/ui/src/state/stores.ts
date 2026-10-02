@@ -84,6 +84,9 @@ interface UiStore {
   filtersOpen: boolean;
   demoOpen: boolean;
   paletteOpen: boolean;
+  /** Clips added to the selection with Shift/Ctrl+click (besides `selected`). */
+  extra: string[];
+  toggleExtra: (id: string) => void;
   setPaletteOpen: (o: boolean) => void;
   setDemoOpen: (o: boolean) => void;
   enginesOpen: boolean;
@@ -112,6 +115,8 @@ export const useUi = create<UiStore>((set) => ({
   filtersOpen: false,
   demoOpen: false,
   paletteOpen: false,
+  extra: [],
+  toggleExtra: (id) => set((s) => ({ extra: s.extra.includes(id) ? s.extra.filter((x) => x !== id) : [...s.extra, id] })),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDemoOpen: (demoOpen) => set({ demoOpen }),
   enginesOpen: false,
@@ -122,7 +127,7 @@ export const useUi = create<UiStore>((set) => ({
   setGraphEdit: (graphEdit) => set({ graphEdit }),
   setFiltersOpen: (filtersOpen) => set({ filtersOpen }),
   setZoom: (z) => set({ pxPerSec: Math.min(2000, Math.max(4, z)) }),
-  select: (selected) => set({ selected }),
+  select: (selected) => set({ selected, extra: [] }),
   setExportOpen: (exportOpen) => set({ exportOpen }),
   setDiagOpen: (diagOpen) => set({ diagOpen }),
 }));

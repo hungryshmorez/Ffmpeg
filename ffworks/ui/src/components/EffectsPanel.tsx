@@ -34,6 +34,8 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
     if (skipped) toast("info", `${skipped} custom graph effect(s) were not pasted`);
     void dispatch({ type: "batch", label: `Paste ${clip$.effects.length - skipped} effects onto ${targets.length} clip(s)`, commands: all });
   };
+  const extraIds = useUi((s) => s.extra);
+  const allClips = view?.project.sequences[0]?.tracks.flatMap((t) => t.clips) ?? [];
   const trackClips = view?.project.sequences[0]?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
   const kind = clip.kind === "audio" ? "audio" : "video";
   const [presets, setPresets] = useState<Record<string, EffectPreset>>({});
@@ -76,6 +78,7 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           <button disabled={clip.effects.length === 0} title="Copy this clip's effect stack" onClick={() => clip$.copy(clip)}>Copy effects</button>
           <button disabled={!sameKind} title="Add the copied effects to this clip (one undo step)" onClick={() => paste([clip])}>Paste</button>
           <button disabled={!sameKind || trackClips.length < 2} title="Add the copied effects to every clip on this track (one undo step)" onClick={() => paste(trackClips)}>Paste to track</button>
+          <button disabled={!sameKind || extraIds.length === 0} title="Add the copied effects to this clip and every clip added with Shift/Ctrl+click (one undo step)" onClick={() => paste(allClips.filter((c) => c.id === clip.id || extraIds.includes(c.id)))}>Paste to selected</button>
         </div>
       </div>
       <div className="field" aria-label="Saved looks">

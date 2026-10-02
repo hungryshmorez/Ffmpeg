@@ -1,7 +1,7 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { PROJECT_EXTENSION } from "../brand";
-import { fromSec } from "../time";
+import { fromSec, toSec } from "../time";
 import { findClip, visibleVideoAt } from "../timeline/math";
 import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
 import { importViaDialog } from "./MediaBrowser";
@@ -51,6 +51,16 @@ export function deleteSelected(ripple: boolean) {
   const { view, dispatch } = useProject.getState();
   const sel = useUi.getState().selected;
   if (!view || !sel) return;
+  const extra = useUi.getState().extra;
+  if (extra.length > 0) {
+    // several clips: one undo step; later clips first so a ripple does not move the ones still to be deleted
+    const seq = view.project.sequences.find((s) => s.id === view.project.active_sequence)!;
+    const ids = [sel, ...extra].filter((id) => findClip(seq, id));
+    const start = (id: string) => { const f = findClip(seq, id); return f ? toSec(f.clip.start) : 0; };
+    ids.sort((a, b) => start(b) - start(a));
+    void dispatch({ type: "batch", label: `Delete ${ids.length} clips`, commands: ids.map((id) => ({ type: "delete_clip" as const, clip: id, ripple })) }).then((ok) => ok && useUi.getState().select(null));
+    return;
+  }
   const seq = view.project.sequences.find((s) => s.id === view.project.active_sequence)!;
   if (!findClip(seq, sel)) return;
   void dispatch({ type: "delete_clip", clip: sel, ripple }).then((ok) => ok && useUi.getState().select(null));

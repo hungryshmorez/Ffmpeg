@@ -158,10 +158,17 @@ const ClipView = memo(
     const media = useProject((s) => s.view?.project.media.find((m) => m.id === clip.media));
     const [ghost, setGhost] = useState<{ start: number; duration: number; sourceIn: number } | null>(null);
     const group = linkedIds(seq, clip.id);
-    const isSel = selected !== null && group.includes(selected);
+    const extra = useUi((s) => s.extra);
+    const isSel = (selected !== null && group.includes(selected)) || group.some((g) => extra.includes(g));
 
     const begin = (mode: DragMode) => (e: React.PointerEvent) => {
       e.stopPropagation();
+      // Shift/Ctrl+click adds or removes this clip from the selection without starting a drag
+      if ((e.shiftKey || e.ctrlKey || e.metaKey) && e.button === 0) {
+        const ui = useUi.getState();
+        if (ui.selected === null) ui.select(clip.id); else if (ui.selected !== clip.id) ui.toggleExtra(clip.id);
+        return;
+      }
       select(clip.id);
       if (track.locked || e.button !== 0) return;
       const el = e.currentTarget as HTMLElement;
