@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { fpsOf, fromSec, snapToFrame, timecode, toSec } from "../time";
-import { dbToGain, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
+import { beatPoints, dbToGain, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
 import { usePlayhead, useProject, useUi } from "../state/stores";
 import type { Clip, Sequence, Track } from "../types";
@@ -20,6 +20,8 @@ export function Timeline() {
   const fps = fpsOf(view.project.settings.fps);
   const px = useUi((s) => s.pxPerSec);
   const setZoom = useUi((s) => s.setZoom);
+  const snapBeats = useUi((s) => s.snapBeats);
+  const setSnapBeats = useUi((s) => s.setSnapBeats);
   const dispatch = useProject((s) => s.dispatch);
   const duration = toSec(view.duration);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -50,6 +52,7 @@ export function Timeline() {
         <input aria-label="Timeline zoom" type="range" min={4} max={600} value={px} onChange={(e) => setZoom(Number(e.target.value))} />
         <button title="Add video track" onClick={() => dispatch({ type: "add_track", kind: "video" })}>+ Video track</button>
         <button title="Add audio track" onClick={() => dispatch({ type: "add_track", kind: "audio" })}>+ Audio track</button>
+        <label className="check" title="Snap clip edges and the playhead to detected beats (detect beats in the Inspector first)"><input type="checkbox" checked={snapBeats} onChange={(e) => setSnapBeats(e.target.checked)} /> Snap to beats</label>
         <span className="muted right">Space play · S split · Del delete · ⇧Del ripple · ←/→ frame · Ctrl+wheel zoom</span>
       </div>
       <div className="timeline-scroll" ref={scrollRef} onWheel={onWheel}>
@@ -146,6 +149,11 @@ const ClipView = memo(
       const x0 = e.clientX;
       const exclude = new Set(group);
       const pts = snapPoints(seq, usePlayhead.getState().t, exclude);
+      if (useUi.getState().snapBeats) {
+        const byMedia: Record<string, number[] | undefined> = {};
+        for (const [id, v] of Object.entries(useAnalysis.getState().beats)) if (typeof v === "object") byMedia[id] = v.beats;
+        pts.push(...beatPoints(seq, byMedia, exclude));
+      }
       const thr = 8 / px;
       let current = { start, duration, sourceIn };
       let moved = false;
@@ -155,10 +163,14 @@ const ClipView = memo(
         if (Math.abs(ev.clientX - x0) > 2) moved = true;
         if (mode === "move") {
           let s = Math.max(0, start + dx);
-          // snap either edge of the clip
+          // snap either edge of the clip; an edge that found a snap point beats one that did not
           const a = snap(s, pts, thr);
           const b = snap(s + duration, pts, thr) - duration;
-          s = Math.abs(a - s) <= Math.abs(b - s) ? a : b;
+          const aSnapped = a !== s;
+          const bSnapped = b !== s;
+          if (aSnapped && bSnapped) s = Math.abs(a - s) <= Math.abs(b - s) ? a : b;
+          else if (aSnapped) s = a;
+          else if (bSnapped) s = b;
           current = { start: Math.max(0, snapToFrame(s, fps)), duration, sourceIn };
           const under = document.elementsFromPoint(ev.clientX, ev.clientY).find((n) => (n as HTMLElement).dataset?.trackKind === track.kind) as HTMLElement | undefined;
           targetTrack = under?.dataset.trackId && under.dataset.trackId !== track.id ? under.dataset.trackId : null;
@@ -199,6 +211,7 @@ const ClipView = memo(
         title={`${clip.name}\nstart ${timecode(g.start, fps)}  dur ${timecode(g.duration, fps)}`}
       >
         {clip.kind === "video" ? <Filmstrip mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} /> : <WaveCanvas mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} gainDb={clip.gain_db + track.gain_db} height={height} />}
+        {clip.kind === "audio" && <BeatTicks mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} />}
         <span className="clip-name">{clip.name}{clip.gain_db !== 0 ? `  ${clip.gain_db > 0 ? "+" : ""}${clip.gain_db.toFixed(1)} dB` : ""}</span>
         <div className="handle left" onPointerDown={begin("trim-start")} />
         <div className="handle right" onPointerDown={begin("trim-end")} />
@@ -260,3 +273,14 @@ function WaveCanvas({ mediaId, sourceIn, duration, px, gainDb, height }: { media
   return <canvas ref={ref} width={w} height={height} style={{ width: cssW, height }} aria-label="audio waveform" />;
 }
 
+
+function BeatTicks({ mediaId, sourceIn, duration, px }: { mediaId: string; sourceIn: number; duration: number; px: number }) {
+  const b = useAnalysis((s) => s.beats[mediaId]);
+  if (typeof b !== "object") return null;
+  const ticks = b.beats.filter((t) => t >= sourceIn && t <= sourceIn + duration);
+  return (
+    <div className="beat-ticks" aria-hidden>
+      {ticks.map((t) => <i key={t} style={{ left: (t - sourceIn) * px }} />)}
+    </div>
+  );
+}

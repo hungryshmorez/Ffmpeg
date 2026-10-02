@@ -22,6 +22,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design.
 | Autosave (every 20 s while unsaved, 3 rotating copies, atomic) and crash recovery dialog (Recover / Open original / Discard); corrupt latest autosave falls back to the previous | done, tested incl. a real `kill -9` of the app |
 | Media relinking: offline detection, folder search by content fingerprint (finds renamed/moved files), name-only matches reported but never auto-applied, manual Locate; one undo step | done, tested (Rust + real GUI) |
 | Settings: custom FFmpeg/FFprobe paths, validated by running them before saving (Diagnostics dialog) | done, tested |
+| Beat detection (ported from the browser app's `beat-detection.js`: spectral flux, adaptive peaks, median-interval BPM) via FFmpeg decode, cached; beat ticks on audio clips; snap to beats | done, tested (synthetic + FFmpeg click tracks, real GUI) |
 | Keyframes, transitions, proxies, render queue | **not started** (rest of Phase 2) |
 | Automation DSL, macros, blueprints, analysis, glitch/datamosh labs, plugins | **not started** (Phases 3–10) |
 
@@ -47,10 +48,11 @@ Headless: `cargo run -p ffworks-cli -- command project.ffworks` prints the exact
 ## Tests
 
 ```bash
-cargo test --workspace            # 60 tests: time, model, commands/undo, effects, ffprobe parsing, real-FFmpeg e2e
-(cd ui && npm test)               # timeline math
+cargo test --workspace            # 65 tests: time, model, commands/undo, effects, ffprobe parsing, real-FFmpeg e2e
+(cd ui && npm test)               # timeline math + beat points
 scripts/uitest/run.sh             # headless GUI test under Xvfb (Linux): 30 steps in the real webview
 scripts/uitest/recovery.sh        # kill -9 crash-recovery test: 9 steps across 3 app launches
+scripts/uitest/beats.sh           # beat detection, ticks, snap-to-beats: 6 steps
 scripts/uitest/relink.sh          # offline media + relink + FFmpeg-path settings: 10 steps across 2 launches
 ```
 
@@ -62,3 +64,11 @@ The e2e tests generate tiny fixtures with FFmpeg, build an edit (trim, split, mo
 * Verified on Linux only (Rust tests, WebKitGTK GUI test). The Windows build is configured (`tauri.conf.json`, CI workflow) but **has not been built or run on Windows**.
 * Native open/save dialogs and window-close confirmation are wired but not exercised by the automated GUI test (the test calls the same backend commands the dialogs call).
 * Autosave covers the project state only; it does not recover in-progress renders. Undo history is not restored after recovery.
+
+## Relationship to the browser-based FFmpeg Studio
+
+FFWORKS was started from scratch; no code was copied at first. A later survey found what ports and what does not:
+
+* **Ported:** beat detection (`beat-detection.js` → `crates/ffworks-core/src/beats.rs`). One deliberate behavioural change: a minimum-strength floor, because the original reported phantom beats in silence/flat regions.
+* **Good candidates, not yet ported:** the filter chains in `workflows*.js` (most entries are settings keyed to the old page's HTML control ids, so only the FFmpeg strings carry over); `audio-dsp.js`/`audio-intel.js` analysis; `nodegraph.js` UI for Phase 3; the ideas in `datamosh.js`/`motion-mosh.js` for Phases 8–9 (they work on in-memory browser frames, so the pipeline must be redesigned for disk-based codec work).
+* **Not applicable:** the WebGL/VJ/live-visuals modules, which do not map onto an FFmpeg render pipeline.

@@ -262,6 +262,13 @@ async fn relink_media(app: AppHandle, state: State<'_, AppState>, media_id: Stri
 }
 
 #[tauri::command]
+async fn get_beats(state: State<'_, AppState>, media_id: String) -> Result<ffworks_core::beats::BeatAnalysis, String> {
+    let (tools, path, key) = media_for(&state, &media_id)?;
+    let cache = state.cache_dir.clone();
+    tauri::async_runtime::spawn_blocking(move || ffworks_core::beats::detect(&tools, &path, &cache, &key)).await.map_err(s)?.map_err(s)
+}
+
+#[tauri::command]
 fn list_effects() -> Vec<ffworks_core::effects::EffectDef> {
     ffworks_core::effects::registry()
 }
@@ -429,12 +436,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
+            get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
+            get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

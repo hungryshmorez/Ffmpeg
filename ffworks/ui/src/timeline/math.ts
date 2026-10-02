@@ -84,3 +84,17 @@ export function findClip(seq: Sequence, id: string): { clip: Clip; track: Track 
   for (const track of seq.tracks) for (const clip of track.clips) if (clip.id === id) return { clip, track };
   return null;
 }
+
+/** Timeline times of detected beats that fall inside audio clips (beat time is relative to the source media). */
+export function beatPoints(seq: Sequence, beatsByMedia: Record<string, readonly number[] | undefined>, exclude: ReadonlySet<string> = new Set()): number[] {
+  const out: number[] = [];
+  for (const tr of seq.tracks)
+    for (const c of tr.clips) {
+      if (c.kind !== "audio" || exclude.has(c.id)) continue; // a dragged clip must not snap to its own beats
+      const beats = beatsByMedia[c.media];
+      if (!beats) continue;
+      const { start, sourceIn, duration } = times(c);
+      for (const b of beats) if (b >= sourceIn && b <= sourceIn + duration) out.push(start + (b - sourceIn));
+    }
+  return out;
+}

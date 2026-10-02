@@ -57,6 +57,8 @@ interface UiStore {
   previewBusy: boolean;
   setPreview: (p: PreviewInfo | null) => void;
   setPreviewBusy: (b: boolean) => void;
+  snapBeats: boolean;
+  setSnapBeats: (b: boolean) => void;
   pxPerSec: number;
   selected: string | null;
   exportOpen: boolean;
@@ -71,6 +73,8 @@ export const useUi = create<UiStore>((set) => ({
   previewBusy: false,
   setPreview: (preview) => set({ preview }),
   setPreviewBusy: (previewBusy) => set({ previewBusy }),
+  snapBeats: false,
+  setSnapBeats: (snapBeats) => set({ snapBeats }),
   pxPerSec: 80,
   selected: null,
   exportOpen: false,

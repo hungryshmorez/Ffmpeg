@@ -62,6 +62,10 @@ A registry of `EffectDef`s (id, category, required FFmpeg filters, `ParamDef`s w
 
 `RelinkMedia` replaces an asset in place (same id) through `Patch::ReplaceMedia`, so clips keep their references and undo is exact. `relink::find_candidates` walks the chosen folders (depth ≤ 8, ≤ 100 000 files, symlinks skipped), hashes only files whose size equals the original's, and ranks fingerprint matches (`exact`, even if renamed) above same-name files. `Engine::relink_search` applies only exact matches, as one batch. Settings (`settings.json` in the app config dir) override `FFWORKS_FFMPEG`/`PATH`; new paths are executed (`-version`) and must identify as FFmpeg/FFprobe before they are saved.
 
+## Beat detection (`beats.rs`)
+
+FFmpeg decodes the first audio stream to mono 44.1 kHz f32; a 1024-sample Hann-windowed FFT (hop 512) gives spectral flux; peaks must be local maxima, exceed 1.35× the moving average and a 5 % strength floor, and be ≥ 0.18 s apart; BPM is the median inter-onset interval folded into 60–200. Results are cached per media fingerprint. Beat times are source-relative; the UI maps them to the timeline per clip (`beatPoints`) for ticks and snapping.
+
 ## Jobs (`jobs.rs`)
 
 `run_job` executes on a worker thread with real progress from FFmpeg `-progress pipe:1` (`out_time_us` ÷ timeline length → fraction; no fake percentages), ETA, cancellation (watchdog kills the process tree), stderr capture, and a `JobLog` (executable, argv, timestamps, exit code, stderr). Output goes to `name.ffworks-partial.ext` and is renamed on success, so a failed/cancelled export never leaves a truncated file or clobbers a good one. Failures get a plain-language hint (`explain_failure`) alongside the raw log.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dbToGain, linkedIds, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
+import { beatPoints, dbToGain, linkedIds, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
 import { fromSec, snapToFrame, timecode, toSec } from "../time";
 import type { Clip, Sequence } from "../types";
 
@@ -24,6 +24,17 @@ describe("time", () => {
   it("round-trips seconds", () => expect(toSec(fromSec(1.234567))).toBeCloseTo(1.234567, 6));
   it("formats non-drop timecode", () => expect(timecode(3661.5, 30)).toBe("01:01:01:15"));
   it("snaps to frames", () => expect(snapToFrame(1.02, 30)).toBeCloseTo(1 + 1 / 30, 6));
+});
+
+describe("beat points", () => {
+  it("maps source-relative beats into timeline time, honouring the clip range", () => {
+    const c = { ...clip("aa", "10", "2", "audio", null, "1"), media: "m" };
+    const sq: Sequence = { id: "s", name: "s", tracks: [{ id: "a1", name: "A1", kind: "audio", muted: false, locked: false, gain_db: 0, clips: [c] }] };
+    // source beats at 0.5 (before range), 1.0, 2.0, 3.0 (== end of range), 3.5 (after)
+    expect(beatPoints(sq, { m: [0.5, 1, 2, 3, 3.5] })).toEqual([10, 11, 12]);
+    expect(beatPoints(sq, {})).toEqual([]);
+    expect(beatPoints(sq, { m: [1, 2] }, new Set(["aa"]))).toEqual([]);
+  });
 });
 
 describe("timeline math", () => {

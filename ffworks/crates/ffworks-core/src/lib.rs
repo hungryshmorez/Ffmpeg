@@ -1,5 +1,6 @@
 //! FFWORKS engine. GUI-free by design so the editor, tests and a future headless CLI share it.
 pub mod analysis;
+pub mod beats;
 pub mod brand;
 pub mod commands;
 pub mod effects;

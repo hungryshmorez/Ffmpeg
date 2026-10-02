@@ -1,10 +1,13 @@
 import { fpsOf, timecode, toSec } from "../time";
 import { findClip, linkedIds, times } from "../timeline/math";
+import { useAnalysis } from "../state/analysis";
 import { useProject, useUi } from "../state/stores";
 import { CommitSlider } from "./CommitSlider";
 import { EffectsPanel } from "./EffectsPanel";
 
 export function Inspector() {
+  const beats = useAnalysis((s) => s.beats);
+  const ensureBeats = useAnalysis((s) => s.ensureBeats);
   const view = useProject((s) => s.view)!;
   const dispatch = useProject((s) => s.dispatch);
   const selected = useUi((s) => s.selected);
@@ -62,6 +65,17 @@ export function Inspector() {
           <p className="muted">This clip has no audio.</p>
         )}
       </div>
+      {audio && (
+        <div className="field">
+          <label>Beats</label>
+          {(() => {
+            const b = beats[audio.media];
+            if (typeof b === "object") return <p className="muted" data-testid="beat-summary">{b.beats.length} beats · {b.bpm ? `${b.bpm} BPM` : "BPM unclear"} (ticks shown on the audio clip; enable “Snap to beats” in the timeline)</p>;
+            if (b === "loading") return <p className="muted">Detecting beats…</p>;
+            return <button onClick={() => ensureBeats(audio.media)}>{b === "failed" ? "Detection failed — retry" : "Detect beats"}</button>;
+          })()}
+        </div>
+      )}
       {videoClip && <EffectsPanel clip={videoClip} />}
     </div>
   );

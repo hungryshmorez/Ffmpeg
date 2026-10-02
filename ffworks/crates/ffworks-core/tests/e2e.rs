@@ -465,3 +465,29 @@ fn relink_refuses_a_file_missing_a_needed_stream() {
     assert!(eng.relink_media(&m, &silent).is_err());
     assert!(eng.project.media(&m).unwrap().info.has_audio());
 }
+
+#[test]
+fn beats_are_detected_from_a_real_audio_file_and_cached() {
+    let dir = tempfile::tempdir().unwrap();
+    let wav = dir.path().join("clicks.wav");
+    // 120 BPM click track made by FFmpeg: 20 ms 1 kHz bursts every 0.5 s for 8 s
+    ffmpeg(&["-f", "lavfi", "-i", "aevalsrc=if(lt(mod(t\\,0.5)\\,0.02)\\,0.9*sin(2*PI*1000*t)\\,0):s=44100:d=8", wav.to_str().unwrap()]);
+    let cache = dir.path().join("cache");
+    let a = ffworks_core::beats::detect(&tools(), &wav, &cache, "k").unwrap();
+    assert!(a.beats.len() >= 12, "{:?}", a.beats);
+    assert!((a.bpm - 120.0).abs() < 1.5, "bpm {}", a.bpm);
+    assert!((a.duration - 8.0).abs() < 0.05);
+    for b in &a.beats {
+        let nearest = (b / 0.5).round() * 0.5;
+        assert!((b - nearest).abs() < 0.05, "{b}");
+    }
+    assert!(cache.join("k.beats.json").exists());
+    let cached = ffworks_core::beats::detect(&tools(), &wav, &cache, "k").unwrap();
+    assert_eq!(cached.beats.len(), a.beats.len());
+    assert!(cached.beats.iter().zip(&a.beats).all(|(x, y)| (x - y).abs() < 1e-9), "cache must return the same beats (JSON float round-trip tolerance)");
+    assert_eq!(cached.bpm, a.bpm);
+    // no audio stream -> clean error
+    let silent = dir.path().join("v.mp4");
+    ffmpeg(&["-f", "lavfi", "-i", "color=c=red:s=64x64:d=1", "-c:v", "libx264", silent.to_str().unwrap()]);
+    assert!(ffworks_core::beats::detect(&tools(), &silent, &cache, "v").is_err());
+}
