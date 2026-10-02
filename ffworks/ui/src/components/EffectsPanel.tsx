@@ -7,6 +7,7 @@ import { KeyframeField, type FieldSpec } from "./KeyframeField";
 import { useClipProps } from "./ClipPropsPanel";
 import { RandomBar } from "./RandomBar";
 import { toggleStar, useFavs } from "../state/favourites";
+import { pasteCommands, useFxClipboard } from "../state/fxClipboard";
 
 let registryCache: EffectDef[] | null = null;
 
@@ -22,6 +23,18 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
   useEffect(() => {
     if (!registryCache) void api.listEffects().then((d) => { registryCache = d; setDefs(d); });
   }, []);
+  const clip$ = useFxClipboard();
+  const toast = useProject((s) => s.toast);
+  const view = useProject((s) => s.view);
+  const sameKind = clip$.kind === (clip.kind === "audio" ? "audio" : "video") && clip$.effects.length > 0;
+  const paste = (targets: Clip[]) => {
+    const all = targets.flatMap((t) => pasteCommands(clip$.effects, t).commands);
+    const skipped = pasteCommands(clip$.effects, clip).skipped;
+    if (!all.length) return toast("info", "Nothing to paste (graph effects are not copied)");
+    if (skipped) toast("info", `${skipped} custom graph effect(s) were not pasted`);
+    void dispatch({ type: "batch", label: `Paste ${clip$.effects.length - skipped} effects onto ${targets.length} clip(s)`, commands: all });
+  };
+  const trackClips = view?.project.sequences[0]?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
   const byId = (id: string) => defs.find((d) => d.id === id);
   const mine = defs.filter((d) => d.kind === clip.kind);
   const groups = [...new Set(mine.map((d) => d.category))];
@@ -40,6 +53,13 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           </select>
           <button onClick={() => void dispatch({ type: "add_effect", clip: clip.id, effect: pick })}>Add</button>
           <button className="small" aria-label={favs.starred.effects.includes(pick) ? "Remove from favourites" : "Add to favourites"} title="Favourite" onClick={() => void saveFavs(toggleStar(favs, "effects", pick))}>{favs.starred.effects.includes(pick) ? "★" : "☆"}</button>
+        </div>
+      </div>
+      <div className="field">
+        <div className="row">
+          <button disabled={clip.effects.length === 0} title="Copy this clip's effect stack" onClick={() => clip$.copy(clip)}>Copy effects</button>
+          <button disabled={!sameKind} title="Add the copied effects to this clip (one undo step)" onClick={() => paste([clip])}>Paste</button>
+          <button disabled={!sameKind || trackClips.length < 2} title="Add the copied effects to every clip on this track (one undo step)" onClick={() => paste(trackClips)}>Paste to track</button>
         </div>
       </div>
       <RandomBar kind="effects" roll={(pool, count, seed) => api.randomEffects(clip.id, count, pool, seed)} />
