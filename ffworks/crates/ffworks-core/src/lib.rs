@@ -24,6 +24,7 @@ pub mod jobs;
 pub mod glx;
 pub mod keyframes;
 pub mod migrate;
+pub mod package;
 pub mod patch;
 pub mod preview;
 pub mod process;

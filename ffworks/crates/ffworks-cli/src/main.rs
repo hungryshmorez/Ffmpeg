@@ -9,6 +9,7 @@
 //!                                                             apply a JSON list of commands (one undo step each, all or nothing)
 //!   ffworks detect <media> <silence|black|freeze> [level] [min-seconds]
 //!   ffworks sync <reference-media> <other-media>              how much later the second recording is
+//!   ffworks package <project> <folder>                        copy the project and all its media into one folder
 //!   ffworks batch <input-dir> <output-dir> [preset]           transcode every media file in a folder
 use ffworks_core::commands::Command;
 use ffworks_core::detect::{detect, Kind};
@@ -136,6 +137,13 @@ fn run() -> ffworks_core::Result<()> {
             let r = ffworks_core::audiosync::measure(&tools, Path::new(a), Path::new(b))?;
             println!("lag {:.3} s (the second recording is {}) confidence {:.0}%", r.lag_seconds, if r.lag_seconds >= 0.0 { "later" } else { "earlier" }, r.confidence * 100.0);
         }
+        Some("package") => {
+            let (project, folder) = (args.get(1).ok_or_else(|| usage("package <project> <folder>"))?, args.get(2).ok_or_else(|| usage("package <project> <folder>"))?);
+            let eng = Engine::load(Path::new(project), tools.clone())?;
+            let name = Path::new(project).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "project".into());
+            let r = ffworks_core::package::package(&eng.project, Path::new(folder), &name)?;
+            println!("packaged {} ({} media files, {:.1} MB)", r.project_file.display(), r.files_copied, r.bytes as f64 / 1e6);
+        }
         Some("batch") => {
             let (input, output) = (args.get(1).ok_or_else(|| usage("batch <input-dir> <output-dir> [preset]"))?, args.get(2).ok_or_else(|| usage("batch <input-dir> <output-dir> [preset]"))?);
             let preset = args.get(3).cloned().unwrap_or_else(|| "h264_mp4".into());
@@ -167,7 +175,7 @@ fn run() -> ffworks_core::Result<()> {
                 return Err(Error::validation(format!("{failed} file(s) failed")));
             }
         }
-        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|detect|sync|batch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
+        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|detect|sync|package|batch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
     }
     Ok(())
 }

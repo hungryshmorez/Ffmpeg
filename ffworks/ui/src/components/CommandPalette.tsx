@@ -1,3 +1,4 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
@@ -16,6 +17,11 @@ function buildActions(): PaletteAction[] {
     { id: "new", label: "New project", run: () => void newProject() },
     { id: "open", label: "Open project…", hint: "Ctrl+O", run: () => void openProject() },
     { id: "save", label: "Save project", hint: "Ctrl+S", run: () => void saveProject() },
+    { id: "package", label: "Package project and media into a folder…", keywords: "collect archive copy move", run: () => void (async () => {
+      const dir = await open({ directory: true, title: "Folder to collect the project and its media into" });
+      if (typeof dir !== "string") return;
+      try { proj.toast("info", `Packaged: ${await api.packageProject(dir)}`); } catch (e) { proj.toast("error", String(e)); }
+    })() },
     { id: "saveas", label: "Save project as…", hint: "Ctrl+Shift+S", run: () => void saveProject(true) },
     { id: "import", label: "Import media…", run: () => void importViaDialog() },
     { id: "subs", label: "Import subtitles…", keywords: "srt vtt captions", run: () => void importSubtitlesViaDialog() },

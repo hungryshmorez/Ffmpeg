@@ -68,3 +68,20 @@ fn a_script_builds_a_project_then_render_and_batch_and_detectors_work() {
     let (ok, _, err) = ffworks(&["render", proj.to_str().unwrap(), dir.path().join("o.mp4").to_str().unwrap()]);
     assert!(!ok && err.contains("empty"), "{err}");
 }
+
+#[test]
+fn package_collects_a_project_with_its_media() {
+    let dir = tempfile::tempdir().unwrap();
+    let media = clip(dir.path(), "m.mp4");
+    let script = dir.path().join("s.json");
+    std::fs::write(&script, r#"[{"type":"add_marker","time":"1","name":"x","color":null,"note":null}]"#).unwrap();
+    let proj = dir.path().join("p.ffworks");
+    let (ok, _, e) = ffworks(&["run", "new", script.to_str().unwrap(), "--save", proj.to_str().unwrap()]);
+    assert!(ok, "{e}");
+    let _ = media;
+    let out = dir.path().join("pack");
+    let (ok, o, e) = ffworks(&["package", proj.to_str().unwrap(), out.to_str().unwrap()]);
+    assert!(ok && o.contains("0 media files") && out.join("p.ffworks").exists(), "{o} {e}");
+    let (ok, _, e) = ffworks(&["package", dir.path().join("none.ffworks").to_str().unwrap(), out.to_str().unwrap()]);
+    assert!(!ok && !e.is_empty());
+}

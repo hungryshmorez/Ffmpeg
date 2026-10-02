@@ -80,6 +80,7 @@ Toolbar "Filters" opens a searchable list of every filter in the installed FFmpe
 * **Scopes:** waveform, vectorscope, histogram of the frame under the playhead and an audio spectrogram (`scopes.rs`, FFmpeg's own filters; PNG cached). Tests: scopes differ per picture, spectrogram peak sits at the tone's frequency; `scopes.sh` 6 GUI checks incl. the image really loading in the webview. Not done: live updating while playing.
 * **Demo mode "Keep look":** each demo segment can be saved as a saved look (with its random values) or added to the selected clip. Transitions can only be starred, not applied from the demo.
 * **Command palette** (Ctrl+K) lists every action with its shortcut; shortcuts themselves are still fixed.
+* **Project packaging:** palette action / `ffworks package <project> <folder>` copies the project and every media file (image sequences with all frames) into one folder; the copy points at the copies and renders with the originals deleted (`tests/package.rs`). The open project is never changed; missing media is refused by name.
 
 ## Unverified / known gaps
 * Proxies: the file properties are verified (960x540 H.264/AAC), but whether a proxy plays in a webview that cannot decode the original (e.g. ProRes on Windows WebView2) is unverified: this sandbox webview cannot decode H.264 at all, so only the "original fails → offer proxy → proxy created" path was exercised. Markers aren't exported as chapters yet.
