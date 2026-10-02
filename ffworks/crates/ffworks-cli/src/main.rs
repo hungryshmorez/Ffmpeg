@@ -4,7 +4,8 @@
 //!   ffworks presets                                           export presets this FFmpeg can encode
 //!   ffworks probe <media>                                     media info as JSON
 //!   ffworks command <project> [preset] [out]                  print the FFmpeg command (Command Inspector)
-//!   ffworks render <project> <out> [preset]                   export a project with progress
+//!   ffworks render <project> <out> [preset] [--keep]          export a project with progress; `out` may use name
+//!                                                               tokens ({project} {date}...); --keep never overwrites
 //!   ffworks run <project|new> <commands.json> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]
 //!                                                             apply a JSON list of commands (one undo step each, all or nothing)
 //!   ffworks detect <media> <silence|black|freeze> [level] [min-seconds]
@@ -64,6 +65,27 @@ fn convert_file(tools: &Tools, f: &Path, name: &str, out: &Path, preset: &str) -
     render(&eng, tools, out, preset, false)
 }
 
+/// `out` with name tokens (`{project}`, `{date}`... see `naming::TOKENS`) in its file name expanded; the date is UTC.
+fn expand_out(eng: &Engine, out: &str, preset: &str) -> PathBuf {
+    let p = PathBuf::from(out);
+    let Some(name) = p.file_name().and_then(|n| n.to_str()).filter(|n| n.contains('{')) else { return p };
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) => (&name[..i], &name[i..]),
+        None => (name, ""),
+    };
+    let (date, time) = ffworks_core::naming::utc_now();
+    let ctx = ffworks_core::naming::NameContext {
+        project: eng.project.name.clone(),
+        sequence: eng.project.active().map(|s| s.name.clone()).unwrap_or_default(),
+        preset: preset.to_string(),
+        date,
+        time,
+        width: eng.project.settings.width,
+        height: eng.project.settings.height,
+    };
+    p.with_file_name(format!("{}{ext}", ffworks_core::naming::expand(stem, &ctx)))
+}
+
 fn presets_for(tools: &Tools) -> Vec<ExportSettings> {
     let caps = Capabilities::discover(tools).ok();
     ExportSettings::builtin()
@@ -92,8 +114,10 @@ fn run() -> ffworks_core::Result<()> {
         Some(cmd @ ("command" | "render")) => {
             let project = args.get(1).ok_or_else(|| usage(&format!("{cmd} <project.ffworks> ...")))?;
             let eng = Engine::load(Path::new(project), tools.clone())?;
+            // flags may appear anywhere after the project; positions count the other arguments
+            let pos: Vec<String> = args.iter().filter(|a| !a.starts_with("--")).cloned().collect();
             let (out, preset) = if cmd == "render" {
-                (args.get(2).cloned().ok_or_else(|| usage("render <project> <out> [preset]"))?, args.get(3).cloned())
+                (pos.get(2).cloned().ok_or_else(|| usage("render <project> <out> [preset] [--keep]"))?, pos.get(3).cloned())
             } else {
                 (args.get(3).cloned().unwrap_or_else(|| "output.mp4".into()), args.get(2).cloned())
             };
@@ -104,8 +128,10 @@ fn run() -> ffworks_core::Result<()> {
                 job.program = tools.ffmpeg.clone();
                 println!("{}", job.display());
             } else {
-                render(&eng, &tools, Path::new(&out), &preset, true)?;
-                eprintln!("\rdone: {out}");
+                let out = expand_out(&eng, &out, &preset);
+                let out = if args.iter().any(|a| a == "--keep") { ffworks_core::naming::next_free(&out) } else { out };
+                render(&eng, &tools, &out, &preset, true)?;
+                eprintln!("\rdone: {}", out.display());
             }
         }
         Some("run") => {

@@ -101,3 +101,27 @@ fn watch_once_converts_stable_files_once_and_reports_bad_ones() {
     assert_eq!(o.lines().filter(|l| l.starts_with("ok")).count(), 1, "converted once");
     assert!(out.join("a.mp4").exists());
 }
+
+#[test]
+fn render_names_files_from_tokens_and_keep_never_overwrites() {
+    use ffworks_core::commands::Command as C;
+    let dir = tempfile::tempdir().unwrap();
+    let media = clip(dir.path(), "m.mp4");
+    let mut eng = ffworks_core::engine::Engine::new("Trailer", ffworks_core::project::ProjectSettings { width: 160, height: 120, fps: ffworks_core::Rational::from_int(25), sample_rate: 48000 }, ffworks_core::process::Tools::discover(None, None));
+    let m = eng.import_media(Path::new(&media)).unwrap();
+    let v = eng.project.active().unwrap().tracks[0].id.clone();
+    eng.dispatch(C::PlaceClip { media: m, track: v, start: ffworks_core::Rational::ZERO, source_in: None, duration: None, with_audio: true, audio_track: None }).unwrap();
+    let proj = dir.path().join("p.ffworks");
+    eng.save(&proj).unwrap();
+    let out = dir.path().join("{project}_{res}.mp4");
+    for _ in 0..2 {
+        let (ok, _, err) = ffworks(&["render", proj.to_str().unwrap(), out.to_str().unwrap(), "--keep", "h264_mp4"]);
+        assert!(ok, "{err}");
+    }
+    assert!(dir.path().join("Trailer_160x120.mp4").exists(), "tokens expanded");
+    assert!(dir.path().join("Trailer_160x120_v2.mp4").exists(), "the second render did not replace the first");
+    // without --keep the same name is replaced (no _v3)
+    let (ok, _, err) = ffworks(&["render", proj.to_str().unwrap(), out.to_str().unwrap()]);
+    assert!(ok, "{err}");
+    assert!(!dir.path().join("Trailer_160x120_v3.mp4").exists());
+}

@@ -869,11 +869,42 @@ fn preview_command(state: State<AppState>, preset: String, output: String, engin
 }
 
 /// Queue an export. It runs in the background (one at a time by default); progress arrives as `job-state` events.
+/// With `keep_existing`, an output that exists already (or that a queued export will write) gets `_v2`, `_v3`… instead
+/// of being replaced; the job's `output` says which name was used.
 #[tauri::command]
-fn start_export(state: State<AppState>, preset: String, output: String, engine: Option<String>) -> Result<String, String> {
+fn start_export(state: State<AppState>, preset: String, output: String, engine: Option<String>, keep_existing: Option<bool>) -> Result<String, String> {
+    let output = if keep_existing.unwrap_or(false) {
+        let reserved: Vec<PathBuf> = state
+            .queue
+            .snapshot()
+            .into_iter()
+            .filter(|j| matches!(j.state, ffworks_core::jobs::JobState::Queued | ffworks_core::jobs::JobState::Rendering { .. }))
+            .map(|j| PathBuf::from(j.output))
+            .collect();
+        ffworks_core::naming::next_free_except(std::path::Path::new(&output), &reserved).to_string_lossy().into_owned()
+    } else {
+        output
+    };
     let job = build_job(&state, &preset, &output, None, 1, engine.as_deref())?;
     ffworks_core::diskspace::check(&job.output, &preset, job.total_duration.as_f64()).map_err(s)?;
     Ok(state.queue.submit(job, "export", PRIORITY_EXPORT))
+}
+
+/// File stem for an export named by `template` (tokens: see `naming::TOKENS`); `date`/`time` come from the user's clock.
+#[tauri::command]
+fn export_name(state: State<AppState>, template: String, preset: String, date: String, time: String) -> Result<String, String> {
+    let e = state.engine.lock().unwrap();
+    let seq = e.project.active().map_err(s)?;
+    let ctx = ffworks_core::naming::NameContext {
+        project: e.project.name.clone(),
+        sequence: seq.name.clone(),
+        preset,
+        date,
+        time,
+        width: e.project.settings.width,
+        height: e.project.settings.height,
+    };
+    Ok(ffworks_core::naming::expand(&template, &ctx))
 }
 
 #[tauri::command]
@@ -998,12 +1029,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

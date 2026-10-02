@@ -29,4 +29,5 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 6: expressions, modulators, parameter linking, MIDI. Audio-reactive: DONE for loudness, whole or per band ("Follow audio" → keyframes); beat-only triggers not done.
 * Phases 7-9: pixel sort (PARTIAL: frei0r 3.6's `pixels0rt` is offered on Windows where it is bundled; not on Linux test machines with frei0r 1.8, so untested here; no built-in sorter), real motion-vector datamosh / FFglitch motion transfer, corruption lab.
 * Phase 10: plugin system (Extism), local API.
-* Cross-cutting: SQLite index, smart rendering, export naming/versioning, persistent job state across crashes, accessibility pass, colour management, preview/analysis through the job queue.
+* DONE: export naming templates + never-overwrite versioning (dialog and CLI).
+* Cross-cutting: SQLite index, smart rendering, persistent job state across crashes, accessibility pass, colour management, preview/analysis through the job queue.

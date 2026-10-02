@@ -45,6 +45,7 @@ pub mod scenes;
 pub mod scopes;
 pub mod settings;
 pub mod subtitles;
+pub mod naming;
 pub mod reactive;
 pub mod time;
 pub mod titles;

@@ -4,6 +4,15 @@ import { api } from "../api";
 import { useJobs, useProject, useUi } from "../state/stores";
 import type { EngineInfo, ExportPreset, JobEvent } from "../types";
 
+const TEMPLATE_KEY = "ffworks.exportTemplate", KEEP_KEY = "ffworks.exportKeep";
+const stored = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const store = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* not persisted this session */ } };
+/** Local date and time for name templates. */
+function clock(): { date: string; time: string } {
+  const d = new Date(), p = (n: number) => String(n).padStart(2, "0");
+  return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, time: `${p(d.getHours())}${p(d.getMinutes())}` };
+}
+
 export function ExportDialog() {
   const open = useUi((s) => s.exportOpen);
   const setOpen = useUi((s) => s.setExportOpen);
@@ -19,6 +28,8 @@ export function ExportDialog() {
   const [verify, setVerify] = useState<string | null>(null);
   const [engines, setEngines] = useState<EngineInfo[]>([]);
   const [engine, setEngine] = useState("default");
+  const [template, setTemplate] = useState(() => stored(TEMPLATE_KEY, "{project}"));
+  const [keep, setKeep] = useState(() => stored(KEEP_KEY, "1") === "1");
 
   useEffect(() => { void api.listExportPresets().then(setPresets); }, []);
   useEffect(() => { if (open) void api.listEngines().then((r) => { setEngines(r.engines.filter((x) => x.ok)); setEngine((cur) => (r.engines.some((x) => x.id === cur) ? cur : r.active)); }); }, [open]);
@@ -35,12 +46,14 @@ export function ExportDialog() {
   const running = job && (job.state === "queued" || job.state === "rendering");
   const choose = async () => {
     const ext = p?.extension ?? "mp4";
-    const picked = await save({ title: "Export to", defaultPath: `${view.project.name}.${ext}`, filters: [{ name: p?.name ?? ext, extensions: [ext] }] });
+    const { date, time } = clock();
+    const stem = await api.exportName(template, preset, date, time).catch(() => view.project.name);
+    const picked = await save({ title: "Export to", defaultPath: `${stem}.${ext}`, filters: [{ name: p?.name ?? ext, extensions: [ext] }] });
     if (picked) setOutput(picked);
   };
   const start = async () => {
     setVerify(null);
-    try { setJobId(await api.startExport(preset, output, engine)); } catch (e) { toast("error", String(e)); }
+    try { setJobId(await api.startExport(preset, output, engine, keep)); } catch (e) { toast("error", String(e)); }
   };
 
   return (
@@ -64,6 +77,12 @@ export function ExportDialog() {
         <div className="field">
           <label>Destination</label>
           <div className="row"><input readOnly value={output} placeholder="Choose a file…" aria-label="Destination" /><button onClick={() => void choose()}>Browse…</button></div>
+        </div>
+        <div className="field">
+          <label htmlFor="name-template">File name</label>
+          <input id="name-template" aria-label="File name template" value={template} onChange={(e) => { setTemplate(e.target.value); store(TEMPLATE_KEY, e.target.value); }} title="Used when you press Browse… Tokens: {project} {sequence} {preset} {date} {time} {res}" />
+          <span className="muted">Tokens: {"{project} {sequence} {preset} {date} {time} {res}"} — used as the suggested name in Browse…</span>
+          <label className="check"><input type="checkbox" aria-label="Keep earlier exports" checked={keep} onChange={(e) => { setKeep(e.target.checked); store(KEEP_KEY, e.target.checked ? "1" : "0"); }} /> Keep earlier exports (save as _v2, _v3… instead of replacing an existing file)</label>
         </div>
         <details><summary>FFmpeg command (Command Inspector)</summary><pre className="cmd">{command || "Choose a destination to see the exact FFmpeg command."}</pre></details>
         {job && (
