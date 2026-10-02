@@ -35,6 +35,7 @@
 
     // favourites: star the current pick, make a group, put noise in it
     const star = await waitFor(() => $("button[aria-label='Add to favourites']"));
+    await waitFor(() => $("select[aria-label='Effect to add']").options.length > 3);
     const picked = $("select[aria-label='Effect to add']").value;
     star.click();
     await waitFor(() => $("button[aria-label='Remove from favourites']"));
