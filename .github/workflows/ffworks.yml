@@ -89,19 +89,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: choco install ffmpeg -y --no-progress
-      - name: Fetch pinned FFmpeg to bundle with the installer
-        shell: pwsh
-        run: |
-          $url = "https://github.com/GyanD/codexffmpeg/releases/download/7.1.1/ffmpeg-7.1.1-essentials_build.zip"
-          $sha = "04861d3339c5ebe38b56c19a15cf2c0cc97f5de4fa8910e4d47e5e6404e4a2d4"
-          Invoke-WebRequest $url -OutFile ffmpeg.zip
-          $got = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
-          if ($got -ne $sha) { throw "FFmpeg download checksum mismatch: $got" }
-          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-extract
-          $root = Get-ChildItem ffmpeg-extract -Directory | Select-Object -First 1
-          New-Item -ItemType Directory -Force src-tauri/ffmpeg-bin | Out-Null
-          Copy-Item "$($root.FullName)/bin/ffmpeg.exe","$($root.FullName)/bin/ffprobe.exe","$($root.FullName)/LICENSE","$($root.FullName)/README.txt" src-tauri/ffmpeg-bin/
-          Copy-Item THIRD_PARTY_NOTICES.md src-tauri/ffmpeg-bin/
       - run: npm ci --prefix ui
       - run: cargo test -p ffworks-core
       - run: npx --prefix ui tauri build
