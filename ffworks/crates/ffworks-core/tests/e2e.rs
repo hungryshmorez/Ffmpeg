@@ -607,3 +607,96 @@ mod queue_tests {
         q.shutdown();
     }
 }
+
+fn transition_project(dir: &Path, kind: &str) -> Engine {
+    let a = fixture(dir, "ta.mp4", "red", "320x240", "25", 440, 4);
+    let b = fixture(dir, "tb.mp4", "blue", "320x240", "25", 880, 4);
+    let mut eng = Engine::new("tr", ProjectSettings { width: 320, height: 240, fps: secs(25), sample_rate: 48000 }, tools());
+    let (ma, mb) = (eng.import_media(&a).unwrap(), eng.import_media(&b).unwrap());
+    let v = eng.project.active().unwrap().tracks[0].id.clone();
+    // A: timeline 0..2 from source 0..2 (handle after out point available); B: 2..4 from source 1..3 (handle before in point)
+    eng.dispatch(Command::PlaceClip { media: ma, track: v.clone(), start: secs(0), source_in: Some(secs(0)), duration: Some(secs(2)), with_audio: true, audio_track: None }).unwrap();
+    eng.dispatch(Command::PlaceClip { media: mb, track: v, start: secs(2), source_in: Some(secs(1)), duration: Some(secs(2)), with_audio: true, audio_track: None }).unwrap();
+    let t = &eng.project.active().unwrap().tracks[0];
+    let (ca, cb) = (t.clips[0].id.clone(), t.clips[1].id.clone());
+    eng.dispatch(Command::AddTransition { clip_a: ca, clip_b: cb, kind: kind.into(), duration: secs(1) }).unwrap();
+    eng
+}
+
+#[test]
+fn cross_dissolve_blends_video_and_audio_at_the_cut_without_changing_length() {
+    let dir = tempfile::tempdir().unwrap();
+    let eng = transition_project(dir.path(), "fade");
+    let out = dir.path().join("t.mp4");
+    export(&eng, &out, "h264_mp4");
+    let info = probe(&tools(), &out).unwrap();
+    assert!((info.duration.as_f64() - 4.0).abs() < 0.1, "length unchanged: {}", info.duration.as_f64());
+    let red = pixel_at(&out, 1.0);
+    let mid = pixel_at(&out, 2.0);
+    let blue = pixel_at(&out, 3.0);
+    assert!(red.0 > 170 && red.2 < 60, "before the transition: red {red:?}");
+    assert!(blue.2 > 170 && blue.0 < 60, "after the transition: blue {blue:?}");
+    assert!(mid.0 > 50 && mid.2 > 50 && mid.0 < 200 && mid.2 < 200, "at the cut both colours are present: {mid:?}");
+    // progress through the dissolve is monotonic: more red earlier, more blue later
+    let (early, late) = (pixel_at(&out, 1.65), pixel_at(&out, 2.35));
+    assert!(early.0 > late.0 && early.2 < late.2, "{early:?} -> {late:?}");
+    // audio is continuous through the cut (a plain cut would also be, but a missing/extra gap would drop the level)
+    assert!(mean_volume_db(&out, 1.7, 0.6) > -35.0);
+    assert!(mean_volume_db(&out, 0.2, 1.0) > -35.0 && mean_volume_db(&out, 2.8, 1.0) > -35.0);
+}
+
+#[test]
+fn dip_to_black_goes_dark_at_the_cut_and_the_transition_is_deterministic() {
+    let dir = tempfile::tempdir().unwrap();
+    let eng = transition_project(dir.path(), "fadeblack");
+    let out = dir.path().join("d.mp4");
+    export(&eng, &out, "h264_mp4");
+    let mid = pixel_at(&out, 2.0);
+    // pure blue is ~219; at the midpoint of fadeblack the picture is (nearly) black
+    assert!(mid.0 < 60 && mid.1 < 60 && mid.2 < 110, "dip to black at the cut: {mid:?}");
+    // same project exports to the same preview key / graph
+    let g1 = render_graph::build(&eng.project).unwrap();
+    let g2 = render_graph::build(&eng.project).unwrap();
+    assert_eq!(g1, g2);
+}
+
+#[test]
+fn every_transition_kind_renders_in_real_ffmpeg() {
+    let dir = tempfile::tempdir().unwrap();
+    for (kind, _) in ffworks_core::transitions::KINDS {
+        let eng = transition_project(dir.path(), kind);
+        let out = dir.path().join(format!("{kind}.mp4"));
+        export(&eng, &out, "h264_mp4"); // panics with FFmpeg's message if the graph is rejected
+        assert!((probe(&tools(), &out).unwrap().duration.as_f64() - 4.0).abs() < 0.15, "{kind}");
+    }
+}
+
+#[test]
+fn missing_xfade_is_reported_before_running() {
+    let dir = tempfile::tempdir().unwrap();
+    let eng = transition_project(dir.path(), "fade");
+    let mut caps = Capabilities::discover(&tools()).unwrap();
+    caps.filters.remove("xfade");
+    let g = render_graph::build(&eng.project).unwrap();
+    let r = compile(&g, &RenderOptions { output: dir.path().join("o.mp4"), settings: ExportSettings::find("h264_mp4").unwrap(), range: None, scale_div: 1 }, Some(&caps));
+    assert!(matches!(r, Err(Error::Validation(m)) if m.contains("xfade")));
+}
+
+
+#[test]
+fn same_media_used_far_apart_keeps_audio_in_both_places() {
+    // Regression: sharing one input between branches via split/asplit starved the late branch (silent audio).
+    let dir = tempfile::tempdir().unwrap();
+    let src = fixture(dir.path(), "s.mp4", "red", "320x240", "25", 440, 4);
+    let mut eng = Engine::new("t", ProjectSettings { width: 320, height: 240, fps: secs(25), sample_rate: 48000 }, tools());
+    let m = eng.import_media(&src).unwrap();
+    let v = eng.project.active().unwrap().tracks[0].id.clone();
+    for (start, s_in) in [(0, 0), (6, 2)] {
+        eng.dispatch(Command::PlaceClip { media: m.clone(), track: v.clone(), start: secs(start), source_in: Some(secs(s_in)), duration: Some(secs(2)), with_audio: true, audio_track: None }).unwrap();
+    }
+    let out = dir.path().join("o.mp4");
+    export(&eng, &out, "h264_mp4");
+    assert!(mean_volume_db(&out, 0.3, 1.5) > -35.0, "first use has audio");
+    assert!(mean_volume_db(&out, 6.3, 1.5) > -35.0, "second, much later use has audio");
+    assert!(mean_volume_db(&out, 3.0, 2.0) < -60.0, "gap is silent");
+}

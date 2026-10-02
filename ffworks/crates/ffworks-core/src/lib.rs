@@ -20,6 +20,7 @@ pub mod relink;
 pub mod render_graph;
 pub mod settings;
 pub mod time;
+pub mod transitions;
 
 pub use commands::{Command, Edge};
 pub use engine::Engine;

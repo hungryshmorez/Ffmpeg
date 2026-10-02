@@ -141,102 +141,122 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
     let h = (g.height / opts.scale_div).max(2) & !1;
     let fps = fps_expr(g);
 
-    // Which inputs are referenced how many times, per stream kind (so we can split them).
-    let mut v_uses = vec![0usize; g.inputs.len()];
-    let mut a_uses = vec![0usize; g.inputs.len()];
-    for s in &g.video {
-        v_uses[s.input] += 1;
+    const MAX_INPUTS: usize = 200;
+    if g.inputs.len() > MAX_INPUTS {
+        return Err(Error::validation(format!(
+            "this render needs {} simultaneous source files; the limit is {MAX_INPUTS} (OS file-handle limits). Render a time range, or split the project",
+            g.inputs.len()
+        )));
     }
-    for s in &g.audio {
-        a_uses[s.input] += 1;
-    }
+    let require = |names: &[String]| -> Result<()> {
+        if let Some(caps) = caps {
+            for r in names {
+                if !caps.has_filter(r) {
+                    return Err(Error::validation(format!("FFmpeg filter '{r}' needed by an effect or transition is not available in this build")));
+                }
+            }
+        }
+        Ok(())
+    };
 
     let mut f: Vec<String> = vec![];
     if want_video {
-        for (i, n) in v_uses.iter().enumerate().filter(|(_, n)| **n > 1) {
-            let outs: String = (0..*n).map(|k| format!("[v{i}_{k}]")).collect();
-            f.push(format!("[{i}:v:0]split={n}{outs}"));
-        }
         f.push(format!("color=c=black:s={w}x{h}:r={fps}:d={},format=yuv420p[base0]", secs(g.duration)));
-        let mut used = vec![0usize; g.inputs.len()];
-        let mut layer_idx = 0;
-        for seg in &g.video {
-            let label = if v_uses[seg.input] > 1 {
-                let k = used[seg.input];
-                used[seg.input] += 1;
-                format!("[v{}_{k}]", seg.input)
-            } else {
-                format!("[{}:v:0]", seg.input)
-            };
-            // Half a *source* frame is subtracted from trim bounds so decimal rounding can never
-            // exclude the frame sitting exactly on a boundary.
-            let half = g.inputs[seg.input].src_fps.map(|f| Rational::new(1, 2).div(f)).unwrap_or_else(|| Rational::new(1, 2).div(g.fps));
-            let t0 = (seg.source_in - half).max(Rational::ZERO);
-            let t1 = seg.source_in + seg.duration - half;
-            if let Some(caps) = caps {
-                for r in &seg.requires {
-                    if !caps.has_filter(r) {
-                        return Err(Error::validation(format!("FFmpeg filter '{r}' needed by an effect is not available in this build")));
-                    }
-                }
-            }
-            // Effects run after scaling so their parameters are relative to the output frame.
+        // every input stream is consumed by exactly one chain (see `InputRef::key`)
+        let take = |input: usize| -> String { format!("[{input}:v:0]") };
+        // Half a *source* frame is subtracted from trim bounds so decimal rounding can never
+        // exclude the frame sitting exactly on a boundary.
+        let src_half = |input: usize| g.inputs[input].src_fps.map(|f| Rational::new(1, 2).div(f)).unwrap_or_else(|| Rational::new(1, 2).div(g.fps));
+        // Scale/pad to the project frame, trim the source range, restart timestamps, then effects. `shift` places the
+        // result on the timeline; transition parts stay at 0 and are placed after the blend.
+        let vchain = |label: &str, input: usize, source_in: Rational, dur: Rational, shift: Option<Rational>, filters: &[String]| -> String {
+            let t0 = (source_in - src_half(input)).max(Rational::ZERO);
+            let t1 = source_in + dur - src_half(input);
+            let place = shift.map(|st| format!("+{}/TB", secs(st))).unwrap_or_default();
             let mut chain = format!(
-                "{label}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS+{}/TB,fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p",
+                "{label}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS{place},fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p",
                 secs(t0),
                 secs(t1),
-                secs(seg.start),
             );
-            for fx in &seg.filters {
+            for fx in filters {
                 chain.push(',');
                 chain.push_str(fx);
             }
-            let translucent = seg.opacity < 1.0;
-            if translucent {
-                chain.push_str(&format!(",format=yuva420p,colorchannelmixer=aa={}", seg.opacity));
-            } else {
-                chain.push_str(",format=yuv420p");
-            }
-            chain.push_str(&format!("[vs{layer_idx}]"));
-            f.push(chain);
-            let fmt = if translucent { ":format=auto" } else { "" };
-            f.push(format!("[base{layer_idx}][vs{layer_idx}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", layer_idx + 1));
-            layer_idx += 1;
+            chain
+        };
+        enum Item<'a> {
+            Seg(&'a crate::render_graph::VideoSegment),
+            Tr(&'a crate::render_graph::VideoTransition),
         }
-        f.push(format!("[base{layer_idx}]null[vout]"));
+        let mut items: Vec<(usize, Item)> = g.video.iter().map(|s| (s.layer, Item::Seg(s))).chain(g.video_transitions.iter().map(|t| (t.layer, Item::Tr(t)))).collect();
+        items.sort_by_key(|(l, _)| *l); // stable: compositing order = track order
+        for (n, (_, item)) in items.iter().enumerate() {
+            match item {
+                Item::Seg(seg) => {
+                    require(&seg.requires)?;
+                    let label = take(seg.input);
+                    let mut chain = vchain(&label, seg.input, seg.source_in, seg.duration, Some(seg.start), &seg.filters);
+                    let translucent = seg.opacity < 1.0;
+                    if translucent {
+                        chain.push_str(&format!(",format=yuva420p,colorchannelmixer=aa={}", seg.opacity));
+                    } else {
+                        chain.push_str(",format=yuv420p");
+                    }
+                    chain.push_str(&format!("[vs{n}]"));
+                    f.push(chain);
+                    let fmt = if translucent { ":format=auto" } else { "" };
+                    f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", n + 1));
+                }
+                Item::Tr(t) => {
+                    require(&t.a.requires)?;
+                    require(&t.b.requires)?;
+                    require(&["xfade".to_string()])?;
+                    let (la, lb) = (take(t.a.input), take(t.b.input));
+                    f.push(format!("{}[ta{n}]", vchain(&la, t.a.input, t.a.source_in, t.duration, None, &t.a.filters)));
+                    f.push(format!("{}[tb{n}]", vchain(&lb, t.b.input, t.b.source_in, t.duration, None, &t.b.filters)));
+                    f.push(format!("[ta{n}][tb{n}]xfade=transition={}:duration={}:offset=0,setpts=PTS-STARTPTS+{}/TB,format=yuv420p[vs{n}]", t.kind, secs(t.duration), secs(t.start)));
+                    f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0[base{}]", n + 1));
+                }
+            }
+        }
+        f.push(format!("[base{}]null[vout]", items.len()));
     }
     if want_audio {
         let sr = g.sample_rate;
-        for (i, n) in a_uses.iter().enumerate().filter(|(_, n)| **n > 1) {
-            let outs: String = (0..*n).map(|k| format!("[a{i}_{k}]")).collect();
-            f.push(format!("[{i}:a:0]asplit={n}{outs}"));
-        }
-        let total_samples = g.duration.round_units(Rational::from_int(sr as i64));
+        let rate = Rational::from_int(sr as i64);
+        let total_samples = g.duration.round_units(rate);
         f.push(format!("anullsrc=r={sr}:cl=stereo,atrim=end_sample={total_samples},asetpts=PTS-STARTPTS[asil]"));
         let mut labels = vec!["[asil]".to_string()];
-        let mut used = vec![0usize; g.inputs.len()];
+        let take = |input: usize| -> String { format!("[{input}:a:0]") };
+        // Sample-accurate trim of `len` samples starting at `s0`, plus gain.
+        let achain = |label: &str, s0: i64, s1: i64, gain_db: f64| -> String {
+            let mut chain = format!("{label}aresample={sr},aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS,atrim=start_sample={s0}:end_sample={s1},asetpts=PTS-STARTPTS");
+            if gain_db != 0.0 {
+                chain.push_str(&format!(",volume={gain_db:.4}dB"));
+            }
+            chain
+        };
+        let delay_of = |start: Rational| {
+            let d = start.round_units(rate);
+            if d > 0 { format!(",adelay={d}S|{d}S") } else { String::new() }
+        };
         for (k, seg) in g.audio.iter().enumerate() {
-            let label = if a_uses[seg.input] > 1 {
-                let u = used[seg.input];
-                used[seg.input] += 1;
-                format!("[a{}_{u}]", seg.input)
-            } else {
-                format!("[{}:a:0]", seg.input)
-            };
-            let rate = Rational::from_int(sr as i64);
+            let label = take(seg.input);
             let s0 = seg.source_in.round_units(rate);
             let s1 = (seg.source_in + seg.duration).round_units(rate);
-            let delay = seg.start.round_units(rate);
-            let mut chain = format!("{label}aresample={sr},aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS,atrim=start_sample={s0}:end_sample={s1},asetpts=PTS-STARTPTS");
-            if seg.gain_db != 0.0 {
-                chain.push_str(&format!(",volume={:.4}dB", seg.gain_db));
-            }
-            if delay > 0 {
-                chain.push_str(&format!(",adelay={delay}S|{delay}S"));
-            }
-            chain.push_str(&format!("[as{k}]"));
-            f.push(chain);
+            f.push(format!("{}{}[as{k}]", achain(&label, s0, s1, seg.gain_db), delay_of(seg.start)));
             labels.push(format!("[as{k}]"));
+        }
+        for (k, t) in g.audio_transitions.iter().enumerate() {
+            require(&["acrossfade".to_string()])?;
+            // both parts must have exactly the same sample count
+            let len = t.duration.round_units(rate);
+            let (sa, sb) = (t.a.source_in.round_units(rate), t.b.source_in.round_units(rate));
+            let (la, lb) = (take(t.a.input), take(t.b.input));
+            f.push(format!("{}[xa{k}]", achain(&la, sa, sa + len, t.a.gain_db)));
+            f.push(format!("{}[xb{k}]", achain(&lb, sb, sb + len, t.b.gain_db)));
+            f.push(format!("[xa{k}][xb{k}]acrossfade=d={}:c1=tri:c2=tri{}[at{k}]", secs(t.duration), delay_of(t.start)));
+            labels.push(format!("[at{k}]"));
         }
         f.push(format!("{}amix=inputs={}:normalize=0:duration=longest:dropout_transition=0,atrim=end_sample={total_samples}[aout]", labels.concat(), labels.len()));
     }

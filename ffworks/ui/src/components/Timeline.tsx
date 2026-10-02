@@ -3,7 +3,7 @@ import { fpsOf, fromSec, snapToFrame, timecode, toSec } from "../time";
 import { beatPoints, dbToGain, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
 import { usePlayhead, useProject, useUi } from "../state/stores";
-import type { Clip, Sequence, Track } from "../types";
+import type { Clip, Sequence, Track, Transition } from "../types";
 
 const HEADER_W = 132;
 const ROW_H: Record<string, number> = { video: 54, audio: 48 };
@@ -120,6 +120,7 @@ function TrackRow({ seq, track, px, fps, width }: { seq: Sequence; track: Track;
         </button>
       </div>
       <div className="track-clips" data-track-id={track.id} data-track-kind={track.kind} style={{ width, marginLeft: HEADER_W, opacity: track.muted ? 0.45 : 1 }}>
+        {track.transitions.map((t) => <TransitionMark key={t.id} t={t} track={track} px={px} />)}
         {track.clips.map((c) => (
           <ClipView key={c.id} clip={c} track={track} seq={seq} px={px} fps={fps} height={h - 4} />
         ))}
@@ -281,6 +282,19 @@ function BeatTicks({ mediaId, sourceIn, duration, px }: { mediaId: string; sourc
   return (
     <div className="beat-ticks" aria-hidden>
       {ticks.map((t) => <i key={t} style={{ left: (t - sourceIn) * px }} />)}
+    </div>
+  );
+}
+
+/** Visual marker centred on the cut: spans the blended region. */
+function TransitionMark({ t, track, px }: { t: Transition; track: Track; px: number }) {
+  const a = track.clips.find((c) => c.id === t.clip_a);
+  if (!a) return null;
+  const cut = toSec(a.start) + toSec(a.duration);
+  const d = toSec(t.duration);
+  return (
+    <div className="transition-mark" style={{ left: (cut - d / 2) * px, width: Math.max(4, d * px) }} title={`${t.kind} · ${d.toFixed(2)} s`} data-transition-mark={t.id}>
+      <span>{t.kind}</span>
     </div>
   );
 }

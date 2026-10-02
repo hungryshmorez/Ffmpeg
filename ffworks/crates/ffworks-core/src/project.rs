@@ -5,6 +5,7 @@ use crate::error::{Error, Result};
 use crate::effects::EffectInstance;
 use crate::ffprobe::MediaInfo;
 use crate::time::{Fps, Rational};
+use crate::transitions::Transition;
 use serde::{Deserialize, Serialize};
 
 pub const SCHEMA_VERSION: u32 = 1;
@@ -62,6 +63,9 @@ pub struct Track {
     /// Clips sorted by `start`, non-overlapping.
     #[serde(default)]
     pub clips: Vec<Clip>,
+    /// Transitions on adjacent clip pairs (video tracks).
+    #[serde(default)]
+    pub transitions: Vec<Transition>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -112,8 +116,8 @@ impl Sequence {
             id: new_id("seq"),
             name: name.into(),
             tracks: vec![
-                Track { id: new_id("trk"), name: "V1".into(), kind: TrackKind::Video, muted: false, locked: false, gain_db: 0.0, clips: vec![] },
-                Track { id: new_id("trk"), name: "A1".into(), kind: TrackKind::Audio, muted: false, locked: false, gain_db: 0.0, clips: vec![] },
+                Track { id: new_id("trk"), name: "V1".into(), kind: TrackKind::Video, muted: false, locked: false, gain_db: 0.0, clips: vec![], transitions: vec![] },
+                Track { id: new_id("trk"), name: "A1".into(), kind: TrackKind::Audio, muted: false, locked: false, gain_db: 0.0, clips: vec![], transitions: vec![] },
             ],
         }
     }
@@ -205,6 +209,7 @@ impl Project {
                     }
                     prev_end = Some(c.end());
                 }
+                crate::transitions::validate_track(self, t)?;
             }
         }
         Ok(())

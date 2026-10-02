@@ -50,6 +50,12 @@ A registry of `EffectDef`s (id, category, required FFmpeg filters, `ParamDef`s w
 
 **Preview/final parity:** preview renders (`range`, `scale_div`) use the same compiler; only resolution/range differ.
 
+## Transitions (`transitions.rs`)
+
+`Track.transitions` holds `{clip_a, clip_b, kind, duration}` for touching clips on a video track. A transition is centred on the cut: the render graph shortens A and B by `duration/2` each and adds an overlapped segment that `xfade`s A's media *after* its out point with B's media *before* its in point (handles), so the timeline length never changes; linked audio gets an `acrossfade` of the same span. Durations snap to an even number of frames. `Project::validate` enforces adjacency, opacity = 100 %, handle availability and that transitions don't consume whole clips; moving/trimming/splitting a transitioned clip is therefore refused with an explanation, while deleting a clip removes its transitions automatically.
+
+**Render-graph inputs:** every clip use (linked A/V share one) and every transition side gets its own `-i`. Sharing one input across branches with `split`/`asplit` starved branches that were consumed at very different times (the crossfade audio came out silent), so splitting is not used; a render needing more than 200 simultaneous inputs is refused with an explanation (OS file-handle limits).
+
 ## Preview (`preview.rs`)
 
 `preview::render` compiles the same render graph with a `range` and `scale_div` into a cached `previews/<key>.mp4`. The key is a SHA-256 of the project JSON (minus the display name) + range + quality, so any edit yields a new key and the UI compares `renderHash` to decide whether a preview is current. Cached hits skip FFmpeg. Not yet done: per-range invalidation, background pre-render, frame cache.

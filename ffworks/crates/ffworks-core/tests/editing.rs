@@ -323,3 +323,88 @@ fn autosave_recovery_rotation_and_corruption_fallback() {
     recovery::clear(&ad);
     assert!(recovery::find(&ad).is_none());
 }
+
+fn two_clips(e: &mut Engine, m: &str, v: &str, a_in: i64, b_in: i64) -> (String, String) {
+    // A: timeline 0..2 from source a_in..a_in+2 ; B: 2..4 from source b_in..b_in+2 (media is 10 s long)
+    let mk = |start: i64, s_in: i64| Command::PlaceClip { media: m.into(), track: v.into(), start: secs(start), source_in: Some(secs(s_in)), duration: Some(secs(2)), with_audio: true, audio_track: None };
+    e.dispatch(mk(0, a_in)).unwrap();
+    e.dispatch(mk(2, b_in)).unwrap();
+    let t = &e.project.active().unwrap().tracks[0];
+    (t.clips[0].id.clone(), t.clips[1].id.clone())
+}
+
+#[test]
+fn transitions_validate_handles_adjacency_and_undo() {
+    let (mut e, m, v, _) = engine();
+    let (a, b) = two_clips(&mut e, &m, &v, 3, 4);
+    let add = |k: &str, d: Rational| Command::AddTransition { clip_a: a.clone(), clip_b: b.clone(), kind: k.into(), duration: d };
+    assert!(e.dispatch(add("bogus", secs(1))).is_err());
+    let before = e.project.clone();
+    e.dispatch(add("fade", r(1, 2))).unwrap(); // 15 frames -> snapped to 16 frames
+    let t = e.project.active().unwrap().tracks[0].transitions[0].clone();
+    assert_eq!(t.duration, r(8, 15));
+    assert!(e.dispatch(add("fade", secs(1))).is_err(), "one transition per cut");
+    // moving / trimming a clip that is part of a transition is refused with a clear message
+    let err = e.dispatch(Command::MoveClip { clip: b.clone(), start: secs(3), track: None }).unwrap_err().to_string();
+    assert!(err.contains("touch") || err.contains("transition"), "{err}");
+    // edit then undo
+    e.dispatch(Command::SetTransition { transition: t.id.clone(), kind: Some("wipeleft".into()), duration: Some(secs(1)) }).unwrap();
+    assert_eq!(e.project.active().unwrap().tracks[0].transitions[0].kind, "wipeleft");
+    e.undo().unwrap();
+    assert_eq!(e.project.active().unwrap().tracks[0].transitions[0].kind, "fade");
+    e.undo().unwrap();
+    assert_eq!(e.project, before);
+    // save/load keeps them
+    e.redo().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("t.ffworks");
+    e.save(&p).unwrap();
+    assert_eq!(Engine::load(&p, Tools { ffmpeg: "ffmpeg".into(), ffprobe: "ffprobe".into() }).unwrap().project, e.project);
+    // deleting a clip removes its transition automatically (and undo restores both)
+    let with = e.project.clone();
+    e.dispatch(Command::DeleteClip { clip: a.clone(), ripple: false }).unwrap();
+    assert!(e.project.active().unwrap().tracks[0].transitions.is_empty());
+    e.undo().unwrap();
+    assert_eq!(e.project, with);
+}
+
+#[test]
+fn transitions_need_media_handles_and_opacity_100() {
+    let (mut e, m, v, _) = engine();
+    // A ends exactly at the media end (source 8..10): no handle after its out point
+    let (a, b) = two_clips(&mut e, &m, &v, 8, 4);
+    let err = e.dispatch(Command::AddTransition { clip_a: a.clone(), clip_b: b.clone(), kind: "fade".into(), duration: secs(1) }).unwrap_err().to_string();
+    assert!(err.contains("no media left after"), "{err}");
+    // B starts at source 0: no handle before its in point
+    let (mut e2, m2, v2, _) = engine();
+    let (a2, b2) = two_clips(&mut e2, &m2, &v2, 3, 0);
+    let err = e2.dispatch(Command::AddTransition { clip_a: a2.clone(), clip_b: b2.clone(), kind: "fade".into(), duration: secs(1) }).unwrap_err().to_string();
+    assert!(err.contains("no media before"), "{err}");
+    // opacity < 1 not allowed
+    let (mut e3, m3, v3, _) = engine();
+    let (a3, b3) = two_clips(&mut e3, &m3, &v3, 3, 4);
+    e3.dispatch(Command::SetClipOpacity { clip: a3.clone(), opacity: 0.5 }).unwrap();
+    assert!(e3.dispatch(Command::AddTransition { clip_a: a3, clip_b: b3, kind: "fade".into(), duration: secs(1) }).is_err());
+    // non-adjacent
+    let (mut e4, m4, v4, _) = engine();
+    e4.dispatch(Command::PlaceClip { media: m4.clone(), track: v4.clone(), start: secs(0), source_in: Some(secs(3)), duration: Some(secs(2)), with_audio: true, audio_track: None }).unwrap();
+    e4.dispatch(Command::PlaceClip { media: m4, track: v4, start: secs(3), source_in: Some(secs(4)), duration: Some(secs(2)), with_audio: true, audio_track: None }).unwrap();
+    let t = &e4.project.active().unwrap().tracks[0];
+    assert!(e4.dispatch(Command::AddTransition { clip_a: t.clips[0].id.clone(), clip_b: t.clips[1].id.clone(), kind: "fade".into(), duration: secs(1) }).is_err());
+}
+
+#[test]
+fn render_graph_splits_clips_around_a_transition() {
+    let (mut e, m, v, _) = engine();
+    let (a, b) = two_clips(&mut e, &m, &v, 3, 4);
+    e.dispatch(Command::AddTransition { clip_a: a, clip_b: b, kind: "fade".into(), duration: secs(1) }).unwrap();
+    let g = ffworks_core::render_graph::build(&e.project).unwrap();
+    // A: 0..1.5 (source 3..4.5); transition 1.5..2.5; B: 2.5..4 (source 4.5..6)
+    assert_eq!(g.video.iter().map(|s| (s.start, s.source_in, s.duration)).collect::<Vec<_>>(), vec![(secs(0), secs(3), r(3, 2)), (r(5, 2), r(9, 2), r(3, 2))]);
+    let t = &g.video_transitions[0];
+    // A part = source 3+2-0.5 = 4.5 s; B part = source 4-0.5 = 3.5 s
+    assert_eq!((t.start, t.duration, t.a.source_in, t.b.source_in), (r(3, 2), secs(1), r(9, 2), r(7, 2)));
+    // linked audio crossfades too
+    assert_eq!(g.audio_transitions.len(), 1);
+    assert_eq!(g.audio.len(), 2);
+}

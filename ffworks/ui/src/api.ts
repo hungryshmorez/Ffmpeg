@@ -22,6 +22,7 @@ export const api = {
   setSettings: (ffmpegPath: string | null, ffprobePath: string | null) => invoke<{ ffmpeg: string; ffprobe: string }>("set_settings", { ffmpegPath, ffprobePath }),
   relinkSearch: (dir: string) => invoke<RelinkResult>("relink_search", { dir }),
   relinkMedia: (mediaId: string, path: string) => invoke<StateView>("relink_media", { mediaId, path }),
+  listTransitions: () => invoke<[string, string][]>("list_transitions"),
   listEffects: () => invoke<EffectDef[]>("list_effects"),
   renderPreview: (start: string, end: string, scaleDiv: number) => invoke<PreviewInfo>("render_preview", { start, end, scaleDiv }),
   listExportPresets: () => invoke<ExportPreset[]>("list_export_presets"),

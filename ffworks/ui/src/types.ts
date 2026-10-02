@@ -11,7 +11,8 @@ export interface EffectInstance { id: string; effect: string; enabled: boolean; 
 export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string }
 export interface EffectDef { id: string; name: string; category: string; requires: string[]; params: ParamDef[] }
 export interface Clip { id: string; media: string; name: string; kind: TrackKind; start: Rational; source_in: Rational; duration: Rational; link: string | null; gain_db: number; opacity: number; effects: EffectInstance[] }
-export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; clips: Clip[] }
+export interface Transition { id: string; clip_a: string; clip_b: string; kind: string; duration: Rational }
+export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; clips: Clip[]; transitions: Transition[] }
 export interface Sequence { id: string; name: string; tracks: Track[] }
 export interface ProjectSettings { width: number; height: number; fps: Rational; sample_rate: number }
 export interface Project { schema_version: number; name: string; settings: ProjectSettings; media: MediaAsset[]; sequences: Sequence[]; active_sequence: string }
@@ -48,6 +49,9 @@ export type Command =
   | { type: "set_effect_enabled"; clip: string; effect_id: string; enabled: boolean }
   | { type: "move_effect"; clip: string; effect_id: string; index: number }
   | { type: "set_clip_opacity"; clip: string; opacity: number }
+  | { type: "add_transition"; clip_a: string; clip_b: string; kind: string; duration: Rational }
+  | { type: "remove_transition"; transition: string }
+  | { type: "set_transition"; transition: string; kind?: string | null; duration?: Rational | null }
   | { type: "rename_project"; name: string };
 
 export interface Waveform { bins_per_sec: number; peaks: number[] }

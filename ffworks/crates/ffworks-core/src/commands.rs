@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use crate::patch::Patch;
 use crate::project::{new_id, Clip, Id, MediaAsset, Project, ProjectSettings, Track, TrackKind};
 use crate::time::{snap_to_frame, Rational};
+use crate::transitions::{self, Transition};
 use crate::effects::{self, EffectInstance};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -54,6 +55,10 @@ pub enum Command {
     SetEffectEnabled { clip: Id, effect_id: Id, enabled: bool },
     MoveEffect { clip: Id, effect_id: Id, index: usize },
     SetClipOpacity { clip: Id, opacity: f64 },
+    /// Blend two adjacent clips on a video track (`kind` is an xfade name; see `transitions::KINDS`).
+    AddTransition { clip_a: Id, clip_b: Id, kind: String, duration: Rational },
+    RemoveTransition { transition: Id },
+    SetTransition { transition: Id, kind: Option<String>, duration: Option<Rational> },
     /// Several commands applied as one undo step (spec §112).
     Batch { label: String, commands: Vec<Command> },
 }
@@ -86,6 +91,9 @@ impl Command {
             Command::SetEffectEnabled { .. } => "Toggle effect".into(),
             Command::MoveEffect { .. } => "Reorder effect".into(),
             Command::SetClipOpacity { .. } => "Clip opacity".into(),
+            Command::AddTransition { kind, .. } => format!("Add {kind} transition"),
+            Command::RemoveTransition { .. } => "Remove transition".into(),
+            Command::SetTransition { .. } => "Edit transition".into(),
             Command::Batch { label, .. } => label.clone(),
         }
     }
@@ -144,7 +152,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             Ok(vec![Patch::InsertTrack {
                 seq: sid,
                 index,
-                track: Track { id: new_id("trk"), name: name.clone().unwrap_or(default), kind: *kind, muted: false, locked: false, gain_db: 0.0, clips: vec![] },
+                track: Track { id: new_id("trk"), name: name.clone().unwrap_or(default), kind: *kind, muted: false, locked: false, gain_db: 0.0, clips: vec![], transitions: vec![] },
             }])
         }
         Command::RemoveTrack { track } => {
@@ -334,6 +342,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             for gid in &group {
                 let (gt, gc) = seq.find_clip(gid).expect("member");
                 ensure_unlocked(gt)?;
+                for tr in gt.transitions.iter().filter(|x| &x.clip_a == gid || &x.clip_b == gid) {
+                    out.push(Patch::RemoveTransition { seq: sid.clone(), track: gt.id.clone(), id: tr.id.clone() });
+                }
                 out.push(Patch::RemoveClip { seq: sid.clone(), clip: gid.clone() });
                 if *ripple {
                     for later in gt.clips.iter().filter(|c| c.start >= gc.end() && !group.contains(&c.id)) {
@@ -390,6 +401,35 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 _ => unreachable!(),
             }
             Ok(vec![Patch::PutClip { seq: sid, track: t.id.clone(), clip: c2 }])
+        }
+        Command::AddTransition { clip_a, clip_b, kind, duration } => {
+            transitions::check_kind(kind)?;
+            let (ta, _) = seq.find_clip(clip_a).ok_or_else(|| Error::NotFound(format!("clip {clip_a}")))?;
+            let (tb, _) = seq.find_clip(clip_b).ok_or_else(|| Error::NotFound(format!("clip {clip_b}")))?;
+            if ta.id != tb.id {
+                return Err(Error::validation("both clips of a transition must be on the same track"));
+            }
+            ensure_unlocked(ta)?;
+            // duplicates, adjacency, opacity and media handles are checked by project validation right after applying
+            Ok(vec![Patch::PutTransition { seq: sid, track: ta.id.clone(), transition: Transition { id: new_id("trn"), clip_a: clip_a.clone(), clip_b: clip_b.clone(), kind: kind.clone(), duration: transitions::snap_duration(*duration, fps) } }])
+        }
+        Command::RemoveTransition { transition } => {
+            let t = seq.tracks.iter().find(|t| t.transitions.iter().any(|x| &x.id == transition)).ok_or_else(|| Error::NotFound(format!("transition {transition}")))?;
+            ensure_unlocked(t)?;
+            Ok(vec![Patch::RemoveTransition { seq: sid, track: t.id.clone(), id: transition.clone() }])
+        }
+        Command::SetTransition { transition, kind, duration } => {
+            let t = seq.tracks.iter().find(|t| t.transitions.iter().any(|x| &x.id == transition)).ok_or_else(|| Error::NotFound(format!("transition {transition}")))?;
+            ensure_unlocked(t)?;
+            let mut x = t.transitions.iter().find(|x| &x.id == transition).expect("found").clone();
+            if let Some(k) = kind {
+                transitions::check_kind(k)?;
+                x.kind = k.clone();
+            }
+            if let Some(d) = duration {
+                x.duration = transitions::snap_duration(*d, fps);
+            }
+            Ok(vec![Patch::PutTransition { seq: sid, track: t.id.clone(), transition: x }])
         }
         Command::SetClipGain { clip, gain_db, relative } => {
             let (_, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;

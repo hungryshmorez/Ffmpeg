@@ -4,6 +4,7 @@
 
 use crate::error::{Error, Result};
 use crate::project::{Clip, Id, MediaAsset, Project, ProjectSettings, Track};
+use crate::transitions::Transition;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -12,6 +13,9 @@ pub enum Patch {
     /// Insert the clip into `track`, or replace/move it if a clip with the same id already exists anywhere.
     PutClip { seq: Id, track: Id, clip: Clip },
     RemoveClip { seq: Id, clip: Id },
+    /// Insert or replace (by id) a transition on `track`.
+    PutTransition { seq: Id, track: Id, transition: Transition },
+    RemoveTransition { seq: Id, track: Id, id: Id },
     /// Insert a whole track (with its clips) at `index`.
     InsertTrack { seq: Id, index: usize, track: Track },
     RemoveTrack { seq: Id, track: Id },
@@ -58,6 +62,27 @@ pub fn apply(p: &mut Project, patch: &Patch) -> Result<Patch> {
             let track_id = s.tracks[ti].id.clone();
             let old = s.tracks[ti].clips.remove(ci);
             Ok(Patch::PutClip { seq: seq.clone(), track: track_id, clip: old })
+        }
+        Patch::PutTransition { seq, track, transition } => {
+            let s = p.sequence_mut(seq)?;
+            let t = s.tracks.iter_mut().find(|t| &t.id == track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
+            match t.transitions.iter().position(|x| x.id == transition.id) {
+                Some(i) => {
+                    let old = std::mem::replace(&mut t.transitions[i], transition.clone());
+                    Ok(Patch::PutTransition { seq: seq.clone(), track: track.clone(), transition: old })
+                }
+                None => {
+                    t.transitions.push(transition.clone());
+                    Ok(Patch::RemoveTransition { seq: seq.clone(), track: track.clone(), id: transition.id.clone() })
+                }
+            }
+        }
+        Patch::RemoveTransition { seq, track, id } => {
+            let s = p.sequence_mut(seq)?;
+            let t = s.tracks.iter_mut().find(|t| &t.id == track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
+            let i = t.transitions.iter().position(|x| &x.id == id).ok_or_else(|| Error::NotFound(format!("transition {id}")))?;
+            let old = t.transitions.remove(i);
+            Ok(Patch::PutTransition { seq: seq.clone(), track: track.clone(), transition: old })
         }
         Patch::InsertTrack { seq, index, track } => {
             let s = p.sequence_mut(seq)?;
