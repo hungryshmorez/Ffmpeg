@@ -24,6 +24,18 @@ export async function importSubtitlesViaDialog() {
   }
 }
 
+export async function importSequenceViaDialog(fps: number) {
+  const p = await open({ title: "Pick any one frame of the image sequence", filters: [{ name: "Pictures", extensions: ["png", "jpg", "jpeg", "bmp", "tif", "tiff", "webp"] }] });
+  if (typeof p !== "string") return;
+  const { toast, setView } = useProject.getState();
+  try {
+    setView((await api.importImageSequence(p, fps)).state);
+    toast("info", "Image sequence imported as one clip");
+  } catch (e) {
+    toast("error", String(e));
+  }
+}
+
 export async function importPaths(paths: string[]) {
   const { toast, setView } = useProject.getState();
   try {
@@ -73,6 +85,7 @@ export function addToTimeline(media: MediaAsset, startSec?: number, trackId?: st
 
 export function MediaBrowser() {
   const view = useProject((s) => s.view)!;
+  const [seqFps, setSeqFps] = useState(25);
   const [sel, setSel] = useState<string | null>(null);
   const ensure = useAnalysis((s) => s.ensureThumbs);
   const thumbs = useAnalysis((s) => s.thumbs);
@@ -96,7 +109,7 @@ export function MediaBrowser() {
   return (
     <div className="panel media" aria-label="Media browser">
       <div className="panel-title">
-        Media <button className="small" onClick={() => void importViaDialog()}>Import…</button> <button className="small" title="Add a .srt / .vtt file as title clips on a new track" onClick={() => void importSubtitlesViaDialog()}>Subtitles…</button>
+        Media <button className="small" onClick={() => void importViaDialog()}>Import…</button> <button className="small" title="Add a .srt / .vtt file as title clips on a new track" onClick={() => void importSubtitlesViaDialog()}>Subtitles…</button> <button className="small" title="Import numbered pictures (shot_0001.png, shot_0002.png…) as one clip: pick any frame" onClick={() => void importSequenceViaDialog(seqFps)}>Sequence…</button><input aria-label="Sequence frame rate" className="num" type="number" min={1} max={240} value={seqFps} onChange={(e) => setSeqFps(Number(e.target.value))} title="Frames per second" style={{ width: 48 }} />
         <button className="small" title="Make low-resolution H.264 copies of every video for smooth, universally playable preview (exports always use the originals)" onClick={makeAll}>Make proxies</button>
         <button className="small" title="Delete all proxy files (they can be made again)" onClick={() => void api.clearProxies().then((b) => { toast("info", `Deleted proxies (${formatBytes(b)})`); return refreshProxies(); })}>Clear</button>
       </div>

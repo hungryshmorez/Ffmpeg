@@ -285,7 +285,7 @@ impl Engine {
 
     /// Media whose source file no longer exists (spec §41 relinking input).
     pub fn offline_media(&self) -> Vec<String> {
-        self.project.media.iter().filter(|m| !m.is_generated() && !Path::new(&m.path).exists()).map(|m| m.id.clone()).collect()
+        self.project.media.iter().filter(|m| !m.is_generated() && !media_exists(&m.path)).map(|m| m.id.clone()).collect()
     }
 
     // ---- persistence -------------------------------------------------------------------------
@@ -309,6 +309,31 @@ impl Engine {
         project.validate()?;
         Ok(Engine { project, tools, path: Some(path.to_path_buf()), undo: vec![], redo: vec![], saved_at: Some(0), recording: None, revision: 0, autosaved_rev: None })
     }
+}
+
+/// Whether a media path (a file, or an image-sequence pattern) is present.
+fn media_exists(path: &str) -> bool {
+    if crate::imgseq::is_pattern(path) {
+        crate::imgseq::first_frame(path).is_some_and(|p| p.exists())
+    } else {
+        Path::new(path).exists()
+    }
+}
+
+/// Import an image sequence (any one frame of it) as one media item at `fps` frames per second.
+pub fn prepare_sequence_asset(tools: &Tools, frame: &Path, fps: crate::time::Fps) -> Result<MediaAsset> {
+    let seq = crate::imgseq::detect(frame)?;
+    let first = crate::imgseq::first_frame(&seq.pattern).ok_or_else(|| Error::validation("no frames found"))?;
+    let mut info = probe(tools, &first)?;
+    if info.video.len() != 1 {
+        return Err(Error::validation("the frames must be pictures"));
+    }
+    info.still = false;
+    info.container = "image2".into();
+    info.video[0].fps = Some(fps);
+    info.duration = Rational::new(seq.count as i64 * fps.den() as i64, fps.num() as i64);
+    let stem = Path::new(&seq.pattern).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(MediaAsset { id: new_id("med"), name: format!("{stem} ({} frames)", seq.count), path: seq.pattern, fingerprint: None, generator: None, info })
 }
 
 /// Probe `path` and build a media asset without touching any project state.

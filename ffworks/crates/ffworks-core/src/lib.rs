@@ -19,6 +19,7 @@ pub mod fonts;
 pub mod frei0r;
 pub mod generators;
 pub mod hwenc;
+pub mod imgseq;
 pub mod jobs;
 pub mod glx;
 pub mod keyframes;

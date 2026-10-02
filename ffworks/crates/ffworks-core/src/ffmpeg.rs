@@ -38,6 +38,7 @@ impl ExportSettings {
             ExportSettings { id: "prores_mov".into(), name: "ProRes 422 HQ MOV".into(), extension: "mov".into(), video_codec: Some("prores_ks".into()), crf: None, encoder_preset: None, pix_fmt: Some("yuv422p10le".into()), audio_codec: Some("pcm_s16le".into()), audio_bitrate: None, extra: s(&["-profile:v", "3"]) },
             ExportSettings { id: "dnxhr_mov".into(), name: "DNxHR HQ MOV".into(), extension: "mov".into(), video_codec: Some("dnxhd".into()), crf: None, encoder_preset: None, pix_fmt: Some("yuv422p".into()), audio_codec: Some("pcm_s16le".into()), audio_bitrate: None, extra: s(&["-profile:v", "dnxhr_hq"]) },
             ExportSettings { id: "ffv1_mkv".into(), name: "FFV1 lossless MKV".into(), extension: "mkv".into(), video_codec: Some("ffv1".into()), crf: None, encoder_preset: None, pix_fmt: None, audio_codec: Some("flac".into()), audio_bitrate: None, extra: s(&["-level", "3", "-coder", "1"]) },
+            ExportSettings { id: "png_sequence".into(), name: "PNG image sequence (name_00001.png …)".into(), extension: "png".into(), video_codec: Some("png".into()), crf: None, encoder_preset: None, pix_fmt: Some("rgb24".into()), audio_codec: None, audio_bitrate: None, extra: vec![] },
             ExportSettings { id: "gif".into(), name: "Animated GIF (no audio)".into(), extension: "gif".into(), video_codec: Some("gif".into()), crf: None, encoder_preset: None, pix_fmt: None, audio_codec: None, audio_bitrate: None, extra: s(&["-loop", "0"]) },
             ExportSettings { id: "flac".into(), name: "FLAC (audio only)".into(), extension: "flac".into(), video_codec: None, crf: None, encoder_preset: None, pix_fmt: None, audio_codec: Some("flac".into()), audio_bitrate: None, extra: vec![] },
             ExportSettings { id: crate::quick::PRESET.into(), name: "Quick export, no re-encode (single untouched clip, MKV)".into(), extension: "mkv".into(), video_codec: None, crf: None, encoder_preset: None, pix_fmt: None, audio_codec: None, audio_bitrate: None, extra: vec![] },
@@ -513,6 +514,14 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         } else if i.still {
             // a looped single picture, bounded to what this use needs
             pre.extend(["-loop".into(), "1".into(), "-framerate".into(), fps.clone(), "-t".into(), len, "-i".into(), i.path.clone()]);
+        } else if crate::imgseq::is_pattern(&i.path) {
+            // numbered pictures played at the rate they were imported with
+            let rate = i.src_fps.map(|f| format!("{}/{}", f.num(), f.den())).unwrap_or_else(|| fps.clone());
+            pre.extend(["-framerate".into(), rate]);
+            if let Some(first) = crate::imgseq::first_index(&i.path) {
+                pre.extend(["-start_number".into(), first.to_string()]);
+            }
+            pre.extend(["-i".into(), i.path.clone()]);
         } else {
             pre.push("-i".into());
             pre.push(i.path.clone());
@@ -549,10 +558,17 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         post.extend(["-ss".into(), secs(r_start)]);
     }
     post.extend(["-t".into(), secs(out_dur)]);
-    post.push(opts.output.to_string_lossy().into_owned());
+    // an image sequence writes numbered files: `out.png` becomes `out_%05d.png`; the job's output is the first frame
+    let (out_arg, first_out) = if st.id == "png_sequence" && !crate::imgseq::is_pattern(&opts.output.to_string_lossy()) {
+        let stem = opts.output.with_extension("");
+        (format!("{}_%05d.png", stem.to_string_lossy()), PathBuf::from(format!("{}_00001.png", stem.to_string_lossy())))
+    } else {
+        (opts.output.to_string_lossy().into_owned(), opts.output.clone())
+    };
+    post.push(out_arg);
 
     // Unreferenced inputs would trigger "does not contain any stream" noise; graph building only adds used inputs.
-    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: opts.output.clone(), force_file: false })
+    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: first_out, force_file: false })
 }
 
 /// Case-insensitive on Windows, exact elsewhere; compares canonical paths when both exist.

@@ -129,6 +129,20 @@ fn dispatch(state: State<AppState>, command: Command) -> Result<StateView, Strin
     Ok(view(&e))
 }
 
+/// Import the image sequence that `path` (any one frame) belongs to as ONE media item played at `fps` frames per second.
+#[tauri::command]
+async fn import_image_sequence(app: AppHandle, state: State<'_, AppState>, path: String, fps: u32) -> Result<serde_json::Value, String> {
+    if !(1..=240).contains(&fps) {
+        return Err("frame rate must be between 1 and 240".into());
+    }
+    let tools = state.engine.lock().unwrap().tools.clone();
+    let asset = tauri::async_runtime::spawn_blocking(move || ffworks_core::engine::prepare_sequence_asset(&tools, Path::new(&path), ffworks_core::time::Fps::new(fps as i64, 1))).await.map_err(s)?.map_err(s)?;
+    let mut e = state.engine.lock().unwrap();
+    e.import_asset(asset).map_err(s)?;
+    allow_media(&app, &e);
+    Ok(serde_json::json!({ "state": view(&e) }))
+}
+
 /// Read a SubRip/WebVTT file and put its cues on a new "Subtitles" track as title clips (one undo step).
 #[tauri::command]
 fn import_subtitles(state: State<AppState>, path: String, offset: f64) -> Result<StateView, String> {
@@ -904,12 +918,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, sync_offset, import_subtitles, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, sync_offset, import_subtitles, import_image_sequence, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, sync_offset, import_subtitles, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, sync_offset, import_subtitles, import_image_sequence, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

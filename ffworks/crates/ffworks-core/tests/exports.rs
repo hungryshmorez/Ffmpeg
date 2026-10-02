@@ -32,9 +32,17 @@ fn every_available_preset_renders_with_the_right_codec() {
             continue;
         }
         let out = dir.path().join(format!("{}.{}", st.id, st.extension));
+        let out = if st.id == "png_sequence" { dir.path().join("frames.png") } else { out };
         let mut job = compile_project(&eng.project, &RenderOptions { output: out.clone(), settings: st.clone(), range: None, scale_div: 1 }, Some(&caps)).unwrap_or_else(|e| panic!("{}: {e}", st.id));
         job.program = tools().ffmpeg;
         run_job(&tools(), &job, "t", "export", &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("{} failed: {e}", st.id));
+        if st.id == "png_sequence" {
+            assert!(job.output.exists(), "first frame {} exists", job.output.display());
+            let n = std::fs::read_dir(dir.path()).unwrap().filter(|e| e.as_ref().unwrap().file_name().to_string_lossy().starts_with("frames_")).count();
+            assert_eq!(n, 50, "2 s at 25 fps");
+            done.push(st.id);
+            continue;
+        }
         let info = probe(&tools(), &out).unwrap();
         if let Some(vc) = &st.video_codec {
             let want = match vc.as_str() { "libx264" => "h264", "libx265" => "hevc", "libvpx-vp9" => "vp9", "libsvtav1" => "av1", "prores_ks" => "prores", "dnxhd" => "dnxhd", other => other };

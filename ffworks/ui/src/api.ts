@@ -19,6 +19,7 @@ export const api = {
   discardRecovery: () => invoke<void>("discard_recovery"),
   detectScenes: (mediaId: string, threshold: number) => invoke<SceneAnalysis>("detect_scenes", { mediaId, threshold }),
   detectRanges: (mediaId: string, kind: DetectKind, threshold: number, minLen: number) => invoke<[number, number][]>("detect_ranges", { mediaId, kind, threshold, minLen }),
+  importImageSequence: (path: string, fps: number) => invoke<{ state: StateView }>("import_image_sequence", { path, fps }),
   importSubtitles: (path: string, offset: number) => invoke<StateView>("import_subtitles", { path, offset }),
   syncOffset: (reference: string, clip: string) => invoke<{ lag: number; confidence: number; start: number }>("sync_offset", { reference, clip }),
   getEffectPresets: () => invoke<Record<string, EffectPreset>>("get_effect_presets"),

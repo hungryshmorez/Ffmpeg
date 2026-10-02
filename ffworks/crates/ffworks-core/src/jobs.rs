@@ -118,7 +118,9 @@ fn run_inner(
     let final_out = job.output.clone();
     let partial = partial_path(&final_out);
     let mut args = args;
-    if let Some(last) = args.last_mut() {
+    // numbered image output (`name_%05d.png`) is written in place: there is no single file to rename
+    let numbered = args.last().is_some_and(|a| crate::imgseq::is_pattern(a));
+    if let (false, Some(last)) = (numbered, args.last_mut()) {
         *last = partial.to_string_lossy().into_owned();
     }
 
@@ -221,6 +223,10 @@ fn run_inner(
         let msg = explain_failure(&log.stderr);
         on_state(JobState::Failed { message: msg.clone() });
         return (Err(Error::ToolFailed { tool: "ffmpeg".into(), code: status.code(), hint: msg }), Some(log));
+    }
+    if numbered {
+        on_state(JobState::Completed);
+        return (Ok(()), Some(log));
     }
     if let Err(e) = std::fs::rename(&partial, &final_out).map_err(|e| Error::io(&final_out, e)) {
         on_state(JobState::Failed { message: e.to_string() });
