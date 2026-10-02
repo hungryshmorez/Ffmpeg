@@ -8,7 +8,11 @@ fn tools() -> Tools {
 #[test]
 fn lists_filters_with_known_entries() {
     let l = tools().list_filters().unwrap();
-    assert!(l.len() > 100, "only {} filters", l.len());
+    let raw = || {
+        let o = std::process::Command::new(&tools().ffmpeg).args(["-hide_banner", "-filters"]).output().unwrap();
+        String::from_utf8_lossy(&o.stdout).lines().take(14).collect::<Vec<_>>().join("\n")
+    };
+    assert!(l.len() > 100, "only {} filters; ffmpeg -filters starts:\n{}", l.len(), raw());
     let eq = l.iter().find(|f| f.name == "eq").expect("eq");
     assert_eq!(eq.io, "V->V");
     assert!(eq.timeline);

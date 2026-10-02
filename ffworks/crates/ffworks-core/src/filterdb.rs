@@ -46,7 +46,8 @@ pub fn parse_filter_list(out: &str) -> Vec<FilterInfo> {
     for line in out.lines() {
         let mut p = line.split_whitespace();
         let (Some(flags), Some(name), Some(io)) = (p.next(), p.next(), p.next()) else { continue };
-        if flags.len() != 3 || !flags.chars().all(|c| "T.S.C".contains(c)) || !io.contains("->") {
+        // three flag columns (`T`imeline, `S`lice threads, `C`ommand); newer FFmpeg may add letters, so accept any `.`/capital
+        if flags.len() != 3 || !flags.chars().all(|c| c == '.' || c.is_ascii_uppercase()) || !io.contains("->") {
             continue;
         }
         let desc: Vec<&str> = p.collect();
