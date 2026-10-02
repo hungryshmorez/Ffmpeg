@@ -15,7 +15,7 @@ Rule: **search first, adopt if the license (MIT/BSD/Apache) and quality allow, b
 |---|---|---|
 | Expression evaluator | [`fasteval`](https://github.com/likebike/fasteval) (MIT) | Phase 6 modulators/expressions |
 | MIDI | [`midir`](https://github.com/Boddlnagg/midir) (MIT) | Phase 6 |
-| Node graph UI | [`@xyflow/react`](https://github.com/xyflow/xyflow) (MIT) | Phases 3/4/6 (filter graph, blueprints, compositor) |
+| Node graph UI | [`@xyflow/react`](https://github.com/xyflow/xyflow) (MIT) | **Adopted** for the Phase 3 filter-graph editor (MIT, v12); still planned for Phases 4/6 (blueprints, compositor) |
 | Plugin sandbox | [Extism](https://extism.org) (BSD-3) | Phase 10 |
 | Pixel sorting | [`patsore/pixel-sorter`](https://github.com/patsore/pixel-sorter) (MIT) | Phase 7 reference algorithm (decode → sort → encode helper job) |
 | Optical flow | [`iris-cv`](https://github.com/muhammad-fiaz/iris-cv) (MIT, v0.0.0 — immature) | Phase 9 candidate; evaluate against OpenCV bindings |

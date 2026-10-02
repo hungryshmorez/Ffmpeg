@@ -346,6 +346,13 @@ fn filter_help(state: State<AppState>, name: String) -> Result<ffworks_core::fil
     tools.filter_help(&name).map_err(|e| e.to_string())
 }
 
+/// Structural errors (as Err) and FFmpeg pad-count problems (as the list) for a filter graph being edited.
+#[tauri::command]
+fn check_filter_graph(state: State<AppState>, graph: ffworks_core::filtergraph::FilterGraph) -> Result<Vec<String>, String> {
+    let tools = state.engine.lock().unwrap().tools.clone();
+    ffworks_core::filterdb::check_pads(&tools, &graph).map_err(|e| e.to_string())
+}
+
 /// Bundled and installed fonts usable for titles.
 #[tauri::command]
 fn list_fonts() -> Vec<ffworks_core::fonts::FontEntry> {
@@ -521,12 +528,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

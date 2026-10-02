@@ -42,3 +42,34 @@ fn two_input_filter_and_unknown_and_bad_name() {
     assert!(t.filter_help("definitely_not_a_filter").is_err());
     assert!(t.filter_help("a;b").is_err());
 }
+
+#[test]
+fn pad_check_finds_missing_and_extra_connections() {
+    use ffworks_core::filtergraph::{FilterGraph, GEdge, GNode};
+    let t = tools();
+    let n = |id: &str, f: &str| GNode { id: id.into(), filter: f.into(), ..Default::default() };
+    let e = |a: &str, ap: usize, b: &str, bp: usize| GEdge { from: a.into(), from_pad: ap, to: b.into(), to_pad: bp };
+    let mut ok = FilterGraph::passthrough();
+    ok.nodes.push(n("h", "hflip"));
+    ok.edges = vec![e("in", 0, "h", 0), e("h", 0, "out", 0)];
+    assert!(ffworks_core::filterdb::check_pads(&t, &ok).unwrap().is_empty());
+
+    // overlay needs two inputs
+    let mut one = FilterGraph::passthrough();
+    one.nodes.push(n("o", "overlay"));
+    one.edges = vec![e("in", 0, "o", 0), e("o", 0, "out", 0)];
+    let p = ffworks_core::filterdb::check_pads(&t, &one).unwrap();
+    assert_eq!(p.len(), 1);
+    assert!(p[0].contains("2 input"), "{p:?}");
+
+    // split makes two outputs; only one connected
+    let mut sp = FilterGraph::passthrough();
+    sp.nodes.push(n("s", "split"));
+    sp.edges = vec![e("in", 0, "s", 0), e("s", 0, "out", 0)];
+    assert!(ffworks_core::filterdb::check_pads(&t, &sp).unwrap()[0].contains("2 output"));
+
+    let mut nope = FilterGraph::passthrough();
+    nope.nodes.push(n("x", "no_such_filter"));
+    nope.edges = vec![e("in", 0, "x", 0), e("x", 0, "out", 0)];
+    assert!(ffworks_core::filterdb::check_pads(&t, &nope).unwrap()[0].contains("no filter called"));
+}

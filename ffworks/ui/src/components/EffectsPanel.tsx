@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { useProject } from "../state/stores";
+import { useProject, useUi } from "../state/stores";
 import type { Clip, EffectDef } from "../types";
 import { CommitSlider } from "./CommitSlider";
 import { KeyframeField, type FieldSpec } from "./KeyframeField";
@@ -48,6 +48,12 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
               <button className="small" title="Move down" disabled={i === clip.effects.length - 1} onClick={() => void dispatch({ type: "move_effect", clip: clip.id, effect_id: fx.id, index: i + 1 })}>↓</button>
               <button className="small" title="Remove effect" aria-label={`Remove ${def?.name ?? fx.effect}`} onClick={() => void dispatch({ type: "remove_effect", clip: clip.id, effect_id: fx.id })}>✕</button>
             </div>
+            {fx.effect === "graph" && (
+              <div className="field">
+                <button onClick={() => useUi.getState().setGraphEdit({ clip: clip.id, fx: fx.id })}>Edit graph…</button>
+                <span className="muted"> {fx.graph ? `${fx.graph.nodes.length - 2} filter(s)` : ""}</span>
+              </div>
+            )}
             {def?.params.map((p) => {
               const value = fx.params[p.id] ?? p.default;
               if (p.animatable && clipProps) {

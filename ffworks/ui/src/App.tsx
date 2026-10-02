@@ -8,6 +8,7 @@ import { QueuePanel } from "./components/QueuePanel";
 import { RecoveryDialog } from "./components/RecoveryDialog";
 import { Diagnostics } from "./components/Diagnostics";
 import { FilterBrowser } from "./components/FilterBrowser";
+import { GraphEditor } from "./components/GraphEditor";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -85,6 +86,8 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // timeline shortcuts must not act on the project behind an open dialog (Delete in the graph editor would delete the clip)
+      if (document.querySelector("[aria-modal='true']")) return;
       const el = e.target as HTMLElement;
       if (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") {
         if (!(e.ctrlKey || e.metaKey)) return;
@@ -127,6 +130,7 @@ export default function App() {
       <ExportDialog />
       <Diagnostics />
       <FilterBrowser />
+      <GraphEditor />
       <QueuePanel />
       <RecoveryDialog />
       <Toasts />

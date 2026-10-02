@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, RelinkResult, StateView, Waveform } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -31,6 +31,7 @@ export const api = {
   clearProxies: () => invoke<number>("clear_proxies"),
   listFonts: () => invoke<FontEntry[]>("list_fonts"),
   listFilters: () => invoke<FilterInfo[]>("list_filters"),
+  checkFilterGraph: (graph: FilterGraph) => invoke<string[]>("check_filter_graph", { graph }),
   filterHelp: (name: string) => invoke<FilterHelp>("filter_help", { name }),
   listClipProps: () => invoke<ClipProps>("list_clip_props"),
   renderPreview: (start: string, end: string, scaleDiv: number) => invoke<PreviewInfo>("render_preview", { start, end, scaleDiv }),

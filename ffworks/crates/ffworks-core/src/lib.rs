@@ -10,6 +10,7 @@ pub mod error;
 pub mod ffmpeg;
 pub mod ffprobe;
 pub mod filterdb;
+pub mod filtergraph;
 pub mod fonts;
 pub mod generators;
 pub mod jobs;

@@ -147,6 +147,9 @@ pub fn validate_track(p: &Project, track: &Track) -> Result<()> {
                     return Err(Error::validation(format!("the audio of '{}' has effects, pan, fades, keyframes or retiming; transitions cannot be combined with those yet", c.name)));
                 }
             }
+            if c.effects.iter().any(|e| e.enabled && e.graph.is_some()) {
+                return Err(Error::validation(format!("'{}' has a custom filter graph; transitions cannot be combined with those yet", c.name)));
+            }
             if !c.transform.is_identity() || c.blend != "normal" || !c.keyframes.is_empty() {
                 return Err(Error::validation(format!("'{}' has a transform, blend mode or keyframes; transitions cannot be combined with those yet", c.name)));
             }

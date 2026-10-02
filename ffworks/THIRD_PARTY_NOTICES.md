@@ -24,6 +24,7 @@ Titles use **DejaVu Sans** and **DejaVu Sans Bold** (embedded in the binary; use
 |---|---|---|
 | [`scenesdetect`](https://crates.io/crates/scenesdetect) (a Rust port of [PySceneDetect](https://github.com/Breakthrough/PySceneDetect), © Brandon Castellano, BSD-3-Clause) | scene/shot cut detection | MIT OR Apache-2.0 |
 | [`ebur128`](https://github.com/sdroege/ebur128) (port of libebur128, © Jan Kokemüller / Sebastian Dröge) | loudness (LUFS, LRA, true peak) | MIT |
+| [`@xyflow/react`](https://github.com/xyflow/xyflow) (© webkid GmbH) | node-graph editor | MIT |
 | Tauri, React, Zustand, Vite and their dependencies | application shell and UI | MIT / Apache-2.0 |
 
 Complete dependency licenses can be listed with `cargo license` and `npx license-checker` in `ffworks/` and `ffworks/ui/`.

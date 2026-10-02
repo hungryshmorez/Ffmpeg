@@ -82,6 +82,8 @@ interface UiStore {
   exportOpen: boolean;
   diagOpen: boolean;
   filtersOpen: boolean;
+  graphEdit: { clip: string; fx: string } | null;
+  setGraphEdit: (g: { clip: string; fx: string } | null) => void;
   setFiltersOpen: (o: boolean) => void;
   setZoom: (z: number) => void;
   select: (id: string | null) => void;
@@ -100,6 +102,8 @@ export const useUi = create<UiStore>((set) => ({
   exportOpen: false,
   diagOpen: false,
   filtersOpen: false,
+  graphEdit: null,
+  setGraphEdit: (graphEdit) => set({ graphEdit }),
   setFiltersOpen: (filtersOpen) => set({ filtersOpen }),
   setZoom: (z) => set({ pxPerSec: Math.min(2000, Math.max(4, z)) }),
   select: (selected) => set({ selected }),

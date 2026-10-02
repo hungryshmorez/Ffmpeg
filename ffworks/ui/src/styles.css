@@ -128,3 +128,14 @@ input[type=color] { width: 56px; height: 24px; padding: 0; border: 1px solid var
 .filter-list button.active { background: var(--line); }
 .filter-detail { max-height: 52vh; overflow: auto; font-size: 12px; }
 .filter-opts { width: 100%; border-collapse: collapse; } .filter-opts td, .filter-opts th { border-bottom: 1px solid var(--line); padding: 3px 6px; text-align: left; vertical-align: top; }
+
+.graph-editor { width: min(1280px, 98vw); }
+.graph-cols { display: grid; grid-template-columns: 200px 1fr 260px; gap: 10px; height: 56vh; }
+.graph-palette { display: flex; flex-direction: column; min-height: 0; }
+.graph-palette ul { list-style: none; margin: 4px 0 0; padding: 0; overflow: auto; border: 1px solid var(--line); flex: 1; }
+.graph-palette li button { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding: 3px 6px; font-size: 12px; }
+.graph-canvas { border: 1px solid var(--line); min-height: 0; }
+.graph-props { overflow: auto; font-size: 12px; }
+.gopt { gap: 4px; margin: 2px 0; } .gopt input { flex: 1; min-width: 0; }
+.gnode { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; min-width: 110px; font-size: 12px; color: var(--text, #ddd); }
+.gnode.sel { border-color: #3aa0ff; } .gnode.fixed { background: #1b3b2a; }

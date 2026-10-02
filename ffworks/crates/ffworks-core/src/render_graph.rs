@@ -151,6 +151,9 @@ fn effect_filters(c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
             filters.push(f);
             let def = crate::effects::find(&fx.effect)?;
             requires.extend(def.requires.iter().map(|r| r.to_string()));
+            if let Some(g) = &fx.graph {
+                requires.extend(g.requires());
+            }
             alpha |= def.alpha;
         }
     }

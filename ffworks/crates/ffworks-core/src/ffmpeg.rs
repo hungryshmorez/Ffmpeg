@@ -325,9 +325,21 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                         }
                         chain.push_str(",reverse,setpts=PTS-STARTPTS");
                     }
-                    for fx in &seg.filters {
-                        chain.push(',');
-                        chain.push_str(fx);
+                    for (k, fx) in seg.filters.iter().enumerate() {
+                        match fx.strip_prefix(crate::effects::GRAPH_MARK) {
+                            // a user filter graph: close the chain, emit its statements, continue from its output at project size
+                            Some(stmts) => {
+                                let (gi, go, tag) = (format!("gi{n}x{k}"), format!("go{n}x{k}"), format!("gt{n}x{k}"));
+                                chain.push_str(&format!("[{gi}]"));
+                                f.push(std::mem::take(&mut chain));
+                                f.push(stmts.replace("@IN@", &gi).replace("@OUT@", &go).replace("@T@", &tag));
+                                chain = format!("[{go}]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1");
+                            }
+                            None => {
+                                chain.push(',');
+                                chain.push_str(fx);
+                            }
+                        }
                     }
                     let blended = seg.blend != "normal";
                     let animated_opacity = seg.animated("opacity");

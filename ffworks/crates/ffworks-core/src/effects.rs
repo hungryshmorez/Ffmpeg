@@ -65,6 +65,7 @@ pub fn registry() -> Vec<EffectDef> {
         au("denoise", "Noise reduction (FFT)", "Restoration", &["afftdn"], vec![p("amount", "Reduction", 0.0, 40.0, 12.0, 0.5, "dB")]),
         au("normalizer", "Dynamic normalizer", "Dynamics", &["dynaudnorm"], vec![]),
         au("mono", "Mono downmix", "Channels", &["pan"], vec![]),
+        EffectDef { id: GRAPH_EFFECT, name: "Custom filter graph", kind: "video", category: "Custom", requires: &[], params: vec![], alpha: false },
         EffectDef {
             id: "crop",
             name: "Crop",
@@ -89,7 +90,15 @@ pub struct EffectInstance {
     pub enabled: bool,
     #[serde(default)]
     pub params: BTreeMap<String, f64>,
+    /// Only for the `graph` effect: the user-built node graph.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph: Option<crate::filtergraph::FilterGraph>,
 }
+
+/// Effect id of the node-graph effect.
+pub const GRAPH_EFFECT: &str = "graph";
+/// Marks a filter string that holds whole filtergraph statements (with `@T@`, `@IN@`, `@OUT@` placeholders) rather than one filter.
+pub const GRAPH_MARK: char = '\u{1}';
 
 fn yes() -> bool {
     true
@@ -104,7 +113,8 @@ impl EffectInstance {
             check_param(&def, k, *v)?;
             params.insert(k.clone(), *v);
         }
-        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params })
+        let graph = (effect == GRAPH_EFFECT).then(crate::filtergraph::FilterGraph::passthrough);
+        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph })
     }
 }
 
@@ -148,6 +158,15 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
     };
     let eval = |k: &str| if animated(k) { ":eval=frame" } else { "" };
     Ok(Some(match inst.effect.as_str() {
+        GRAPH_EFFECT => {
+            let g = inst.graph.as_ref().ok_or_else(|| Error::validation("graph effect has no graph"))?;
+            // a pure pass-through changes nothing
+            if g.nodes.len() == 2 && g.edges.len() == 1 {
+                g.validate()?;
+                return Ok(None);
+            }
+            format!("{GRAPH_MARK}{}", g.compile("@T@", "@IN@", "@OUT@")?)
+        }
         "brightness" => format!("eq=brightness={}{}", val("amount")?, eval("amount")),
         "contrast" => format!("eq=contrast={}{}", val("amount")?, eval("amount")),
         "saturation" => format!("eq=saturation={}{}", val("amount")?, eval("amount")),
@@ -249,7 +268,7 @@ mod tests {
         for d in registry() {
             let e = EffectInstance::new("x".into(), d.id, &BTreeMap::new()).unwrap();
             // crop and eq at their defaults are deliberate no-ops
-            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq"].contains(&d.id), "{}", d.id);
+            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph"].contains(&d.id), "{}", d.id);
         }
     }
 

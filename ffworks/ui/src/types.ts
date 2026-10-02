@@ -11,7 +11,10 @@ export type Align = "left" | "center" | "right";
 export interface Title { text: string; font: string; size: number; color: string; align: Align; outline_width: number; outline_color: string; shadow: number; box_color: string | null; box_pad: number }
 export interface FontEntry { name: string; path: string; bundled: boolean }
 
-export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number> }
+export interface GNode { id: string; filter: string; options: [string, string][]; x: number; y: number }
+export interface GEdge { from: string; from_pad: number; to: string; to_pad: number }
+export interface FilterGraph { nodes: GNode[]; edges: GEdge[] }
+export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number>; graph?: FilterGraph }
 export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string; animatable: boolean }
 export interface EffectDef { id: string; name: string; kind: "video" | "audio"; category: string; requires: string[]; params: ParamDef[]; alpha: boolean }
 export type Interp = "linear" | "hold" | "ease_in" | "ease_out" | "ease_in_out";
@@ -75,6 +78,7 @@ export type Command =
   | { type: "remove_effect"; clip: string; effect_id: string }
   | { type: "set_effect_param"; clip: string; effect_id: string; param: string; value: number }
   | { type: "set_effect_enabled"; clip: string; effect_id: string; enabled: boolean }
+  | { type: "set_effect_graph"; clip: string; effect_id: string; graph: FilterGraph }
   | { type: "move_effect"; clip: string; effect_id: string; index: number }
   | { type: "set_clip_opacity"; clip: string; opacity: number }
   | { type: "set_clip_param"; clip: string; param: string; value: number }

@@ -181,6 +181,40 @@ impl Tools {
     }
 }
 
+/// Problems with a graph that only FFmpeg's own pad counts can reveal (unknown filter, missing or extra connections).
+/// Empty means every node's connections match what the filter declares. Dynamic-pad filters are not checked.
+pub fn check_pads(tools: &Tools, g: &crate::filtergraph::FilterGraph) -> Result<Vec<String>> {
+    g.validate()?;
+    let mut problems = vec![];
+    for n in g.nodes.iter().filter(|n| !n.filter.is_empty()) {
+        let help = match tools.filter_help(&n.filter) {
+            Ok(h) => h,
+            Err(_) => {
+                problems.push(format!("'{}': this FFmpeg has no filter called '{}'", n.id, n.filter));
+                continue;
+            }
+        };
+        let dynamic = |pads: &[String]| pads.iter().any(|p| p.starts_with("dynamic"));
+        let ins = g.edges.iter().filter(|e| e.to == n.id).count();
+        let outs = g.edges.iter().filter(|e| e.from == n.id).count();
+        if !dynamic(&help.inputs) && ins != help.inputs.len() {
+            problems.push(format!("'{}' ({}) takes {} input(s) but {} connected", n.id, n.filter, help.inputs.len(), ins));
+        }
+        // `split` is the one dynamic-output filter people always use: its count is its `outputs` option (default 2)
+        let want_outs = if n.filter == "split" {
+            Some(n.options.iter().find(|(k, _)| k == "outputs").and_then(|(_, v)| v.parse::<usize>().ok()).unwrap_or(2))
+        } else if dynamic(&help.outputs) {
+            None
+        } else {
+            Some(help.outputs.len())
+        };
+        if let Some(w) = want_outs.filter(|w| *w != outs) {
+            problems.push(format!("'{}' ({}) has {} output(s) but {} connected", n.id, n.filter, w, outs));
+        }
+    }
+    Ok(problems)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
