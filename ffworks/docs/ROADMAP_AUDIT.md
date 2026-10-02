@@ -26,7 +26,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 2/3: mask/lens-correction effects, adjustment layers, nested/compound clips and truly editable multiple sequences, audio graphs, keyframed graph options, graph templates, docking/workspaces. (Shortcut editor: DONE for the 19 keyboard actions.)
 * Phase 4: Rhai/DSL scripting beyond JSON command lists, macro variables/loops/conditions, permissions model.
 * Phase 5: transient detection, drift correction for auto-sync.
-* Phase 6: expressions, modulators, parameter linking, MIDI. Audio-reactive: DONE for loudness ("Follow audio" → keyframes); frequency-band / beat triggers not done.
+* Phase 6: expressions, modulators, parameter linking, MIDI. Audio-reactive: DONE for loudness, whole or per band ("Follow audio" → keyframes); beat-only triggers not done.
 * Phases 7-9: pixel sort (PARTIAL: frei0r 3.6's `pixels0rt` is offered on Windows where it is bundled; not on Linux test machines with frei0r 1.8, so untested here; no built-in sorter), real motion-vector datamosh / FFglitch motion transfer, corruption lab.
 * Phase 10: plugin system (Extism), local API.
 * Cross-cutting: SQLite index, smart rendering, export naming/versioning, persistent job state across crashes, accessibility pass, colour management, preview/analysis through the job queue.

@@ -134,8 +134,8 @@ impl Engine {
                 Ok(())
             }
             Command::RemoveRanges { clip, ranges } => self.remove_ranges(clip, ranges, fwd, inv),
-            Command::AnimateFromAudio { clip, param, source, low, high, smooth } => {
-                let keys = self.audio_keys(clip, param, source.as_deref(), *low, *high, *smooth)?;
+            Command::AnimateFromAudio { clip, param, source, low, high, smooth, band } => {
+                let keys = self.audio_keys(clip, param, source.as_deref(), *low, *high, *smooth, band.as_deref().unwrap_or("all"))?;
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
             }
             other => {
@@ -150,7 +150,8 @@ impl Engine {
     }
 
     /// Keyframes making `param` of `clip` follow the loudness of an audio clip over the part of the timeline both cover.
-    fn audio_keys(&self, clip: &str, param: &str, source: Option<&str>, low: f64, high: f64, smooth: f64) -> Result<Vec<crate::keyframes::Keyframe>> {
+    #[allow(clippy::too_many_arguments)]
+    fn audio_keys(&self, clip: &str, param: &str, source: Option<&str>, low: f64, high: f64, smooth: f64, band: &str) -> Result<Vec<crate::keyframes::Keyframe>> {
         let seq = self.project.active()?;
         let (_, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
         // check the parameter can be animated and both values are allowed before running FFmpeg
@@ -158,6 +159,9 @@ impl Engine {
         crate::clipprops::check_value(c, param, high, true)?;
         if !(0.0..=10.0).contains(&smooth) {
             return Err(Error::validation("smoothing must be 0-10 seconds"));
+        }
+        if !crate::reactive::BANDS.iter().any(|b| b.0 == band) {
+            return Err(Error::validation(format!("unknown band '{band}' (all, bass, mid, treble)")));
         }
         let src_id = match source {
             Some(s) => s.to_string(),
@@ -188,7 +192,7 @@ impl Engine {
             return Err(Error::validation("the audio clip does not overlap this clip on the timeline"));
         }
         let media_from = s.source_in + (from - s.start);
-        let levels = crate::reactive::envelope(&self.tools, std::path::Path::new(&media.path), media_from.as_f64(), (to - from).as_f64())?;
+        let levels = crate::reactive::envelope(&self.tools, std::path::Path::new(&media.path), media_from.as_f64(), (to - from).as_f64(), band)?;
         let map = crate::reactive::Mapping { low, high, smooth };
         Ok(crate::reactive::keys(&levels, (from - c.start).as_f64(), map, self.project.settings.fps, c.duration.as_f64()))
     }

@@ -15,13 +15,23 @@ pub const MAX_KEYS: usize = 200;
 /// Level used for silence (FFmpeg reports `-inf`).
 const SILENT_DB: f64 = -120.0;
 
-/// RMS level in dB of the first audio stream of `path` for each 1/[`RATE`] s window of `[from, from + dur)` (media time).
-pub fn envelope(tools: &Tools, path: &Path, from: f64, dur: f64) -> Result<Vec<f64>> {
+/// Frequency bands a curve can follow: (id, label, FFmpeg filter that keeps only that band).
+pub const BANDS: &[(&str, &str, &str)] = &[
+    ("all", "Whole signal", ""),
+    ("bass", "Bass (below 150 Hz)", "lowpass=f=150:p=2,lowpass=f=150:p=2,"),
+    ("mid", "Mids (300 Hz - 3 kHz)", "highpass=f=300:p=2,lowpass=f=3000:p=2,"),
+    ("treble", "Treble (above 5 kHz)", "highpass=f=5000:p=2,highpass=f=5000:p=2,"),
+];
+
+/// RMS level in dB of the first audio stream of `path`, optionally only in `band` (see [`BANDS`]), for each 1/[`RATE`] s
+/// window of `[from, from + dur)` (media time).
+pub fn envelope(tools: &Tools, path: &Path, from: f64, dur: f64, band: &str) -> Result<Vec<f64>> {
+    let pre = BANDS.iter().find(|b| b.0 == band).map(|b| b.2).ok_or_else(|| Error::validation(format!("unknown band '{band}' (all, bass, mid, treble)")))?;
     if !dur.is_finite() || !from.is_finite() || dur <= 0.0 || from < 0.0 {
         return Err(Error::validation("nothing to measure"));
     }
     let n = (48000.0 / RATE).round() as u32;
-    let af = format!("aresample=48000,asetnsamples=n={n}:p=0,astats=metadata=1:reset=1:measure_overall=RMS_level:measure_perchannel=none,ametadata=mode=print:key=lavfi.astats.Overall.RMS_level:file=-");
+    let af = format!("aresample=48000,{pre}asetnsamples=n={n}:p=0,astats=metadata=1:reset=1:measure_overall=RMS_level:measure_perchannel=none,ametadata=mode=print:key=lavfi.astats.Overall.RMS_level:file=-");
     let (ss, t) = (format!("{from:.6}"), format!("{dur:.6}"));
     // run_capture puts the input last, but the filter options must follow it, so the argv is built here
     let mut cmd = std::process::Command::new(&tools.ffmpeg);

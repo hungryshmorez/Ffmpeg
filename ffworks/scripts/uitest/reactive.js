@@ -28,6 +28,7 @@
     setNum(form.querySelector("[aria-label='Value when quiet']"), -0.4);
     setNum(form.querySelector("[aria-label='Value when loud']"), 0.4);
     setNum(form.querySelector("[aria-label='Smoothing in seconds']"), 0);
+    step("a frequency band can be chosen (default: everything)", form.querySelector("[aria-label='Frequency band']").value === "all" && form.querySelectorAll("[aria-label='Frequency band'] option").length === 4);
     await sleep(200);
     [...form.querySelectorAll("button")].find((b) => /Apply/.test(b.textContent)).click();
     const ks = await waitFor(() => vclip().keyframes[param], 30000);

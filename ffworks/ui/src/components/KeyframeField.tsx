@@ -30,10 +30,11 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
   const [low, setLow] = useState(spec.value);
   const [high, setHigh] = useState(Math.min(spec.max, spec.value + span * 0.25));
   const [smooth, setSmooth] = useState(0.1);
+  const [band, setBand] = useState("all");
   const applyFollow = async () => {
     setBusy(true);
     try {
-      if (await dispatch({ type: "animate_from_audio", clip: clip.id, param: spec.param, source: null, low, high, smooth })) { setFollow(false); setOpen(true); }
+      if (await dispatch({ type: "animate_from_audio", clip: clip.id, param: spec.param, source: null, low, high, smooth, band })) { setFollow(false); setOpen(true); }
     } finally { setBusy(false); }
   };
   useEffect(() => { if (!animated) setOpen(false); }, [animated]);
@@ -68,6 +69,12 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
           <span className="muted">{clip.kind === "audio" ? "Follow this clip's loudness" : "Follow the linked audio's loudness"}</span>
           <label>quiet <input aria-label="Value when quiet" className="num" type="number" min={spec.min} max={spec.max} step={spec.step} value={low} onChange={(e) => setLow(e.currentTarget.valueAsNumber)} /></label>
           <label>loud <input aria-label="Value when loud" className="num" type="number" min={spec.min} max={spec.max} step={spec.step} value={high} onChange={(e) => setHigh(e.currentTarget.valueAsNumber)} /></label>
+          <label>listen to <select aria-label="Frequency band" value={band} onChange={(e) => setBand(e.target.value)}>
+            <option value="all">everything</option>
+            <option value="bass">bass (below 150 Hz)</option>
+            <option value="mid">mids (300 Hz – 3 kHz)</option>
+            <option value="treble">treble (above 5 kHz)</option>
+          </select></label>
           <label>smooth <input aria-label="Smoothing in seconds" className="num" type="number" min={0} max={10} step={0.05} value={smooth} onChange={(e) => setSmooth(e.currentTarget.valueAsNumber)} />s</label>
           <button className="small primary" disabled={busy || !Number.isFinite(low) || !Number.isFinite(high) || !Number.isFinite(smooth)} onClick={() => void applyFollow()}>{busy ? "Measuring…" : animated ? "Replace keyframes" : "Apply"}</button>
         </div>

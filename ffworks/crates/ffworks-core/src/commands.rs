@@ -75,8 +75,9 @@ pub enum Command {
     /// animation and keeps the parameter's current static value.
     SetKeyframes { clip: Id, param: String, keys: Vec<Keyframe> },
     /// Make `param` follow the loudness of `source` (an audio clip; default: the clip itself if it is audio, else its linked
-    /// audio): quiet → `low`, loud → `high`, smoothed over `smooth` seconds. Measured with FFmpeg, stored as keyframes. One undo step.
-    AnimateFromAudio { clip: Id, param: String, #[serde(default)] source: Option<Id>, low: f64, high: f64, #[serde(default)] smooth: f64 },
+    /// audio): quiet → `low`, loud → `high`, smoothed over `smooth` seconds, optionally only one frequency `band` (all, bass,
+    /// mid, treble). Measured with FFmpeg, stored as keyframes. One undo step.
+    AnimateFromAudio { clip: Id, param: String, #[serde(default)] source: Option<Id>, low: f64, high: f64, #[serde(default)] smooth: f64, #[serde(default)] band: Option<String> },
     RemoveKeyframe { clip: Id, param: String, time: Rational },
     /// Remove all keyframes of `param`; the static value becomes the first key's value.
     ClearKeyframes { clip: Id, param: String },

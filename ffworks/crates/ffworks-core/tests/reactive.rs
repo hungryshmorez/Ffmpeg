@@ -62,7 +62,7 @@ fn brightness_follows_the_linked_audio_and_undo_and_save_keep_it_right() {
     eng.dispatch(Command::AddEffect { clip: v.clone(), effect: "brightness".into(), params: Default::default(), index: None }).unwrap();
     let fx = eng.project.active().unwrap().find_clip(&v).unwrap().1.effects[0].id.clone();
     let param = format!("fx:{fx}:amount");
-    eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: param.clone(), source: None, low: -0.4, high: 0.4, smooth: 0.0 }).unwrap();
+    eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: param.clone(), source: None, low: -0.4, high: 0.4, smooth: 0.0, band: None }).unwrap();
     let keys = eng.project.active().unwrap().find_clip(&v).unwrap().1.keyframes[&param].clone();
     assert!(keys.len() >= 2 && keys.len() <= 200, "{} keys", keys.len());
     let val = |t: f64| ffworks_core::keyframes::eval(&keys, t).unwrap();
@@ -89,17 +89,51 @@ fn bad_requests_are_refused_before_measuring() {
     let (mut eng, v, a) = project(&src);
     let rev = eng.revision();
     // opacity is animatable; 5 is out of range
-    let e = eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: "opacity".into(), source: None, low: 0.0, high: 5.0, smooth: 0.0 }).unwrap_err();
+    let e = eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: "opacity".into(), source: None, low: 0.0, high: 5.0, smooth: 0.0, band: None }).unwrap_err();
     assert!(e.to_string().contains("outside"), "{e}");
     // following a video clip is refused
-    let e = eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: "opacity".into(), source: Some(v.clone()), low: 0.0, high: 1.0, smooth: 0.0 }).unwrap_err();
+    let e = eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: "opacity".into(), source: Some(v.clone()), low: 0.0, high: 1.0, smooth: 0.0, band: None }).unwrap_err();
     assert!(e.to_string().contains("audio clip"), "{e}");
     assert_eq!(eng.revision(), rev, "nothing changed");
     // an audio clip can drive its own volume (a crude expander: the quiet part is turned down further)
-    eng.dispatch(Command::AnimateFromAudio { clip: a.clone(), param: "gain_db".into(), source: None, low: -20.0, high: 0.0, smooth: 0.2 }).unwrap();
+    eng.dispatch(Command::AnimateFromAudio { clip: a.clone(), param: "gain_db".into(), source: None, low: -20.0, high: 0.0, smooth: 0.2, band: None }).unwrap();
     let k = &eng.project.active().unwrap().find_clip(&a).unwrap().1.keyframes["gain_db"];
     assert!(ffworks_core::keyframes::eval(k, 0.5).unwrap() < -19.0 && ffworks_core::keyframes::eval(k, 3.5).unwrap() > -1.0);
     // SetKeyframes with an empty list removes the animation
     eng.dispatch(Command::SetKeyframes { clip: a.clone(), param: "gain_db".into(), keys: vec![] }).unwrap();
     assert!(!eng.project.active().unwrap().find_clip(&a).unwrap().1.keyframes.contains_key("gain_db"));
+}
+
+/// 4 s: a 60 Hz tone for 2 s, then a 6 kHz tone for 2 s, both equally loud.
+fn two_tones(dir: &Path) -> PathBuf {
+    let p = dir.join("tones.mp4");
+    let st = Proc::new(tools().ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=gray:s=64x64:r=25:d=4", "-f", "lavfi", "-i"])
+        .arg("aevalsrc='0.5*sin(2*PI*if(lt(t,2),60,6000)*t)':s=48000:d=4")
+        .args(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "pcm_s16le", "-shortest"])
+        .arg(&p)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    p
+}
+
+#[test]
+fn a_band_listens_only_to_its_frequencies() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut eng, v, _) = project(&two_tones(dir.path()));
+    let curve = |eng: &mut Engine, band: &str| {
+        eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: "opacity".into(), source: None, low: 0.0, high: 1.0, smooth: 0.0, band: Some(band.into()) }).unwrap();
+        let k = eng.project.active().unwrap().find_clip(&v).unwrap().1.keyframes["opacity"].clone();
+        let at = |t: f64| ffworks_core::keyframes::eval(&k, t).unwrap();
+        (at(1.0), at(3.0))
+    };
+    let (b1, b3) = curve(&mut eng, "bass");
+    assert!(b1 > 0.9 && b3 < 0.1, "bass follows the 60 Hz half: {b1} {b3}");
+    let (t1, t3) = curve(&mut eng, "treble");
+    assert!(t1 < 0.1 && t3 > 0.9, "treble follows the 6 kHz half: {t1} {t3}");
+    let (a1, a3) = curve(&mut eng, "all");
+    assert!((a1 - a3).abs() < 0.3, "the whole signal is about equally loud: {a1} {a3}");
+    let e = eng.dispatch(Command::AnimateFromAudio { clip: v.clone(), param: "opacity".into(), source: None, low: 0.0, high: 1.0, smooth: 0.0, band: Some("ultra".into()) }).unwrap_err();
+    assert!(e.to_string().contains("unknown band"), "{e}");
 }
