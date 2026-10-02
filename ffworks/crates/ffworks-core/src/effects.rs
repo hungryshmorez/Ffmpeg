@@ -82,7 +82,7 @@ fn builtin_registry() -> Vec<EffectDef> {
         e("trails", "Motion trails", "Glitch", &["tmix"], vec![p("frames", "Frames mixed", 2.0, 30.0, 6.0, 1.0, "")]),
         e("ghost", "Ghosting (slow update)", "Glitch", &["lagfun"], vec![p("decay", "Decay", 0.5, 0.99, 0.95, 0.01, "")]),
         e("deband", "Remove banding", "Restoration", &["deband"], vec![]),
-        e("deinterlace", "Deinterlace", "Restoration", &["yadif"], vec![]),
+        e("deinterlace", "Deinterlace", "Restoration", &["kerndeint"], vec![]),
         EffectDef { id: "chroma_key", name: "Chroma key", kind: "video", category: "Keying", requires: &["chromakey"], params: vec![p("colour", "Key colour (0 green, 1 blue, 2 red)", 0.0, 2.0, 0.0, 1.0, ""), p("similarity", "Similarity", 0.01, 0.6, 0.15, 0.01, ""), p("blend", "Edge blend", 0.0, 0.5, 0.05, 0.01, "")], alpha: true },
         au("phaser", "Phaser", "Modulation", &["aphaser"], vec![p("speed", "Speed", 0.1, 2.0, 0.5, 0.05, "Hz"), p("decay", "Decay", 0.1, 0.9, 0.4, 0.05, "")]),
         au("chorus", "Chorus", "Modulation", &["chorus"], vec![p("speed", "Speed", 0.1, 5.0, 0.5, 0.1, "Hz"), p("depth", "Depth", 0.1, 5.0, 2.0, 0.1, "ms")]),
@@ -278,7 +278,8 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
         "trails" => format!("tmix=frames={}", g("frames")?.round() as i64),
         "ghost" => format!("lagfun=decay={}", g("decay")?),
         "deband" => "deband".into(),
-        "deinterlace" => "yadif".into(),
+        // kerndeint rather than yadif/bwdif: those change the stream time base, which makes xfade (transitions) refuse the clip
+        "deinterlace" => "kerndeint".into(),
         "chroma_key" => {
             let colour = ["0x00ff00", "0x0000ff", "0xff0000"][g("colour")?.round() as usize];
             format!("chromakey=color={colour}:similarity={}:blend={}", g("similarity")?, g("blend")?)

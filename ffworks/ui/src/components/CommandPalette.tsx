@@ -1,0 +1,81 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../api";
+import { addMarkerAtPlayhead } from "./MarkerPanel";
+import { importSubtitlesViaDialog, importViaDialog } from "./MediaBrowser";
+import { filterActions, type PaletteAction } from "./palette";
+import { deleteSelected, newProject, openProject, saveProject, splitAtPlayhead } from "./Toolbar";
+import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
+
+/** Everything the toolbar and shortcuts can do, searchable from the keyboard (Ctrl+K). */
+function buildActions(): PaletteAction[] {
+  const ui = useUi.getState();
+  const proj = useProject.getState();
+  const v = proj.view;
+  const seq = v?.project.sequences.find((s) => s.id === v.project.active_sequence);
+  const list: PaletteAction[] = [
+    { id: "new", label: "New project", run: () => void newProject() },
+    { id: "open", label: "Open project…", hint: "Ctrl+O", run: () => void openProject() },
+    { id: "save", label: "Save project", hint: "Ctrl+S", run: () => void saveProject() },
+    { id: "saveas", label: "Save project as…", hint: "Ctrl+Shift+S", run: () => void saveProject(true) },
+    { id: "import", label: "Import media…", run: () => void importViaDialog() },
+    { id: "subs", label: "Import subtitles…", keywords: "srt vtt captions", run: () => void importSubtitlesViaDialog() },
+    { id: "undo", label: "Undo", hint: "Ctrl+Z", run: () => v?.undoLabel && void proj.run(api.undo) },
+    { id: "redo", label: "Redo", hint: "Ctrl+Y", run: () => v?.redoLabel && void proj.run(api.redo) },
+    { id: "split", label: "Split clip at playhead", hint: "S", keywords: "cut razor", run: splitAtPlayhead },
+    { id: "delete", label: "Delete selected clip", hint: "Del", run: () => deleteSelected(false) },
+    { id: "ripple", label: "Ripple delete selected clip", hint: "Shift+Del", run: () => deleteSelected(true) },
+    { id: "marker", label: "Add marker at playhead", hint: "M", run: () => seq && void addMarkerAtPlayhead(seq) },
+    { id: "play", label: "Play / pause", hint: "Space", run: () => usePlayhead.getState().setPlaying(!usePlayhead.getState().playing) },
+    { id: "start", label: "Go to start", hint: "Home", run: () => usePlayhead.getState().setT(0) },
+    { id: "export", label: "Export…", keywords: "render save video", run: () => ui.setExportOpen(true) },
+    { id: "queue", label: "Show render queue", run: () => useJobs.getState().setQueueOpen(true) },
+    { id: "demo", label: "Demo mode (cycle random transitions and effects)", keywords: "random", run: () => ui.setDemoOpen(true) },
+    { id: "filters", label: "Browse FFmpeg filters", run: () => ui.setFiltersOpen(true) },
+    { id: "favs", label: "Favourites and groups", keywords: "star", run: () => ui.setFavsOpen(true) },
+    { id: "builds", label: "FFmpeg builds and frei0r plugins", keywords: "engine glitch0r", run: () => ui.setEnginesOpen(true) },
+    { id: "diag", label: "Diagnostics", run: () => ui.setDiagOpen(true) },
+  ];
+  return list;
+}
+
+export function CommandPalette() {
+  const open = useUi((s) => s.paletteOpen);
+  const setOpen = useUi((s) => s.setPaletteOpen);
+  const [query, setQuery] = useState("");
+  const [index, setIndex] = useState(0);
+  const input = useRef<HTMLInputElement>(null);
+  const actions = useMemo(() => (open ? buildActions() : []), [open]);
+  const shown = useMemo(() => filterActions(actions, query), [actions, query]);
+  useEffect(() => { if (open) { setQuery(""); setIndex(0); setTimeout(() => input.current?.focus(), 0); } }, [open]);
+  useEffect(() => setIndex(0), [query]);
+  if (!open) return null;
+  const run = (a: PaletteAction | undefined) => { if (!a) return; setOpen(false); setTimeout(a.run, 0); };
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+      <div className="modal palette">
+        <input
+          ref={input}
+          aria-label="Type a command"
+          placeholder="Type a command…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
+            else if (e.key === "ArrowDown") { e.preventDefault(); setIndex((i) => Math.min(shown.length - 1, i + 1)); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); setIndex((i) => Math.max(0, i - 1)); }
+            else if (e.key === "Enter") { e.preventDefault(); run(shown[index]); }
+          }}
+        />
+        <ul role="listbox" aria-label="Commands">
+          {shown.length === 0 && <li className="muted">No command matches “{query}”.</li>}
+          {shown.map((a, i) => (
+            <li key={a.id} role="option" aria-selected={i === index} className={i === index ? "sel" : ""} onMouseEnter={() => setIndex(i)} onClick={() => run(a)}>
+              <span>{a.label}</span>
+              {a.hint && <kbd>{a.hint}</kbd>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}

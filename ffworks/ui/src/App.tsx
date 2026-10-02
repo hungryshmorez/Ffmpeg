@@ -12,6 +12,7 @@ import { GraphEditor } from "./components/GraphEditor";
 import { FavouritesDialog } from "./components/FavouritesDialog";
 import { EnginesDialog } from "./components/EnginesDialog";
 import { DemoDialog } from "./components/DemoDialog";
+import { CommandPalette } from "./components/CommandPalette";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -89,6 +90,12 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        const ui = useUi.getState();
+        if (!document.querySelector("[aria-modal='true']") || ui.paletteOpen) ui.setPaletteOpen(!ui.paletteOpen);
+        return;
+      }
       // timeline shortcuts must not act on the project behind an open dialog (Delete in the graph editor would delete the clip)
       if (document.querySelector("[aria-modal='true']")) return;
       const el = e.target as HTMLElement;
@@ -137,6 +144,7 @@ export default function App() {
       <FavouritesDialog />
       <EnginesDialog />
       <DemoDialog />
+      <CommandPalette />
       <QueuePanel />
       <RecoveryDialog />
       <Toasts />

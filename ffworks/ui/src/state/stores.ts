@@ -83,6 +83,8 @@ interface UiStore {
   diagOpen: boolean;
   filtersOpen: boolean;
   demoOpen: boolean;
+  paletteOpen: boolean;
+  setPaletteOpen: (o: boolean) => void;
   setDemoOpen: (o: boolean) => void;
   enginesOpen: boolean;
   setEnginesOpen: (o: boolean) => void;
@@ -109,6 +111,8 @@ export const useUi = create<UiStore>((set) => ({
   diagOpen: false,
   filtersOpen: false,
   demoOpen: false,
+  paletteOpen: false,
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDemoOpen: (demoOpen) => set({ demoOpen }),
   enginesOpen: false,
   setEnginesOpen: (enginesOpen) => set({ enginesOpen }),
