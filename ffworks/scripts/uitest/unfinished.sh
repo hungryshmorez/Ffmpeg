@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# GUI test: exports queued/rendering when the app is killed (kill -9) are offered again on the next launch, after the
+# recovery question, and "Queue them again" renders them.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+W=$(mktemp -d "/tmp/ffworks-unfinished.XXXXXX"); mkdir -p "$W/cache"
+ffmpeg -v error -y -f lavfi -i "testsrc2=s=1280x720:r=30:d=20" -f lavfi -i "sine=f=440:r=48000:d=20" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -shortest "$W/f.mp4"
+(cd ui && VITE_UITEST=1 npx vite build >/dev/null); touch src-tauri/src/lib.rs
+cargo build -p ffworks-app --features custom-protocol,uitest 2>&1 | tail -1
+export DISPLAY=:99 XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/cfg" XDG_DATA_HOME="$W/data" FFWORKS_AUTOSAVE_SECS=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1
+pgrep Xvfb >/dev/null || { Xvfb :99 -screen 0 1600x1000x24 >/dev/null 2>&1 & sleep 2; }
+for phase in 1 2; do
+  sed "s|__SRC__|$W/f.mp4|g; s|__OUTDIR__|$W|g; s|__PHASE__|$phase|g" scripts/uitest/unfinished.js > "$W/t$phase.js"
+  node --check "$W/t$phase.js"
+  FFWORKS_UITEST_SCRIPT="$W/t$phase.js" FFWORKS_UITEST_OUT="$W/r$phase.json" target/debug/ffworks-app >"$W/app$phase.log" 2>&1 & P=$!
+  for i in $(seq 1 180); do [ -f "$W/r$phase.json" ] && break; sleep 1; done
+  [ "$phase" = 2 ] && { ffmpeg -v error -y -f x11grab -video_size 1600x1000 -i :99 -frames:v 1 "${SHOT:-$W/final.png}" || true; }
+  # phase 1 ends in a crash, not a clean exit
+  kill -9 $P 2>/dev/null || true; wait $P 2>/dev/null || true
+  pkill -9 -P $P 2>/dev/null || true
+done
+python3 - "$W/r1.json" "$W/r2.json" <<'PY'
+import json,sys
+steps=[s for f in sys.argv[1:] for s in json.load(open(f))["steps"]];bad=0
+for s in steps:
+    print(("PASS" if s["pass"] else "FAIL"),s["name"],"" if s["pass"] else s["detail"][:300]);bad+=not s["pass"]
+print(f'{len(steps)-bad}/{len(steps)} unfinished-export steps passed');sys.exit(1 if bad else 0)
+PY

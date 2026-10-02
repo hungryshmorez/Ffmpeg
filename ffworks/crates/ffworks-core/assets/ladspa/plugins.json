@@ -1,0 +1,7376 @@
+{
+ "source": "LADSPA plugin control tables read through the LADSPA C API (swh-plugins GPL-2+, TAP GPL-2+, CMT LGPL-2.1+)",
+ "libraries": [
+  {
+   "file": "alias_1407",
+   "plugins": [
+    {
+     "label": "alias",
+     "name": "Aliasing",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Aliasing level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "allpass_1895",
+   "plugins": [
+    {
+     "label": "allpass_n",
+     "name": "Allpass delay line, noninterpolating",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "allpass_l",
+     "name": "Allpass delay line, linear interpolation",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "allpass_c",
+     "name": "Allpass delay line, cubic spline interpolation",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "am_pitchshift_1433",
+   "plugins": [
+    {
+     "label": "amPitchshift",
+     "name": "AM pitchshifter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Pitch shift",
+       "min": 0.25,
+       "max": 4.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Buffer size",
+       "min": 1.0,
+       "max": 7.0,
+       "default": 4.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "amp_1181",
+   "plugins": [
+    {
+     "label": "amp",
+     "name": "Simple amplifier",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Amps gain (dB)",
+       "min": -70.0,
+       "max": 70.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "bandpass_a_iir_1893",
+   "plugins": [
+    {
+     "label": "bandpass_a_iir",
+     "name": "Glame Bandpass Analog Filter",
+     "maker": "Alexander Ehlert <mag@glame.de>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Center Frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 39.313739,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Bandwidth (Hz)",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 321.99378,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "bandpass_iir_1892",
+   "plugins": [
+    {
+     "label": "bandpass_iir",
+     "name": "Glame Bandpass Filter",
+     "maker": "Alexander Ehlert <mag@glame.de>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Center Frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 321.99378,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Bandwidth (Hz)",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 321.99378,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Stages(2 poles per stage)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "butterworth_1902",
+   "plugins": [
+    {
+     "label": "buttlow_iir",
+     "name": "GLAME Butterworth Lowpass",
+     "maker": "Alexander Ehlert <mag@glame.de>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Cutoff Frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 39.313739,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Resonance",
+       "min": 0.10000000149011612,
+       "max": 1.409999966621399,
+       "default": 0.755,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "butthigh_iir",
+     "name": "GLAME Butterworth Highpass",
+     "maker": "Alexander Ehlert <mag@glame.de>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Cutoff Frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 39.313739,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Resonance",
+       "min": 0.10000000149011612,
+       "max": 1.409999966621399,
+       "default": 0.755,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "chebstortion_1430",
+   "plugins": [
+    {
+     "label": "chebstortion",
+     "name": "Chebyshev distortion",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Distortion",
+       "min": 0.0,
+       "max": 3.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "cmt",
+   "plugins": [
+    {
+     "label": "amp_mono",
+     "name": "Amplifier (Mono)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Gain",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "amp_stereo",
+     "name": "Amplifier (Stereo)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Gain",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "canyon_delay",
+     "name": "Canyon Delay",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by David A. Bartold)",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Left to Right Time (Seconds)",
+       "min": 0.009999999776482582,
+       "max": 0.9900000095367432,
+       "default": 0.01,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Left to Right Feedback (Percent)",
+       "min": -1.0,
+       "max": 1.0,
+       "default": -1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Right to Left Time (Seconds)",
+       "min": 0.009999999776482582,
+       "max": 0.9900000095367432,
+       "default": 0.01,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Right to Left Feedback (Percent)",
+       "min": -1.0,
+       "max": 1.0,
+       "default": -1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Low-Pass Cutoff (Hz)",
+       "min": 1.0,
+       "max": 5000.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "disintegrator",
+     "name": "Disintegrator",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Nathaniel Virgo)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Probability",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Multiplier",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "delay_0.01s",
+     "name": "Echo Delay Line (Maximum Delay 0.01s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 0.009999999776482582,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "delay_0.1s",
+     "name": "Echo Delay Line (Maximum Delay 0.1s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 0.10000000149011612,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "delay_1s",
+     "name": "Echo Delay Line (Maximum Delay 1s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "delay_5s",
+     "name": "Echo Delay Line (Maximum Delay 5s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "delay_60s",
+     "name": "Echo Delay Line (Maximum Delay 60s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 60.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "fbdelay_0.01s",
+     "name": "Feedback Delay Line (Maximum Delay 0.01s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 0.009999999776482582,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "fbdelay_0.1s",
+     "name": "Feedback Delay Line (Maximum Delay 0.1s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 0.10000000149011612,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "fbdelay_1s",
+     "name": "Feedback Delay Line (Maximum Delay 1s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "fbdelay_5s",
+     "name": "Feedback Delay Line (Maximum Delay 5s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "fbdelay_60s",
+     "name": "Feedback Delay Line (Maximum Delay 60s)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (Seconds)",
+       "min": 0.0,
+       "max": 60.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet Balance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "freeverb3",
+     "name": "Freeverb (Version 3)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Jezar at Dreampoint, ported by Richard W.E. Furse)",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Freeze Mode",
+       "min": null,
+       "max": null,
+       "default": 0.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Room Size",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Damping",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Width",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "grain_scatter",
+     "name": "Granular Scatter Processor",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Density (Grains/s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Scatter (s)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 2.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Grain Length (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Grain Attack (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "hard_gate",
+     "name": "Hard Gate",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Nathaniel Virgo)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Threshold",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "hpf",
+     "name": "High Pass Filter (One Pole)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Cutoff Frequency (Hz)",
+       "min": 0.0,
+       "max": 24000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      }
+     ]
+    },
+    {
+     "label": "identity_audio",
+     "name": "Identity (Audio)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": []
+    },
+    {
+     "label": "lofi",
+     "name": "Lo Fi",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by David A. Bartold)",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Crackling (%)",
+       "min": -0.10000000149011612,
+       "max": 100.0999984741211,
+       "default": -0.1,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Powersupply Overloading (%)",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Opamp Bandwidth Limiting (Hz)",
+       "min": 1.0,
+       "max": 10000.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "lpf",
+     "name": "Low Pass Filter (One Pole)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Cutoff Frequency (Hz)",
+       "min": 0.0,
+       "max": 24000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      }
+     ]
+    },
+    {
+     "label": "compress_peak",
+     "name": "Simple Compressor (Peak Envelope Tracking)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Threshold",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Compression Ratio",
+       "min": null,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Attack (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Decay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "compress_rms",
+     "name": "Simple Compressor (RMS Envelope Tracking)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Threshold",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Compression Ratio",
+       "min": null,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Attack (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Decay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "expand_peak",
+     "name": "Simple Expander (Peak Envelope Tracking)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Threshold",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Expansion Ratio",
+       "min": null,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Attack (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Decay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "expand_rms",
+     "name": "Simple Expander (RMS Envelope Tracking)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Threshold",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Expansion Ratio",
+       "min": null,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Attack (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Decay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "limit_peak",
+     "name": "Simple Limiter (Peak Envelope Tracking)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Threshold",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Attack (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Decay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "limit_rms",
+     "name": "Simple Limiter (RMS Envelope Tracking)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Threshold",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Attack (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Envelope Decay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "sine_faac",
+     "name": "Sine Oscillator (Freq:audio, Amp:control)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Amplitude",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "sine_fcaa",
+     "name": "Sine Oscillator (Freq:control, Amp:audio)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Frequency",
+       "min": 0.0,
+       "max": 24000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      }
+     ]
+    },
+    {
+     "label": "vcf303",
+     "name": "VCF 303",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by David A. Bartold)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Trigger",
+       "min": null,
+       "max": null,
+       "default": 0.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Cutoff",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Resonance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Envelope Modulation",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "wshape_sine",
+     "name": "Wave Shaper (Sine-Based)",
+     "maker": "CMT (http://www.ladspa.org/cmt, plugin by Richard W.E. Furse)",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Limiting Amplitude",
+       "min": 0.0,
+       "max": null,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "comb_1190",
+   "plugins": [
+    {
+     "label": "comb",
+     "name": "Comb Filter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Band separation (Hz)",
+       "min": 16.0,
+       "max": 640.0,
+       "default": 172.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -0.9900000095367432,
+       "max": 0.9900000095367432,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "comb_1887",
+   "plugins": [
+    {
+     "label": "comb_n",
+     "name": "Comb delay line, noninterpolating",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "comb_l",
+     "name": "Comb delay line, linear interpolation",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "comb_c",
+     "name": "Comb delay line, cubic spline interpolation",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "const_1909",
+   "plugins": [
+    {
+     "label": "const",
+     "name": "Constant Signal Generator",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Signal amplitude",
+       "min": -1.0,
+       "max": 1.100000023841858,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "crossover_dist_1404",
+   "plugins": [
+    {
+     "label": "crossoverDist",
+     "name": "Crossover distortion",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Crossover amplitude",
+       "min": 0.0,
+       "max": 0.10000000149011612,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Smoothing",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "dc_remove_1207",
+   "plugins": [
+    {
+     "label": "dcRemove",
+     "name": "DC Offset Remover",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": []
+    }
+   ]
+  },
+  {
+   "file": "decay_1886",
+   "plugins": [
+    {
+     "label": "decay",
+     "name": "Exponential signal decay",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Decay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "decimator_1202",
+   "plugins": [
+    {
+     "label": "decimator",
+     "name": "Decimator",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Bit depth",
+       "min": 1.0,
+       "max": 24.0,
+       "default": 24.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Sample rate (Hz)",
+       "min": 48.00000227987766,
+       "max": 48000.0,
+       "default": 48000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "declip_1195",
+   "plugins": [
+    {
+     "label": "declip",
+     "name": "Declipper",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": []
+    }
+   ]
+  },
+  {
+   "file": "delay_1898",
+   "plugins": [
+    {
+     "label": "delay_n",
+     "name": "Simple delay line, noninterpolating",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "delay_l",
+     "name": "Simple delay line, linear interpolation",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "delay_c",
+     "name": "Simple delay line, cubic spline interpolation",
+     "maker": "Andy Wingo <wingo at pobox dot com>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Max Delay (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "delayorama_1402",
+   "plugins": [
+    {
+     "label": "delayorama",
+     "name": "Delayorama",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Random seed",
+       "min": 0.0,
+       "max": 1000.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Input gain (dB)",
+       "min": -96.0,
+       "max": 24.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback (%)",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Number of taps",
+       "min": 2.0,
+       "max": 128.0,
+       "default": 2.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "First delay (s)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay range (s)",
+       "min": 9.999999747378752e-05,
+       "max": 6.0,
+       "default": 6.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay change",
+       "min": 0.20000000298023224,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay random (%)",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Amplitude change",
+       "min": 0.20000000298023224,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Amplitude random (%)",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/wet mix",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "diode_1185",
+   "plugins": [
+    {
+     "label": "diode",
+     "name": "Diode Processor",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Mode (0 for none, 1 for half wave, 2 for full wave)",
+       "min": 0.0,
+       "max": 3.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "divider_1186",
+   "plugins": [
+    {
+     "label": "divider",
+     "name": "Audio Divider (Suboctave Generator)",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Denominator",
+       "min": 1.0,
+       "max": 8.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "dj_eq_1901",
+   "plugins": [
+    {
+     "label": "dj_eq_mono",
+     "name": "DJ EQ (mono)",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Lo gain (dB)",
+       "min": -70.0,
+       "max": 6.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Mid gain (dB)",
+       "min": -70.0,
+       "max": 6.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Hi gain (dB)",
+       "min": -70.0,
+       "max": 6.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "dj_eq",
+     "name": "DJ EQ",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Lo gain (dB)",
+       "min": -70.0,
+       "max": 6.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Mid gain (dB)",
+       "min": -70.0,
+       "max": 6.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Hi gain (dB)",
+       "min": -70.0,
+       "max": 6.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "dj_flanger_1438",
+   "plugins": [
+    {
+     "label": "djFlanger",
+     "name": "DJ flanger",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "LFO sync",
+       "min": null,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO period (s)",
+       "min": 0.10000000149011612,
+       "max": 32.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO depth (ms)",
+       "min": 1.0,
+       "max": 5.0,
+       "default": 4.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback (%)",
+       "min": -100.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "dyson_compress_1403",
+   "plugins": [
+    {
+     "label": "dysonCompress",
+     "name": "Dyson compressor",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Peak limit (dB)",
+       "min": -30.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Release time (s)",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Fast compression ratio",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Compression ratio",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "fad_delay_1192",
+   "plugins": [
+    {
+     "label": "fadDelay",
+     "name": "Fractionally Addressed Delay Line",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (seconds)",
+       "min": 0.10000000149011612,
+       "max": 10.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback (dB)",
+       "min": -70.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "fast_lookahead_limiter_1913",
+   "plugins": [
+    {
+     "label": "fastLookaheadLimiter",
+     "name": "Fast Lookahead limiter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Input gain (dB)",
+       "min": -20.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Limit (dB)",
+       "min": -20.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Release time (s)",
+       "min": 0.009999999776482582,
+       "max": 2.0,
+       "default": 0.5075,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "flanger_1191",
+   "plugins": [
+    {
+     "label": "flanger",
+     "name": "Flanger",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay base (ms)",
+       "min": 0.10000000149011612,
+       "max": 25.0,
+       "default": 6.325,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Max slowdown (ms)",
+       "min": 0.0,
+       "max": 10.0,
+       "default": 2.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO frequency (Hz)",
+       "min": 0.05000000074505806,
+       "max": 100.0,
+       "default": 0.33437,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "fm_osc_1415",
+   "plugins": [
+    {
+     "label": "fmOsc",
+     "name": "FM Oscillator",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Waveform (1=sin, 2=tri, 3=squ, 4=saw)",
+       "min": 1.0,
+       "max": 4.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "foldover_1213",
+   "plugins": [
+    {
+     "label": "foldover",
+     "name": "Foldover distortion",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Drive",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Skew",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "foverdrive_1196",
+   "plugins": [
+    {
+     "label": "foverdrive",
+     "name": "Fast overdrive",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Drive level",
+       "min": 1.0,
+       "max": 3.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "freq_tracker_1418",
+   "plugins": [
+    {
+     "label": "freqTracker",
+     "name": "Frequency tracker",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Tracking speed",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "gate_1410",
+   "plugins": [
+    {
+     "label": "gate",
+     "name": "Gate",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "LF key filter (Hz)",
+       "min": 33.59999880194664,
+       "max": 4800.000071525574,
+       "default": 33.599999,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": true
+      },
+      {
+       "name": "HF key filter (Hz)",
+       "min": 239.99999463558197,
+       "max": 23520.000457763672,
+       "default": 23520.000458,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": true
+      },
+      {
+       "name": "Threshold (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": -70.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Attack (ms)",
+       "min": 0.009999999776482582,
+       "max": 1000.0,
+       "default": 250.0075,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Hold (ms)",
+       "min": 2.0,
+       "max": 2000.0,
+       "default": 1500.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay (ms)",
+       "min": 2.0,
+       "max": 4000.0,
+       "default": 2001.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Range (dB)",
+       "min": -90.0,
+       "max": 0.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output select (-1 = key listen, 0 = gate, 1 = bypass)",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "giant_flange_1437",
+   "plugins": [
+    {
+     "label": "giantFlange",
+     "name": "Giant flange",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Double delay",
+       "min": null,
+       "max": null,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO frequency 1 (Hz)",
+       "min": 0.0,
+       "max": 30.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay 1 range (s)",
+       "min": 0.0,
+       "max": 10.5,
+       "default": 2.625,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO frequency 2 (Hz)",
+       "min": 0.0,
+       "max": 30.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay 2 range (s)",
+       "min": 0.0,
+       "max": 10.5,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -100.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "gong_1424",
+   "plugins": [
+    {
+     "label": "gong",
+     "name": "Gong model",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Inner damping",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer damping",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Mic position",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner size 1",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner stiffness 1 +",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner stiffness 1 -",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner size 2",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner stiffness 2 +",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner stiffness 2 -",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner size 3",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner stiffness 3 +",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner stiffness 3 -",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner size 4",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner stiffness 4 +",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Inner stiffness 4 -",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer size 1",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer stiffness 1 +",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer stiffness 1 -",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer size 2",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer stiffness 2 +",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer stiffness 2 -",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer size 3",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer stiffness 3 +",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer stiffness 3 -",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer size 4",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer stiffness 4 +",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Outer stiffness 4 -",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "gong_beater_1439",
+   "plugins": [
+    {
+     "label": "gongBeater",
+     "name": "Gong beater",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Impulse gain (dB)",
+       "min": -70.0,
+       "max": 0.0,
+       "default": -70.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Strike gain (dB)",
+       "min": -70.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Strike duration (s)",
+       "min": 0.0010000000474974513,
+       "max": 0.20000000298023224,
+       "default": 0.1005,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "gsm_1215",
+   "plugins": [
+    {
+     "label": "gsm",
+     "name": "GSM simulator",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Dry/wet mix",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Number of passes",
+       "min": 0.0,
+       "max": 10.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Error rate (bits/block)",
+       "min": 0.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "hard_limiter_1413",
+   "plugins": [
+    {
+     "label": "hardLimiter",
+     "name": "Hard Limiter",
+     "maker": "Marcus Andersson",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "dB limit",
+       "min": -50.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Residue level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "harmonic_gen_1220",
+   "plugins": [
+    {
+     "label": "harmonicGen",
+     "name": "Harmonic generator",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Fundamental magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "2nd harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "3rd harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "4th harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "5th harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "6th harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "7th harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "8th harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "9th harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "10th harmonic magnitude",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "hermes_filter_1200",
+   "plugins": [
+    {
+     "label": "hermesFilter",
+     "name": "Hermes Filter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "LFO1 freq (Hz)",
+       "min": 0.0,
+       "max": 1000.0,
+       "default": 250.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO1 wave (0 = sin, 1 = tri, 2 = saw, 3 = squ, 4 = s&h)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO2 freq (Hz)",
+       "min": 0.0,
+       "max": 1000.0,
+       "default": 250.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO2 wave (0 = sin, 1 = tri, 2 = saw, 3 = squ, 4 = s&h)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Osc1 freq (Hz)",
+       "min": 0.0,
+       "max": 4000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Osc1 wave (0 = sin, 1 = tri, 2 = saw, 3 = squ, 4 = noise)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Osc2 freq (Hz)",
+       "min": 0.0,
+       "max": 4000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Osc2 wave (0 = sin, 1 = tri, 2 = saw, 3 = squ, 4 = noise)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Ringmod 1 depth (0=none, 1=AM, 2=RM)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Ringmod 2 depth (0=none, 1=AM, 2=RM)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Ringmod 3 depth (0=none, 1=AM, 2=RM)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Osc1 gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": -70.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "RM1 gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": -70.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Osc2 gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": -70.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "RM2 gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": -70.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Input gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "RM3 gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": -70.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Xover lower freq",
+       "min": 50.0,
+       "max": 6000.0,
+       "default": 1537.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Xover upper freq",
+       "min": 1000.0,
+       "max": 10000.0,
+       "default": 7750.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dist1 drive",
+       "min": 0.0,
+       "max": 3.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dist2 drive",
+       "min": 0.0,
+       "max": 3.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dist3 drive",
+       "min": 0.0,
+       "max": 3.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt1 type (0=none, 1=LP, 2=HP, 3=BP, 4=BR, 5=AP)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt1 freq",
+       "min": 0.0,
+       "max": 8000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt1 q",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt1 resonance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt1 LFO1 level",
+       "min": -500.0,
+       "max": 500.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt1 LFO2 level",
+       "min": -500.0,
+       "max": 500.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt2 type (0=none, 1=LP, 2=HP, 3=BP, 4=BR, 5=AP)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt2 freq",
+       "min": 0.0,
+       "max": 8000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt2 q",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt2 resonance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt2 LFO1 level",
+       "min": -500.0,
+       "max": 500.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt2 LFO2 level",
+       "min": -500.0,
+       "max": 500.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt3 type (0=none, 1=LP, 2=HP, 3=BP, 4=BR, 5=AP)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt3 freq",
+       "min": 0.0,
+       "max": 8000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt3 q",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt3 resonance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt3 LFO1 level",
+       "min": -500.0,
+       "max": 500.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filt3 LFO2 level",
+       "min": -500.0,
+       "max": 500.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay1 length (s)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay1 feedback",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay1 wetness",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay2 length (s)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay2 feedback",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay2 wetness",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay3 length (s)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay3 feedback",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay3 wetness",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 1 gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 gain (dB)",
+       "min": -70.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "highpass_iir_1890",
+   "plugins": [
+    {
+     "label": "highpass_iir",
+     "name": "Glame Highpass Filter",
+     "maker": "Alexander Ehlert <mag@glame.de>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Cutoff Frequency",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 39.313739,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Stages(2 poles per stage)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "imp_1199",
+   "plugins": [
+    {
+     "label": "imp",
+     "name": "Impulse convolver",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Impulse ID",
+       "min": 1.0,
+       "max": 21.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "High latency mode",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Gain (dB)",
+       "min": -90.0,
+       "max": 24.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "inv_1429",
+   "plugins": [
+    {
+     "label": "inv",
+     "name": "Inverter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": []
+    }
+   ]
+  },
+  {
+   "file": "karaoke_1409",
+   "plugins": [
+    {
+     "label": "karaoke",
+     "name": "Karaoke",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Vocal volume (dB)",
+       "min": -70.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "latency_1914",
+   "plugins": [
+    {
+     "label": "artificialLatency",
+     "name": "Artificial latency",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay (ms)",
+       "min": 0.0,
+       "max": 10000.0,
+       "default": 2500.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "lcr_delay_1436",
+   "plugins": [
+    {
+     "label": "lcrDelay",
+     "name": "L/C/R Delay",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "L delay (ms)",
+       "min": 0.0,
+       "max": 2700.0,
+       "default": 675.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "L level",
+       "min": 0.0,
+       "max": 50.0,
+       "default": 25.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "C delay (ms)",
+       "min": 0.0,
+       "max": 2700.0,
+       "default": 675.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "C level",
+       "min": 0.0,
+       "max": 50.0,
+       "default": 25.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "R delay (ms)",
+       "min": 0.0,
+       "max": 2700.0,
+       "default": 675.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "R level",
+       "min": 0.0,
+       "max": 50.0,
+       "default": 25.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -100.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "High damp (%)",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 50.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Low damp (%)",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 50.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Spread",
+       "min": 0.0,
+       "max": 50.0,
+       "default": 25.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry/Wet level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "lowpass_iir_1891",
+   "plugins": [
+    {
+     "label": "lowpass_iir",
+     "name": "Glame Lowpass Filter",
+     "maker": "Alexander Ehlert <mag@glame.de>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Cutoff Frequency",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 2637.245812,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Stages(2 poles per stage)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "ls_filter_1908",
+   "plugins": [
+    {
+     "label": "lsFilter",
+     "name": "LS Filter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Filter type (0=LP, 1=BP, 2=HP)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Cutoff frequency (Hz)",
+       "min": 96.00000455975533,
+       "max": 24000.0,
+       "default": 1517.893313,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Resonance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "matrix_ms_st_1421",
+   "plugins": [
+    {
+     "label": "matrixMSSt",
+     "name": "Matrix: MS to Stereo",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Width",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "matrix_spatialiser_1422",
+   "plugins": [
+    {
+     "label": "matrixSpatialiser",
+     "name": "Matrix Spatialiser",
+     "maker": "Joern Nettingsmeier <nettings@folkwang-hochschule.de>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Width",
+       "min": -512.0,
+       "max": 512.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "matrix_st_ms_1420",
+   "plugins": [
+    {
+     "label": "matrixStMS",
+     "name": "Matrix: Stereo to MS",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": []
+    }
+   ]
+  },
+  {
+   "file": "mbeq_1197",
+   "plugins": [
+    {
+     "label": "mbeq",
+     "name": "Multiband EQ",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "50Hz gain (low shelving)",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "100Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "156Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "220Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "311Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "440Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "622Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "880Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "1250Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "1750Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "2500Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "3500Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "5000Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "10000Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "20000Hz gain",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "multivoice_chorus_1201",
+   "plugins": [
+    {
+     "label": "multivoiceChorus",
+     "name": "Multivoice Chorus",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Number of voices",
+       "min": 1.0,
+       "max": 8.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay base (ms)",
+       "min": 10.0,
+       "max": 40.0,
+       "default": 10.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Voice separation (ms)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Detune (%)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO frequency (Hz)",
+       "min": 2.0,
+       "max": 30.0,
+       "default": 9.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output attenuation (dB)",
+       "min": -20.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "notch_iir_1894",
+   "plugins": [
+    {
+     "label": "notch_iir",
+     "name": "Mag's Notch Filter",
+     "maker": "Alexander Ehlert <mag@glame.de>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Center Frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 321.99378,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Bandwidth (Hz)",
+       "min": 4.799999878741801,
+       "max": 21599.99942779541,
+       "default": 321.99378,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Stages(2 poles per stage)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "phasers_1217",
+   "plugins": [
+    {
+     "label": "lfoPhaser",
+     "name": "LFO Phaser",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "LFO rate (Hz)",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 25.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "LFO depth",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Spread (octaves)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "fourByFourPole",
+     "name": "4 x 4 pole allpass",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Frequency 1",
+       "min": 1.0,
+       "max": 20000.0,
+       "default": 5000.75,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback 1",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Frequency 2",
+       "min": 1.0,
+       "max": 20000.0,
+       "default": 10000.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback 2",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Frequency 3",
+       "min": 1.0,
+       "max": 20000.0,
+       "default": 15000.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback 3",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Frequency 4",
+       "min": 1.0,
+       "max": 20000.0,
+       "default": 20000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback 4",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    },
+    {
+     "label": "autoPhaser",
+     "name": "Auto phaser",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Attack time (s)",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Decay time (s)",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Modulation depth",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Spread (octaves)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "pitch_scale_1193",
+   "plugins": [
+    {
+     "label": "pitchScale",
+     "name": "Pitch Scaler",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Pitch co-efficient",
+       "min": 0.5,
+       "max": 2.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "pitch_scale_1194",
+   "plugins": [
+    {
+     "label": "pitchScaleHQ",
+     "name": "Higher Quality Pitch Scaler",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Pitch co-efficient",
+       "min": 0.5,
+       "max": 2.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "pointer_cast_1910",
+   "plugins": [
+    {
+     "label": "pointerCastDistortion",
+     "name": "Pointer cast distortion",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Effect cutoff freq (Hz)",
+       "min": 4.799999878741801,
+       "max": 14400.00057220459,
+       "default": 35.523974,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Dry/wet mix",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "rate_shifter_1417",
+   "plugins": [
+    {
+     "label": "rateShifter",
+     "name": "Rate shifter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Rate",
+       "min": -4.0,
+       "max": 4.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "retro_flange_1208",
+   "plugins": [
+    {
+     "label": "retroFlange",
+     "name": "Retro Flanger",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Average stall (ms)",
+       "min": 0.0,
+       "max": 10.0,
+       "default": 2.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Flange frequency (Hz)",
+       "min": 0.5,
+       "max": 8.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "revdelay_1605",
+   "plugins": [
+    {
+     "label": "revdelay",
+     "name": "Reverse Delay (5s max)",
+     "maker": "Jesse Chappell <jesse at essej dot net>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Delay Time (s)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level (dB)",
+       "min": -70.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Level (dB)",
+       "min": -70.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Feedback",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Crossfade samples",
+       "min": 0.0,
+       "max": 5000.0,
+       "default": 1250.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "ringmod_1188",
+   "plugins": [
+    {
+     "label": "ringmod_1i1o1l",
+     "name": "Ringmod with LFO",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Modulation depth (0=none, 1=AM, 2=RM)",
+       "min": 0.0,
+       "max": 2.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Frequency (Hz)",
+       "min": 1.0,
+       "max": 1000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Sine level",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Triangle level",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Sawtooth level",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Square level",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "satan_maximiser_1408",
+   "plugins": [
+    {
+     "label": "satanMaximiser",
+     "name": "Barry's Satan Maximiser",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Decay time (samples)",
+       "min": 2.0,
+       "max": 30.0,
+       "default": 30.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Knee point (dB)",
+       "min": -90.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "sc1_1425",
+   "plugins": [
+    {
+     "label": "sc1",
+     "name": "SC1",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Attack time (ms)",
+       "min": 2.0,
+       "max": 400.0,
+       "default": 101.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Release time (ms)",
+       "min": 2.0,
+       "max": 800.0,
+       "default": 401.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Threshold level (dB)",
+       "min": -30.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Ratio (1:n)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Knee radius (dB)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 3.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Makeup gain (dB)",
+       "min": 0.0,
+       "max": 24.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "sc4_1882",
+   "plugins": [
+    {
+     "label": "sc4",
+     "name": "SC4",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "RMS/peak",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Attack time (ms)",
+       "min": 1.5,
+       "max": 400.0,
+       "default": 101.125,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Release time (ms)",
+       "min": 2.0,
+       "max": 800.0,
+       "default": 401.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Threshold level (dB)",
+       "min": -30.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Ratio (1:n)",
+       "min": 1.0,
+       "max": 20.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Knee radius (dB)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 3.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Makeup gain (dB)",
+       "min": 0.0,
+       "max": 24.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "sc4m_1916",
+   "plugins": [
+    {
+     "label": "sc4m",
+     "name": "SC4 mono",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "RMS/peak",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Attack time (ms)",
+       "min": 1.5,
+       "max": 400.0,
+       "default": 101.125,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Release time (ms)",
+       "min": 2.0,
+       "max": 800.0,
+       "default": 401.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Threshold level (dB)",
+       "min": -30.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Ratio (1:n)",
+       "min": 1.0,
+       "max": 20.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Knee radius (dB)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 3.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Makeup gain (dB)",
+       "min": 0.0,
+       "max": 24.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "se4_1883",
+   "plugins": [
+    {
+     "label": "se4",
+     "name": "SE4",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "RMS/peak",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Attack time (ms)",
+       "min": 1.5,
+       "max": 400.0,
+       "default": 101.125,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Release time (ms)",
+       "min": 2.0,
+       "max": 800.0,
+       "default": 401.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Threshold level (dB)",
+       "min": -30.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Ratio (1:n)",
+       "min": 1.0,
+       "max": 20.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Knee radius (dB)",
+       "min": 1.0,
+       "max": 10.0,
+       "default": 3.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Attenuation (dB)",
+       "min": -24.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaper_1187",
+   "plugins": [
+    {
+     "label": "shaper",
+     "name": "Wave shaper",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Waveshape",
+       "min": -10.0,
+       "max": 10.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "sifter_1210",
+   "plugins": [
+    {
+     "label": "sifter",
+     "name": "Signal sifter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Sift size",
+       "min": 1.0,
+       "max": 1000.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "single_para_1203",
+   "plugins": [
+    {
+     "label": "singlePara",
+     "name": "Single band parametric",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Gain (dB)",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Frequency (Hz)",
+       "min": 0.0,
+       "max": 19200.000286102295,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": true
+      },
+      {
+       "name": "Bandwidth (octaves)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "sinus_wavewrapper_1198",
+   "plugins": [
+    {
+     "label": "sinusWavewrapper",
+     "name": "Sinus wavewrapper",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Wrap degree",
+       "min": 0.0,
+       "max": 10.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "smooth_decimate_1414",
+   "plugins": [
+    {
+     "label": "smoothDecimate",
+     "name": "Smooth Decimator",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Resample rate",
+       "min": 0.0,
+       "max": 48000.0,
+       "default": 48000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": true
+      },
+      {
+       "name": "Smoothing",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "svf_1214",
+   "plugins": [
+    {
+     "label": "svf",
+     "name": "State Variable Filter",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Filter type (0=none, 1=LP, 2=HP, 3=BP, 4=BR, 5=AP)",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filter freq",
+       "min": 0.0,
+       "max": 6000.0,
+       "default": 440.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filter Q",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Filter resonance",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_autopan",
+   "plugins": [
+    {
+     "label": "tap_autopan",
+     "name": "TAP AutoPanner",
+     "maker": "Tom Szilagyi",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Frequency [Hz]",
+       "min": 0.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Depth [%]",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Gain [dB]",
+       "min": -70.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_chorusflanger",
+   "plugins": [
+    {
+     "label": "tap_chorusflanger",
+     "name": "TAP Chorus/Flanger",
+     "maker": "Tom Szilagyi",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Frequency [Hz]",
+       "min": 0.0,
+       "max": 5.0,
+       "default": 1.25,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "L/R Phase Shift [deg]",
+       "min": 0.0,
+       "max": 180.0,
+       "default": 90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Depth [%]",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 75.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Delay [ms]",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 25.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Contour [Hz]",
+       "min": 20.0,
+       "max": 20000.0,
+       "default": 100.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_deesser",
+   "plugins": [
+    {
+     "label": "tap_deesser",
+     "name": "TAP DeEsser",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Threshold Level [dB]",
+       "min": -50.0,
+       "max": 10.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Frequency [Hz]",
+       "min": 2000.0,
+       "max": 16000.0,
+       "default": 5500.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Sidechain Filter",
+       "min": 0.0,
+       "max": 1.0099999904632568,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Monitor",
+       "min": 0.0,
+       "max": 1.0099999904632568,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_doubler",
+   "plugins": [
+    {
+     "label": "tap_doubler",
+     "name": "TAP Fractal Doubler",
+     "maker": "Tom Szilagyi",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Time Tracking",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Pitch Tracking",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Left Position",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Right Position",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Left Position",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Right Position",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_dynamics_m",
+   "plugins": [
+    {
+     "label": "tap_dynamics_m",
+     "name": "TAP Dynamics (M)",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Attack [ms]",
+       "min": 4.0,
+       "max": 500.0,
+       "default": 128.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Release [ms]",
+       "min": 4.0,
+       "max": 1000.0,
+       "default": 502.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Offset Gain [dB]",
+       "min": -20.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Makeup Gain [dB]",
+       "min": -20.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Function",
+       "min": 0.0,
+       "max": 14.100000381469727,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_dynamics_st",
+   "plugins": [
+    {
+     "label": "tap_dynamics_st",
+     "name": "TAP Dynamics (St)",
+     "maker": "Tom Szilagyi",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Attack [ms]",
+       "min": 4.0,
+       "max": 500.0,
+       "default": 128.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Release [ms]",
+       "min": 4.0,
+       "max": 1000.0,
+       "default": 502.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Offset Gain [dB]",
+       "min": -20.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Makeup Gain [dB]",
+       "min": -20.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Stereo Mode",
+       "min": 0.0,
+       "max": 2.0999999046325684,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Function",
+       "min": 0.0,
+       "max": 14.100000381469727,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_echo",
+   "plugins": [
+    {
+     "label": "tap_stereo_echo",
+     "name": "TAP Stereo Echo",
+     "maker": "Tom Szilagyi",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "L Delay [ms]",
+       "min": 0.0,
+       "max": 2000.0,
+       "default": 100.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "L Feedback [%]",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "R/Haas Delay [ms]",
+       "min": 0.0,
+       "max": 2000.0,
+       "default": 100.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "R/Haas Feedback [%]",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "L Echo Level [dB]",
+       "min": -70.0,
+       "max": 10.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "R Echo Level [dB]",
+       "min": -70.0,
+       "max": 10.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level [dB]",
+       "min": -70.0,
+       "max": 10.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Cross Mode",
+       "min": null,
+       "max": null,
+       "default": 0.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Haas Effect",
+       "min": null,
+       "max": null,
+       "default": 0.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Swap Outputs",
+       "min": null,
+       "max": null,
+       "default": 0.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_eq",
+   "plugins": [
+    {
+     "label": "tap_equalizer",
+     "name": "TAP Equalizer",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Band 1 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 4 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 5 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 6 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 7 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 8 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 1 Freq [Hz]",
+       "min": 40.0,
+       "max": 280.0,
+       "default": 100.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 Freq [Hz]",
+       "min": 100.0,
+       "max": 500.0,
+       "default": 200.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 Freq [Hz]",
+       "min": 200.0,
+       "max": 1000.0,
+       "default": 400.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 4 Freq [Hz]",
+       "min": 400.0,
+       "max": 2800.0,
+       "default": 1000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 5 Freq [Hz]",
+       "min": 1000.0,
+       "max": 5000.0,
+       "default": 3000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 6 Freq [Hz]",
+       "min": 3000.0,
+       "max": 9000.0,
+       "default": 6000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 7 Freq [Hz]",
+       "min": 6000.0,
+       "max": 18000.0,
+       "default": 12000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 8 Freq [Hz]",
+       "min": 10000.0,
+       "max": 20000.0,
+       "default": 15000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_eqbw",
+   "plugins": [
+    {
+     "label": "tap_equalizer_bw",
+     "name": "TAP Equalizer/BW",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Band 1 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 4 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 5 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 6 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 7 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 8 Gain [dB]",
+       "min": -50.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 1 Freq [Hz]",
+       "min": 40.0,
+       "max": 280.0,
+       "default": 100.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 Freq [Hz]",
+       "min": 100.0,
+       "max": 500.0,
+       "default": 200.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 Freq [Hz]",
+       "min": 200.0,
+       "max": 1000.0,
+       "default": 400.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 4 Freq [Hz]",
+       "min": 400.0,
+       "max": 2800.0,
+       "default": 1000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 5 Freq [Hz]",
+       "min": 1000.0,
+       "max": 5000.0,
+       "default": 3000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 6 Freq [Hz]",
+       "min": 3000.0,
+       "max": 9000.0,
+       "default": 6000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 7 Freq [Hz]",
+       "min": 6000.0,
+       "max": 18000.0,
+       "default": 12000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 8 Freq [Hz]",
+       "min": 10000.0,
+       "max": 20000.0,
+       "default": 15000.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 1 Bandwidth [octaves]",
+       "min": 0.10000000149011612,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 Bandwidth [octaves]",
+       "min": 0.10000000149011612,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 Bandwidth [octaves]",
+       "min": 0.10000000149011612,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 4 Bandwidth [octaves]",
+       "min": 0.10000000149011612,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 5 Bandwidth [octaves]",
+       "min": 0.10000000149011612,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 6 Bandwidth [octaves]",
+       "min": 0.10000000149011612,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 7 Bandwidth [octaves]",
+       "min": 0.10000000149011612,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 8 Bandwidth [octaves]",
+       "min": 0.10000000149011612,
+       "max": 5.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_limiter",
+   "plugins": [
+    {
+     "label": "tap_limiter",
+     "name": "TAP Scaling Limiter",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Limit Level [dB]",
+       "min": -30.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Output Volume [dB]",
+       "min": -30.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_pinknoise",
+   "plugins": [
+    {
+     "label": "tap_pinknoise",
+     "name": "TAP Pink/Fractal Noise",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Fractal Dimension",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Signal Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Noise Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_pitch",
+   "plugins": [
+    {
+     "label": "tap_pitch",
+     "name": "TAP Pitch Shifter",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Semitone Shift",
+       "min": -12.0,
+       "max": 12.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Rate Shift [%]",
+       "min": -50.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_reflector",
+   "plugins": [
+    {
+     "label": "tap_reflector",
+     "name": "TAP Reflector",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Fragment Length [ms]",
+       "min": 20.0,
+       "max": 1600.0,
+       "default": 415.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_reverb",
+   "plugins": [
+    {
+     "label": "tap_reverb",
+     "name": "TAP Reverberator",
+     "maker": "Tom Szilagyi",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Decay [ms]",
+       "min": 0.0,
+       "max": 10000.0,
+       "default": 2500.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level [dB]",
+       "min": -70.0,
+       "max": 10.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Level [dB]",
+       "min": -70.0,
+       "max": 10.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Comb Filters",
+       "min": null,
+       "max": null,
+       "default": 1.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Allpass Filters",
+       "min": null,
+       "max": null,
+       "default": 1.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Bandpass Filter",
+       "min": null,
+       "max": null,
+       "default": 1.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Enhanced Stereo",
+       "min": null,
+       "max": null,
+       "default": 1.0,
+       "toggled": true,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Reverb Type",
+       "min": 0.0,
+       "max": 42.099998474121094,
+       "default": 0.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_rotspeak",
+   "plugins": [
+    {
+     "label": "tap_rotspeak",
+     "name": "TAP Rotary Speaker",
+     "maker": "Tom Szilagyi",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Rotor Frequency [Hz]",
+       "min": 0.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Horn Frequency [Hz]",
+       "min": 0.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Mic Distance [%]",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 25.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Rotor/Horn Mix",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_sigmoid",
+   "plugins": [
+    {
+     "label": "tap_sigmoid",
+     "name": "TAP Sigmoid Booster",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Pre Gain [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Post Gain [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_tremolo",
+   "plugins": [
+    {
+     "label": "tap_tremolo",
+     "name": "TAP Tremolo",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Frequency [Hz]",
+       "min": 0.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Depth [%]",
+       "min": 0.0,
+       "max": 100.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Gain [dB]",
+       "min": -70.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_tubewarmth",
+   "plugins": [
+    {
+     "label": "tap_tubewarmth",
+     "name": "TAP TubeWarmth",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Drive",
+       "min": 0.10000000149011612,
+       "max": 10.0,
+       "default": 2.575,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tape--Tube Blend",
+       "min": -10.0,
+       "max": 10.0,
+       "default": 10.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tap_vibrato",
+   "plugins": [
+    {
+     "label": "tap_vibrato",
+     "name": "TAP Vibrato",
+     "maker": "Tom Szilagyi",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Frequency [Hz]",
+       "min": 0.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Depth [%]",
+       "min": 0.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wet Level [dB]",
+       "min": -90.0,
+       "max": 20.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tape_delay_1211",
+   "plugins": [
+    {
+     "label": "tapeDelay",
+     "name": "Tape Delay Simulation",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Tape speed (inches/sec, 1=normal)",
+       "min": 0.0,
+       "max": 10.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Dry level (dB)",
+       "min": -90.0,
+       "max": 0.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tap 1 distance (inches)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tap 1 level (dB)",
+       "min": -90.0,
+       "max": 0.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tap 2 distance (inches)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tap 2 level (dB)",
+       "min": -90.0,
+       "max": 0.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tap 3 distance (inches)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 2.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tap 3 level (dB)",
+       "min": -90.0,
+       "max": 0.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tap 4 distance (inches)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 3.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Tap 4 level (dB)",
+       "min": -90.0,
+       "max": 0.0,
+       "default": -90.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "transient_1206",
+   "plugins": [
+    {
+     "label": "transient",
+     "name": "Transient mangler",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Attack speed",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Sustain time",
+       "min": -1.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "triple_para_1204",
+   "plugins": [
+    {
+     "label": "triplePara",
+     "name": "Triple band parametric with shelves",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Low-shelving gain (dB)",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Low-shelving frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 23520.000457763672,
+       "default": 4.8,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Low-shelving slope",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 1 gain (dB)",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 1 frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 23520.000457763672,
+       "default": 40.159681,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Band 1 bandwidth (octaves)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 gain (dB)",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 23520.000457763672,
+       "default": 335.999999,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Band 2 bandwidth (octaves)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 gain (dB)",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 23520.000457763672,
+       "default": 2811.177712,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "Band 3 bandwidth (octaves)",
+       "min": 0.0,
+       "max": 4.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "High-shelving gain (dB)",
+       "min": -70.0,
+       "max": 30.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "High-shelving frequency (Hz)",
+       "min": 4.799999878741801,
+       "max": 23520.000457763672,
+       "default": 23520.000458,
+       "toggled": false,
+       "integer": false,
+       "log": true,
+       "sample_rate": true
+      },
+      {
+       "name": "High-shelving slope",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.5,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "valve_1209",
+   "plugins": [
+    {
+     "label": "valve",
+     "name": "Valve saturation",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Distortion level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Distortion character",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "valve_rect_1405",
+   "plugins": [
+    {
+     "label": "valveRect",
+     "name": "Valve rectifier",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": [
+      {
+       "name": "Sag level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Distortion",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "vocoder_1337",
+   "plugins": [
+    {
+     "label": "vocoder",
+     "name": "Vocoder",
+     "maker": "Achim Settelmeier <settel-linux@sirlab.de> (adapted by Josh Green and Hexasoft)",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Number of bands",
+       "min": 1.0,
+       "max": 16.0,
+       "default": 1.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Left/Right",
+       "min": -100.0,
+       "max": 100.0,
+       "default": -100.0,
+       "toggled": false,
+       "integer": true,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 1 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 2 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 3 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 4 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 5 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 6 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 7 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 8 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 9 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 10 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 11 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 12 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 13 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 14 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 15 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Band 16 Level",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "vynil_1905",
+   "plugins": [
+    {
+     "label": "vynil",
+     "name": "VyNil (Vinyl Effect)",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 2,
+     "controls": [
+      {
+       "name": "Year",
+       "min": 1900.0,
+       "max": 1990.0,
+       "default": 1990.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "RPM",
+       "min": 33.0,
+       "max": 78.0,
+       "default": 33.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Surface warping",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Crackle",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      },
+      {
+       "name": "Wear",
+       "min": 0.0,
+       "max": 1.0,
+       "default": 0.0,
+       "toggled": false,
+       "integer": false,
+       "log": false,
+       "sample_rate": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "zm1_1428",
+   "plugins": [
+    {
+     "label": "zm1",
+     "name": "z-1",
+     "maker": "Steve Harris <steve@plugin.org.uk>",
+     "channels": 1,
+     "controls": []
+    }
+   ]
+  }
+ ]
+}

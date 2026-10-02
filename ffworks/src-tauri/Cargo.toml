@@ -1,0 +1,26 @@
+[package]
+name = "ffworks-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "FFWORKS desktop shell (Tauri). All editing logic lives in ffworks-core."
+
+[lib]
+name = "ffworks_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+ffworks-core = { path = "../crates/ffworks-core" }
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+# Enabled by `tauri build`; makes the binary load the embedded UI instead of the dev server.
+custom-protocol = ["tauri/custom-protocol"]
+# Test-only: lets a script injected via FFWORKS_UITEST_SCRIPT drive the real UI and report results. Never enabled in releases.
+uitest = []
