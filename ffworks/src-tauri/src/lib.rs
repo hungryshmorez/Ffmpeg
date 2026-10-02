@@ -660,8 +660,13 @@ fn list_clip_props() -> serde_json::Value {
 }
 
 #[tauri::command]
-fn list_export_presets() -> Vec<ExportSettings> {
+fn list_export_presets(state: State<AppState>) -> Vec<ExportSettings> {
+    // only offer presets this FFmpeg build can encode (the h264 default is always kept so the dialog is never empty)
+    let c = caps(&state);
     ExportSettings::builtin()
+        .into_iter()
+        .filter(|p| p.id == "h264_mp4" || c.as_ref().is_none_or(|c| p.video_codec.iter().chain(p.audio_codec.iter()).all(|e| c.has_encoder(e))))
+        .collect()
 }
 
 fn caps(state: &AppState) -> Option<Capabilities> {
