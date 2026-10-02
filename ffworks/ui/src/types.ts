@@ -62,3 +62,6 @@ export type JobEvent = { jobId: string; operation: string; output: string } & (
 );
 
 export interface RecoveryInfo { saved_unix: number; original_path: string | null; name: string; clips: number }
+
+export interface AppSettings { ffmpeg_path: string | null; ffprobe_path: string | null }
+export interface RelinkResult { state: StateView; relinked: string[]; unresolved: { mediaId: string; candidates: { path: string; exact: boolean; reason: string }[] }[] }

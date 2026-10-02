@@ -20,7 +20,9 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design.
 | Per-clip effect stack (11 effects: brightness, contrast, saturation, gamma, hue, blur, sharpen, grain, vignette, flips), opacity; reorder/enable/remove; parameter metadata registry; capability-checked | done, tested (pixel-verified in real FFmpeg) |
 | Processed preview: same compiler as export at 1, 1/2, 1/4 or 1/8 resolution over a 10 s window, cached by project content hash, marked out-of-date on any edit | done, tested (file generation + staleness; picture playback not observable in this sandbox) |
 | Autosave (every 20 s while unsaved, 3 rotating copies, atomic) and crash recovery dialog (Recover / Open original / Discard); corrupt latest autosave falls back to the previous | done, tested incl. a real `kill -9` of the app |
-| Keyframes, transitions, proxies, render queue, settings UI, relinking | **not started** (rest of Phase 2) |
+| Media relinking: offline detection, folder search by content fingerprint (finds renamed/moved files), name-only matches reported but never auto-applied, manual Locate; one undo step | done, tested (Rust + real GUI) |
+| Settings: custom FFmpeg/FFprobe paths, validated by running them before saving (Diagnostics dialog) | done, tested |
+| Keyframes, transitions, proxies, render queue | **not started** (rest of Phase 2) |
 | Automation DSL, macros, blueprints, analysis, glitch/datamosh labs, plugins | **not started** (Phases 3–10) |
 
 Nothing in the UI is a placeholder: unimplemented features are simply absent.
@@ -28,7 +30,7 @@ Nothing in the UI is a placeholder: unimplemented features are simply absent.
 ## Requirements
 
 * Windows 10/11 x64 (target). Linux/macOS builds work for development.
-* **FFmpeg ≥ 4.4 and FFprobe** on `PATH`, or set `FFWORKS_FFMPEG` / `FFWORKS_FFPROBE`. Not bundled and never downloaded automatically. *Diagnostics* in the app reports what was found (H.264 export needs a build with `libx264`).
+* **FFmpeg ≥ 4.4 and FFprobe** on `PATH`, set in *Diagnostics → FFmpeg location*, or via `FFWORKS_FFMPEG` / `FFWORKS_FFPROBE`. Not bundled and never downloaded automatically. *Diagnostics* in the app reports what was found (H.264 export needs a build with `libx264`).
 * Rust (stable), Node 20+. On Windows: Visual Studio Build Tools (C++) and WebView2 (preinstalled on Windows 11).
 
 ## Build and run
@@ -45,10 +47,11 @@ Headless: `cargo run -p ffworks-cli -- command project.ffworks` prints the exact
 ## Tests
 
 ```bash
-cargo test --workspace            # 55 tests: time, model, commands/undo, effects, ffprobe parsing, real-FFmpeg e2e
+cargo test --workspace            # 60 tests: time, model, commands/undo, effects, ffprobe parsing, real-FFmpeg e2e
 (cd ui && npm test)               # timeline math
 scripts/uitest/run.sh             # headless GUI test under Xvfb (Linux): 30 steps in the real webview
 scripts/uitest/recovery.sh        # kill -9 crash-recovery test: 9 steps across 3 app launches
+scripts/uitest/relink.sh          # offline media + relink + FFmpeg-path settings: 10 steps across 2 launches
 ```
 
 The e2e tests generate tiny fixtures with FFmpeg, build an edit (trim, split, move, gain), save → reload → export, then verify with FFprobe, **pixel sampling and audio level measurement** that the output matches the edit.

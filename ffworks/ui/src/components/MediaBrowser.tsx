@@ -23,6 +23,29 @@ export async function importPaths(paths: string[]) {
   }
 }
 
+export async function relinkFolder() {
+  const dir = await open({ directory: true, title: "Folder to search for the missing media" });
+  if (typeof dir !== "string") return;
+  const { setView, toast } = useProject.getState();
+  try {
+    const r = await api.relinkSearch(dir);
+    setView(r.state);
+    if (r.relinked.length) toast("info", `Relinked ${r.relinked.length} file(s) by content`);
+    for (const u of r.unresolved) {
+      const m = r.state.project.media.find((x) => x.id === u.mediaId);
+      const hint = u.candidates.length ? `only name-based candidates: ${u.candidates.map((c) => c.path).join(", ")} (${u.candidates[0]?.reason}) — use Locate to accept one` : "no match found";
+      toast("error", `${m?.name ?? u.mediaId}: ${hint}`);
+    }
+  } catch (e) {
+    toast("error", String(e));
+  }
+}
+
+export async function locateMedia(id: string) {
+  const p = await open({ title: "Locate file" });
+  if (typeof p === "string") await useProject.getState().run(() => api.relinkMedia(id, p));
+}
+
 /** Place media at the playhead on the first free compatible track (keyboard-accessible alternative to dragging). */
 export function addToTimeline(media: MediaAsset, startSec?: number, trackId?: string) {
   const { view, dispatch, toast } = useProject.getState();
@@ -50,6 +73,11 @@ export function MediaBrowser() {
       <div className="panel-title">
         Media <button className="small" onClick={() => void importViaDialog()}>Import…</button>
       </div>
+      {view.offlineMedia.length > 0 && (
+        <div className="offline-banner" role="alert">
+          {view.offlineMedia.length} media file(s) offline. <button className="small" onClick={() => void relinkFolder()}>Relink from folder…</button>
+        </div>
+      )}
       <div className="media-list" role="listbox" aria-label="Media items">
         {media.length === 0 && <p className="muted pad">Import files with the button above or drop them on the window.</p>}
         {media.map((m) => {
@@ -71,7 +99,7 @@ export function MediaBrowser() {
             >
               <div className="thumb">{Array.isArray(th) && th[0] ? <img src={th[0]} alt="" draggable={false} /> : <span>{m.info.video.length ? "🎞" : "🎵"}</span>}</div>
               <div className="media-meta">
-                <div className="name">{m.name}{offline && <em> — offline</em>}</div>
+                <div className="name">{m.name}{offline && <em> — offline</em>}{offline && <button className="small" onClick={(e) => { e.stopPropagation(); void locateMedia(m.id); }} onPointerDown={(e) => e.stopPropagation()}>Locate…</button>}</div>
                 <div className="muted">{timecode(toSec(m.info.duration), fps)} · {v ? `${v.width}×${v.height}` : "audio"} {v?.fps ? `· ${toSec(v.fps).toFixed(3)} fps` : ""}</div>
               </div>
             </div>

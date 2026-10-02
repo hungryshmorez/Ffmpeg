@@ -58,6 +58,10 @@ A registry of `EffectDef`s (id, category, required FFmpeg filters, `ParamDef`s w
 
 `Engine::autosave(dir)` writes the unsaved project (plus original path and timestamp) when `revision` changed since the last autosave, rotating `recovery.autosave.json`, `.1`, `.2` (temp file + rename). Explicit save, new, open, and deliberate close-without-saving delete them, so an autosave present at startup means an abnormal exit. `recovery::find` returns the newest *parseable* copy, so a file truncated mid-write falls back to the previous rotation. Recovered engines are dirty and bound to the original path; the autosave stays until the user saves.
 
+## Relinking and settings (`relink.rs`, `settings.rs`)
+
+`RelinkMedia` replaces an asset in place (same id) through `Patch::ReplaceMedia`, so clips keep their references and undo is exact. `relink::find_candidates` walks the chosen folders (depth ≤ 8, ≤ 100 000 files, symlinks skipped), hashes only files whose size equals the original's, and ranks fingerprint matches (`exact`, even if renamed) above same-name files. `Engine::relink_search` applies only exact matches, as one batch. Settings (`settings.json` in the app config dir) override `FFWORKS_FFMPEG`/`PATH`; new paths are executed (`-version`) and must identify as FFmpeg/FFprobe before they are saved.
+
 ## Jobs (`jobs.rs`)
 
 `run_job` executes on a worker thread with real progress from FFmpeg `-progress pipe:1` (`out_time_us` ÷ timeline length → fraction; no fake percentages), ETA, cancellation (watchdog kills the process tree), stderr capture, and a `JobLog` (executable, argv, timestamps, exit code, stderr). Output goes to `name.ffworks-partial.ext` and is renamed on success, so a failed/cancelled export never leaves a truncated file or clobbers a good one. Failures get a plain-language hint (`explain_failure`) alongside the raw log.

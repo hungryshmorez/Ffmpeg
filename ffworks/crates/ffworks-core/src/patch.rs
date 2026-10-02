@@ -18,6 +18,8 @@ pub enum Patch {
     SetTrackProps { seq: Id, track: Id, name: String, muted: bool, locked: bool, gain_db: f64 },
     InsertMedia { index: usize, asset: MediaAsset },
     RemoveMedia { media: Id },
+    /// Replace an asset in place (same id), e.g. when relinking.
+    ReplaceMedia { asset: MediaAsset },
     SetSettings { settings: ProjectSettings },
     SetName { name: String },
 }
@@ -88,6 +90,11 @@ pub fn apply(p: &mut Project, patch: &Patch) -> Result<Patch> {
             let idx = p.media.iter().position(|m| &m.id == media).ok_or_else(|| Error::NotFound(format!("media {media}")))?;
             let old = p.media.remove(idx);
             Ok(Patch::InsertMedia { index: idx, asset: old })
+        }
+        Patch::ReplaceMedia { asset } => {
+            let slot = p.media.iter_mut().find(|m| m.id == asset.id).ok_or_else(|| Error::NotFound(format!("media {}", asset.id)))?;
+            let old = std::mem::replace(slot, asset.clone());
+            Ok(Patch::ReplaceMedia { asset: old })
         }
         Patch::SetSettings { settings } => {
             let old = std::mem::replace(&mut p.settings, settings.clone());

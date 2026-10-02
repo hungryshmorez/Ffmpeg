@@ -27,6 +27,7 @@ struct AppState {
     cache_dir: PathBuf,
     temp_dir: PathBuf,
     recovery_dir: PathBuf,
+    settings_file: PathBuf,
 }
 
 #[derive(Serialize)]
@@ -219,6 +220,48 @@ fn discard_recovery(state: State<AppState>) {
 }
 
 #[tauri::command]
+fn get_settings(state: State<AppState>) -> ffworks_core::settings::Settings {
+    ffworks_core::settings::Settings::load(&state.settings_file)
+}
+
+/// Validate the chosen FFmpeg/FFprobe by running them, then persist and apply. Nothing is saved if validation fails.
+#[tauri::command]
+fn set_settings(state: State<AppState>, ffmpeg_path: Option<String>, ffprobe_path: Option<String>) -> Result<serde_json::Value, String> {
+    let new = ffworks_core::settings::Settings { ffmpeg_path, ffprobe_path };
+    let tools = new.tools();
+    let (ff, pr) = ffworks_core::settings::validate_tools(&tools).map_err(s)?;
+    new.save(&state.settings_file).map_err(s)?;
+    state.engine.lock().unwrap().tools = tools;
+    *state.caps.lock().unwrap() = None;
+    Ok(serde_json::json!({ "ffmpeg": ff, "ffprobe": pr }))
+}
+
+#[tauri::command]
+async fn relink_search(app: AppHandle, dir: String) -> Result<serde_json::Value, String> {
+    let app2 = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let st = app2.state::<AppState>();
+        let mut e = st.engine.lock().unwrap();
+        let (done, rest) = e.relink_search(&[PathBuf::from(dir)]).map_err(s)?;
+        allow_media(&app2, &e);
+        Ok(serde_json::json!({ "state": view(&e), "relinked": done, "unresolved": rest.into_iter().map(|(id, c)| serde_json::json!({ "mediaId": id, "candidates": c })).collect::<Vec<_>>() }))
+    })
+    .await
+    .map_err(s)?
+}
+
+#[tauri::command]
+async fn relink_media(app: AppHandle, state: State<'_, AppState>, media_id: String, path: String) -> Result<StateView, String> {
+    let tools = state.engine.lock().unwrap().tools.clone();
+    let mut asset = tauri::async_runtime::spawn_blocking(move || prepare_asset(&tools, Path::new(&path))).await.map_err(s)?.map_err(s)?;
+    asset.id = media_id;
+    let mut e = state.engine.lock().unwrap();
+    e.dispatch(Command::RelinkMedia { asset }).map_err(s)?;
+    allow_media(&app, &e);
+    Ok(view(&e))
+}
+
+#[tauri::command]
 fn list_effects() -> Vec<ffworks_core::effects::EffectDef> {
     ffworks_core::effects::registry()
 }
@@ -348,7 +391,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let base = app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir().join("ffworks"));
-            let tools = Tools::discover(None, None);
+            let settings_file = app.path().app_config_dir().unwrap_or_else(|_| base.clone()).join("settings.json");
+            let tools = ffworks_core::settings::Settings::load(&settings_file).tools();
             app.manage(AppState {
                 engine: Mutex::new(Engine::new("Untitled", ProjectSettings::default(), tools)),
                 jobs: Mutex::new(HashMap::new()),
@@ -356,6 +400,7 @@ pub fn run() {
                 cache_dir: base.join("analysis"),
                 temp_dir: base.join("tmp"),
                 recovery_dir: base.join("recovery"),
+                settings_file,
             });
             // Autosave unsaved work periodically (spec §47). Never touches the saved project file.
             let secs = std::env::var("FFWORKS_AUTOSAVE_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20).max(1);
@@ -384,12 +429,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
+            get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
+            get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

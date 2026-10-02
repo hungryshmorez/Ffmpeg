@@ -24,6 +24,8 @@ pub enum Command {
     SetProjectSettings { settings: ProjectSettings },
     ImportMedia { asset: MediaAsset },
     RemoveMedia { media: Id },
+    /// Point an existing media entry at a new file (already probed). Clips keep their references.
+    RelinkMedia { asset: MediaAsset },
     AddTrack { kind: TrackKind, name: Option<String> },
     RemoveTrack { track: Id },
     SetTrack { track: Id, name: Option<String>, muted: Option<bool>, locked: Option<bool>, gain_db: Option<f64> },
@@ -68,6 +70,7 @@ impl Command {
             Command::SetProjectSettings { .. } => "Project settings".into(),
             Command::ImportMedia { asset } => format!("Import {}", asset.name),
             Command::RemoveMedia { .. } => "Remove media".into(),
+            Command::RelinkMedia { asset } => format!("Relink {}", asset.name),
             Command::AddTrack { .. } => "Add track".into(),
             Command::RemoveTrack { .. } => "Remove track".into(),
             Command::SetTrack { .. } => "Track properties".into(),
@@ -115,6 +118,13 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 return Err(Error::validation(format!("media id {} already exists", asset.id)));
             }
             Ok(vec![Patch::InsertMedia { index: p.media.len(), asset: asset.clone() }])
+        }
+        Command::RelinkMedia { asset } => {
+            let old = p.media(&asset.id)?;
+            if old.info.has_video() && !asset.info.has_video() || old.info.has_audio() && !asset.info.has_audio() {
+                return Err(Error::validation(format!("'{}' lacks a video/audio stream that '{}' had", asset.name, old.name)));
+            }
+            Ok(vec![Patch::ReplaceMedia { asset: asset.clone() }])
         }
         Command::RemoveMedia { media } => {
             p.media(media)?;

@@ -13,6 +13,9 @@ use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
+/// (relinked media ids, unresolved media id + candidates)
+pub type RelinkOutcome = (Vec<String>, Vec<(String, Vec<crate::relink::Candidate>)>);
+
 #[derive(Clone, Debug)]
 struct Entry {
     label: String,
@@ -178,6 +181,39 @@ impl Engine {
         let id = asset.id.clone();
         self.dispatch(Command::ImportMedia { asset })?;
         Ok(id)
+    }
+
+    /// Relink `media_id` to `new_path` (probed; the id and all clip references are kept). Undoable.
+    pub fn relink_media(&mut self, media_id: &str, new_path: &Path) -> Result<()> {
+        let mut asset = prepare_asset(&self.tools, new_path)?;
+        asset.id = media_id.to_string();
+        self.dispatch(Command::RelinkMedia { asset })
+    }
+
+    /// Search `dirs` for every offline media item and relink all *exact* (fingerprint) matches as ONE undo step.
+    /// Returns (relinked media ids, still-unresolved candidates per media id).
+    pub fn relink_search(&mut self, dirs: &[PathBuf]) -> Result<RelinkOutcome> {
+        let offline = self.offline_media();
+        let missing: Vec<&MediaAsset> = self.project.media.iter().filter(|m| offline.contains(&m.id)).collect();
+        let found = crate::relink::find_candidates(&missing, dirs);
+        let mut cmds = vec![];
+        let mut done = vec![];
+        let mut rest = vec![];
+        for (id, cands) in found {
+            match cands.iter().find(|c| c.exact) {
+                Some(c) => {
+                    let mut asset = prepare_asset(&self.tools, &c.path)?;
+                    asset.id = id.clone();
+                    cmds.push(Command::RelinkMedia { asset });
+                    done.push(id);
+                }
+                None => rest.push((id, cands)),
+            }
+        }
+        if !cmds.is_empty() {
+            self.dispatch(Command::Batch { label: format!("Relink {} media", cmds.len()), commands: cmds })?;
+        }
+        Ok((done, rest))
     }
 
     /// Media whose source file no longer exists (spec §41 relinking input).

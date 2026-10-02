@@ -14,7 +14,9 @@ pub mod preview;
 pub mod process;
 pub mod project;
 pub mod recovery;
+pub mod relink;
 pub mod render_graph;
+pub mod settings;
 pub mod time;
 
 pub use commands::{Command, Edge};

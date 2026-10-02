@@ -398,3 +398,70 @@ fn processed_preview_shows_effects_is_cached_and_invalidates() {
     eng.dispatch(Command::RenameProject { name: "other".into() }).unwrap();
     assert!(render(&eng).cached);
 }
+
+#[test]
+fn offline_media_is_relinked_by_content_even_when_renamed_and_moved() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = fixture(dir.path(), "orig.mp4", "red", "320x240", "25", 440, 2);
+    let b = fixture(dir.path(), "other.mp4", "blue", "320x240", "25", 880, 2);
+    let mut eng = Engine::new("r", ProjectSettings { width: 320, height: 240, fps: secs(25), sample_rate: 48000 }, tools());
+    let ma = eng.import_media(&a).unwrap();
+    let mb = eng.import_media(&b).unwrap();
+    let v = eng.project.active().unwrap().tracks[0].id.clone();
+    eng.dispatch(Command::PlaceClip { media: ma.clone(), track: v, start: secs(0), source_in: None, duration: None, with_audio: true, audio_track: None }).unwrap();
+
+    // user moves + renames the file; a same-named decoy with different content also exists elsewhere
+    let new_home = dir.path().join("moved/deeper");
+    std::fs::create_dir_all(&new_home).unwrap();
+    std::fs::rename(&a, new_home.join("renamed copy.mp4")).unwrap();
+    let decoy_dir = dir.path().join("decoy");
+    std::fs::create_dir_all(&decoy_dir).unwrap();
+    std::fs::copy(&b, decoy_dir.join("orig.mp4")).unwrap(); // same name as the missing file, different content
+    assert_eq!(eng.offline_media(), vec![ma.clone()]);
+
+    let before = eng.project.clone();
+    let (done, rest) = eng.relink_search(&[dir.path().to_path_buf()]).unwrap();
+    assert_eq!(done, vec![ma.clone()], "exact content match relinks despite rename");
+    assert!(rest.is_empty());
+    assert!(eng.offline_media().is_empty());
+    let asset = eng.project.media(&ma).unwrap();
+    assert!(asset.path.ends_with("renamed copy.mp4"));
+    assert_eq!(asset.id, ma, "clip references survive");
+    // clip still renders from the new location
+    let out = dir.path().join("o.mp4");
+    export(&eng, &out, "h264_mp4");
+    assert!(pixel_at(&out, 1.0).0 > 150);
+    // undo restores the offline state exactly
+    eng.undo().unwrap();
+    assert_eq!(eng.project, before);
+    let _ = mb;
+}
+
+#[test]
+fn name_only_matches_are_reported_but_never_auto_applied() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = fixture(dir.path(), "orig.mp4", "red", "320x240", "25", 440, 2);
+    let mut eng = Engine::new("r", ProjectSettings::default(), tools());
+    eng.import_media(&a).unwrap();
+    std::fs::remove_file(&a).unwrap();
+    let decoy = dir.path().join("elsewhere");
+    std::fs::create_dir_all(&decoy).unwrap();
+    fixture(&decoy, "orig.mp4", "blue", "320x240", "25", 880, 3);
+    let (done, rest) = eng.relink_search(&[dir.path().to_path_buf()]).unwrap();
+    assert!(done.is_empty());
+    assert_eq!(rest.len(), 1);
+    assert!(!rest[0].1[0].exact && rest[0].1[0].reason.contains("name"));
+    assert_eq!(eng.offline_media().len(), 1, "still offline");
+}
+
+#[test]
+fn relink_refuses_a_file_missing_a_needed_stream() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = fixture(dir.path(), "a.mp4", "red", "320x240", "25", 440, 2);
+    let mut eng = Engine::new("r", ProjectSettings::default(), tools());
+    let m = eng.import_media(&a).unwrap();
+    let silent = dir.path().join("silent.mp4");
+    ffmpeg(&["-f", "lavfi", "-i", "color=c=red:s=320x240:r=25:d=2", "-c:v", "libx264", silent.to_str().unwrap()]);
+    assert!(eng.relink_media(&m, &silent).is_err());
+    assert!(eng.project.media(&m).unwrap().info.has_audio());
+}
