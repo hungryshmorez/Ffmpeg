@@ -3,8 +3,8 @@
 //! plugins themselves with `scripts/frei0r/dump.py` (frei0r-plugins is GPL-2+; FFWORKS only drives them through
 //! FFmpeg as separate files on the user's machine, and ships none of the plugin binaries).
 //!
-//! Only filters whose parameters are all numbers or switches are offered as effects (73 of 91 in frei0r 1.8); the rest
-//! need colour/position/text editors that FFWORKS does not have yet. The effects offered are those whose plugin file is
+//! Filters whose parameters are numbers, switches, colours (shown as red/green/blue sliders) or positions (x/y sliders) are
+//! offered as effects; the few with text parameters are not (they need a text editor). The effects offered are those whose plugin file is
 //! actually installed here; effects already saved in a project always resolve, so a project opens on a machine without
 //! the plugin and only fails when rendered, with FFmpeg's own "could not find module" message.
 
@@ -47,25 +47,30 @@ fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
+/// Effect parameters for one plugin parameter: a number or switch is one slider, a colour is red/green/blue, a position is x/y.
+fn param_defs(i: usize, q: &Param) -> Vec<ParamDef> {
+    let one = |id: String, name: String, default: f64, step: f64| ParamDef { id: leak(id), name: leak(name), min: 0.0, max: 1.0, default: default.clamp(0.0, 1.0), step, unit: "", animatable: false };
+    match q.ty.as_str() {
+        "color" => ["r", "g", "b"].iter().zip(["red", "green", "blue"]).map(|(c, n)| one(format!("p{i}{c}"), format!("{} ({n})", q.name), 0.5, 0.01)).collect(),
+        "position" => ["x", "y"].iter().map(|c| one(format!("p{i}{c}"), format!("{} ({c})", q.name), 0.5, 0.01)).collect(),
+        ty => vec![one(format!("p{i}"), q.name.clone(), q.default.unwrap_or(0.0), if ty == "bool" { 1.0 } else { 0.01 })],
+    }
+}
+
 /// Every plugin FFWORKS can drive, installed or not, as effect definitions (ids like `f0:glitch0r`).
 fn all_defs() -> &'static Vec<EffectDef> {
     static D: OnceLock<Vec<EffectDef>> = OnceLock::new();
     D.get_or_init(|| {
         plugins()
             .iter()
-            .filter(|p| p.kind == "filter" && p.params.iter().all(|q| q.ty == "double" || q.ty == "bool"))
+            .filter(|p| p.kind == "filter" && p.params.iter().all(|q| ["double", "bool", "color", "position"].contains(&q.ty.as_str())))
             .map(|p| EffectDef {
                 id: leak(format!("{PREFIX}{}", p.id)),
                 name: leak(p.name.clone()),
                 kind: "video",
                 category: "Frei0r",
                 requires: &["frei0r"],
-                params: p
-                    .params
-                    .iter()
-                    .enumerate()
-                    .map(|(i, q)| ParamDef { id: leak(format!("p{i}")), name: leak(q.name.clone()), min: 0.0, max: 1.0, default: q.default.unwrap_or(0.0).clamp(0.0, 1.0), step: if q.ty == "bool" { 1.0 } else { 0.01 }, unit: "", animatable: false })
-                    .collect(),
+                params: p.params.iter().enumerate().flat_map(|(i, q)| param_defs(i, q)).collect(),
                 alpha: false,
             })
             .collect()
@@ -160,13 +165,16 @@ pub fn filter_text(effect_id: &str, params: &BTreeMap<String, f64>) -> Option<St
         return None;
     }
     let src = plugins().iter().find(|p| p.id == plugin)?;
-    let vals: Vec<String> = def
+    let get = |id: &str| def.params.iter().find(|d| d.id == id).map(|d| params.get(id).copied().unwrap_or(d.default)).unwrap_or(0.0);
+    let vals: Vec<String> = src
         .params
         .iter()
-        .zip(&src.params)
-        .map(|(d, q)| {
-            let v = params.get(d.id).copied().unwrap_or(d.default);
-            if q.ty == "bool" { (if v >= 0.5 { "y" } else { "n" }).to_string() } else { format!("{v}") }
+        .enumerate()
+        .map(|(i, q)| match q.ty.as_str() {
+            "bool" => (if get(&format!("p{i}")) >= 0.5 { "y" } else { "n" }).to_string(),
+            "color" => format!("{}/{}/{}", get(&format!("p{i}r")), get(&format!("p{i}g")), get(&format!("p{i}b"))),
+            "position" => format!("{}/{}", get(&format!("p{i}x")), get(&format!("p{i}y"))),
+            _ => format!("{}", get(&format!("p{i}"))),
         })
         .collect();
     Some(if vals.is_empty() { format!("frei0r=filter_name={plugin}") } else { format!("frei0r=filter_name={plugin}:filter_params={}", vals.join("|")) })

@@ -8,6 +8,7 @@ use ffworks_core::jobs::{run_job, CancelToken};
 use ffworks_core::process::{Capabilities, Tools};
 use ffworks_core::project::ProjectSettings;
 use ffworks_core::{render_graph, Rational};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command as Proc;
 
@@ -81,4 +82,28 @@ fn glitch0r_renders_through_the_effect_stack() {
     let still = dir.path().join("calm.mp4");
     export(&eng, &still);
     assert!(psnr(&base, &still) > 40.0, "frequency 0 should not change the picture");
+}
+
+#[test]
+fn every_installed_frei0r_effect_runs_with_its_default_values_including_colour_and_position_ones() {
+    let t = tools();
+    let caps = Capabilities::discover(&t).unwrap();
+    if !caps.has_filter("frei0r") {
+        eprintln!("no frei0r filter in this FFmpeg; skipping");
+        return;
+    }
+    let mut bad = vec![];
+    let mut colour_or_position = 0;
+    for d in effects::registry().iter().filter(|d| d.id.starts_with(frei0r::PREFIX)) {
+        if d.params.iter().any(|p| p.name.contains("(red)") || p.name.ends_with("(x)")) {
+            colour_or_position += 1;
+        }
+        let text = frei0r::filter_text(d.id, &BTreeMap::new()).unwrap();
+        let o = Proc::new(&t.ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x240:r=25:d=0.4", "-vf", &text, "-f", "null", "-"]).output().unwrap();
+        if !o.status.success() {
+            bad.push(format!("{}: {}", d.id, String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or("")));
+        }
+    }
+    eprintln!("colour/position effects exercised: {colour_or_position}");
+    assert!(bad.is_empty(), "{bad:#?}");
 }
