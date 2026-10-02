@@ -9,7 +9,7 @@ describe("effect clipboard", () => {
   it("copies by value and builds add_effect commands in order, skipping graph effects", () => {
     const src = clip("a", [fx("1", "blur", { sigma: 9 }), fx("2", "graph"), fx("3", "hue", { degrees: 30 })]);
     useFxClipboard.getState().copy(src);
-    src.effects[0].params.sigma = 1; // later edits to the source do not follow
+    src.effects[0]!.params.sigma = 1; // later edits to the source do not follow
     const { commands, skipped } = pasteCommands(useFxClipboard.getState().effects, clip("b", []));
     expect(skipped).toBe(1);
     expect(commands).toEqual([

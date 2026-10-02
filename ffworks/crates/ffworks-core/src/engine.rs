@@ -1,6 +1,7 @@
 //! `Engine` owns the open project, the undo/redo history and the tool configuration.
 //! It has no GUI dependency, so the same engine drives the desktop app, tests and a future headless CLI (spec §154).
 
+use crate::project::TrackKind;
 use crate::time::Rational;
 use crate::commands::{plan, Command};
 use crate::error::{Error, Result};
@@ -103,6 +104,21 @@ impl Engine {
             Command::Batch { commands, .. } => {
                 for c in commands {
                     self.run(c, fwd, inv)?;
+                }
+                Ok(())
+            }
+            Command::ImportCues { track, offset, cues } => {
+                if cues.is_empty() {
+                    return Err(Error::validation("no subtitle cues to import"));
+                }
+                self.run(&Command::AddTrack { kind: TrackKind::Video, name: Some(track.clone()) }, fwd, inv)?;
+                let tid = self.project.active()?.tracks.iter().filter(|t| t.kind == TrackKind::Video).last().expect("just added").id.clone();
+                for (a, b, text) in cues {
+                    let start = *a + *offset;
+                    if start < Rational::ZERO {
+                        continue;
+                    }
+                    self.run(&Command::AddTitle { track: tid.clone(), start, duration: *b - *a, text: text.clone() }, fwd, inv)?;
                 }
                 Ok(())
             }

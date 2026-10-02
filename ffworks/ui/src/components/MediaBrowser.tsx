@@ -12,6 +12,18 @@ export async function importViaDialog() {
   if (picked) await importPaths(Array.isArray(picked) ? picked : [picked]);
 }
 
+export async function importSubtitlesViaDialog() {
+  const p = await open({ title: "Import subtitles", filters: [{ name: "Subtitles", extensions: ["srt", "vtt"] }] });
+  if (typeof p !== "string") return;
+  const { toast, setView } = useProject.getState();
+  try {
+    setView(await api.importSubtitles(p, 0));
+    toast("info", "Subtitles added on a new track");
+  } catch (e) {
+    toast("error", String(e));
+  }
+}
+
 export async function importPaths(paths: string[]) {
   const { toast, setView } = useProject.getState();
   try {
@@ -84,7 +96,7 @@ export function MediaBrowser() {
   return (
     <div className="panel media" aria-label="Media browser">
       <div className="panel-title">
-        Media <button className="small" onClick={() => void importViaDialog()}>Import…</button>
+        Media <button className="small" onClick={() => void importViaDialog()}>Import…</button> <button className="small" title="Add a .srt / .vtt file as title clips on a new track" onClick={() => void importSubtitlesViaDialog()}>Subtitles…</button>
         <button className="small" title="Make low-resolution H.264 copies of every video for smooth, universally playable preview (exports always use the originals)" onClick={makeAll}>Make proxies</button>
         <button className="small" title="Delete all proxy files (they can be made again)" onClick={() => void api.clearProxies().then((b) => { toast("info", `Deleted proxies (${formatBytes(b)})`); return refreshProxies(); })}>Clear</button>
       </div>

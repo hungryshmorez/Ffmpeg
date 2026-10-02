@@ -35,6 +35,7 @@ pub mod relink;
 pub mod render_graph;
 pub mod scenes;
 pub mod settings;
+pub mod subtitles;
 pub mod time;
 pub mod titles;
 pub mod transitions;
