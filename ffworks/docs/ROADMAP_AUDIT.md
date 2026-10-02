@@ -10,7 +10,7 @@ Honest status. "Done" = tested with real FFmpeg and/or the GUI scripts. Unverifi
 * NOT POSSIBLE: VST plugins (FFmpeg cannot load them). LV2 needs a build with `lv2` (the bundled one lacks it).
 * DONE: LADSPA (Audacity-style) audio plugins: 122 swh/TAP/CMT effects offered when installed (Linux-verified). Not bundled on Windows. 17 sample-rate-scaled plugins excluded because of an FFmpeg `ladspa` filter bug (needs an upstream patch).
 * TODO: FFglitch (separate `ffedit`/`ffgac` tools) as its own engine slot.
-* ADDED (result pending in CI): the Windows job now renders every bundled frei0r plugin with the bundled FFmpeg after uploading the installer.
+* DONE (verified on CI): the Windows job renders every bundled frei0r plugin with the bundled FFmpeg after uploading the installer — 92/92 drivable plugins run, glitch0r renders through the effect stack.
 
 ## B. Done (all with tests; details in STATUS.md)
 Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/freeze) + cut-ranges-out · export presets (H.265, AV1, ProRes, DNxHR, FFV1, GIF, FLAC, PNG sequence, GPU encoders when they work, datamosh, quick no-re-encode export) · copy/paste effects, saved looks, "Add to clip" from the filter browser · subtitle import · image-sequence import · audio auto-sync · scopes + spectrogram · multi-clip selection · snapshots · macro recorder/replayer · project packaging · disk-space check · demo "Keep look" · 12 extra wipe transitions · command palette · CLI (`presets`, `run`, `detect`, `sync`, `package`, `batch`, `watch`).
@@ -27,7 +27,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 4: Rhai/DSL scripting beyond JSON command lists, macro variables/loops/conditions, permissions model.
 * Phase 5: transient detection, drift correction for auto-sync.
 * Phase 6: expressions, modulators, parameter linking, MIDI. Audio-reactive: DONE for loudness (whole or per band) and beat pulses ("Follow audio" → keyframes).
-* Phases 7-9: pixel sort (PARTIAL: frei0r 3.6's `pixels0rt` is offered on Windows where it is bundled; not on Linux test machines with frei0r 1.8, so untested here; no built-in sorter), real motion-vector datamosh / FFglitch motion transfer, corruption lab.
+* Phases 7-9: pixel sort (PARTIAL: frei0r 3.6's `pixels0rt` ships in the Windows installer and runs there (CI); Linux machines with frei0r 1.8 don't have it; no built-in sorter), real motion-vector datamosh / FFglitch motion transfer, corruption lab.
 * Phase 10: plugin system (Extism), local API.
 * DONE: export naming templates + never-overwrite versioning (dialog and CLI).
 * Cross-cutting: SQLite index, smart rendering, persistent job state across crashes, accessibility pass, colour management, preview/analysis through the job queue.
