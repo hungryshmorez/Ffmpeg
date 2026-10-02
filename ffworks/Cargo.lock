@@ -833,6 +833,7 @@ version = "0.1.0"
 dependencies = [
  "ffworks-core",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
