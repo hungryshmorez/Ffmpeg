@@ -288,3 +288,38 @@ fn old_projects_without_effect_fields_still_load() {
     assert_eq!(c.opacity, 1.0);
     assert!(c.effects.is_empty());
 }
+
+#[test]
+fn autosave_recovery_rotation_and_corruption_fallback() {
+    use ffworks_core::recovery;
+    let dir = tempfile::tempdir().unwrap();
+    let ad = dir.path().join("auto");
+    let (mut e, m, v, _) = engine();
+    // a clean engine writes nothing
+    e.save(&dir.path().join("p.ffworks")).unwrap();
+    assert!(!e.autosave(&ad).unwrap());
+    assert!(recovery::find(&ad).is_none());
+
+    place(&mut e, &m, &v, secs(0));
+    assert!(e.autosave(&ad).unwrap());
+    assert!(!e.autosave(&ad).unwrap(), "no change since last autosave -> no rewrite");
+    let first = e.project.clone();
+    let id = e.project.active().unwrap().tracks[0].clips[0].id.clone();
+    e.dispatch(Command::SplitClip { clip: id, at: secs(5) }).unwrap();
+    assert!(e.autosave(&ad).unwrap());
+
+    let info = recovery::find(&ad).unwrap();
+    assert_eq!(info.clips, 4);
+    assert_eq!(info.original_path.as_deref(), Some(dir.path().join("p.ffworks").to_str().unwrap()));
+    let rec = recovery::load(&info, Tools { ffmpeg: "ffmpeg".into(), ffprobe: "ffprobe".into() }).unwrap();
+    assert_eq!(rec.project, e.project);
+    assert!(rec.is_dirty(), "recovered work must still be unsaved");
+
+    // simulate a crash mid-write: latest file truncated -> previous rotation is used
+    std::fs::write(ad.join("recovery.autosave.json"), b"{\"saved_unix\": 1, \"proj").unwrap();
+    let info = recovery::find(&ad).unwrap();
+    assert_eq!(recovery::load(&info, Tools { ffmpeg: "ffmpeg".into(), ffprobe: "ffprobe".into() }).unwrap().project, first);
+
+    recovery::clear(&ad);
+    assert!(recovery::find(&ad).is_none());
+}

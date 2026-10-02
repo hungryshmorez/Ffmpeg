@@ -19,7 +19,8 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design.
 | Headless CLI (`ffworks caps/probe/command/render`) | done |
 | Per-clip effect stack (11 effects: brightness, contrast, saturation, gamma, hue, blur, sharpen, grain, vignette, flips), opacity; reorder/enable/remove; parameter metadata registry; capability-checked | done, tested (pixel-verified in real FFmpeg) |
 | Processed preview: same compiler as export at 1, 1/2, 1/4 or 1/8 resolution over a 10 s window, cached by project content hash, marked out-of-date on any edit | done, tested (file generation + staleness; picture playback not observable in this sandbox) |
-| Keyframes, transitions, proxies, render queue, autosave/recovery, settings UI, relinking | **not started** (rest of Phase 2) |
+| Autosave (every 20 s while unsaved, 3 rotating copies, atomic) and crash recovery dialog (Recover / Open original / Discard); corrupt latest autosave falls back to the previous | done, tested incl. a real `kill -9` of the app |
+| Keyframes, transitions, proxies, render queue, settings UI, relinking | **not started** (rest of Phase 2) |
 | Automation DSL, macros, blueprints, analysis, glitch/datamosh labs, plugins | **not started** (Phases 3–10) |
 
 Nothing in the UI is a placeholder: unimplemented features are simply absent.
@@ -44,9 +45,10 @@ Headless: `cargo run -p ffworks-cli -- command project.ffworks` prints the exact
 ## Tests
 
 ```bash
-cargo test --workspace            # 54 tests: time, model, commands/undo, effects, ffprobe parsing, real-FFmpeg e2e
+cargo test --workspace            # 55 tests: time, model, commands/undo, effects, ffprobe parsing, real-FFmpeg e2e
 (cd ui && npm test)               # timeline math
 scripts/uitest/run.sh             # headless GUI test under Xvfb (Linux): 30 steps in the real webview
+scripts/uitest/recovery.sh        # kill -9 crash-recovery test: 9 steps across 3 app launches
 ```
 
 The e2e tests generate tiny fixtures with FFmpeg, build an edit (trim, split, move, gain), save → reload → export, then verify with FFprobe, **pixel sampling and audio level measurement** that the output matches the edit.
@@ -56,4 +58,4 @@ The e2e tests generate tiny fixtures with FFmpeg, build an edit (trim, split, mo
 * The monitor plays *source* media through the webview and does **not** render effects or opacity unless you press *Render preview*; otherwise it shows a "bypassed" badge. Codecs the webview cannot decode (e.g. HEVC/ProRes on WebView2, or H.264 on a WebKitGTK without GStreamer plugins) will show black; proxy-based preview is Phase 2 (rendered previews are H.264, so they play where H.264 does). Invalidation is per whole project, not per time range yet. The monitor says it is a source preview; export is the authoritative render.
 * Verified on Linux only (Rust tests, WebKitGTK GUI test). The Windows build is configured (`tauri.conf.json`, CI workflow) but **has not been built or run on Windows**.
 * Native open/save dialogs and window-close confirmation are wired but not exercised by the automated GUI test (the test calls the same backend commands the dialogs call).
-* No autosave/crash recovery yet; save often.
+* Autosave covers the project state only; it does not recover in-progress renders. Undo history is not restored after recovery.

@@ -26,6 +26,7 @@ struct AppState {
     caps: Mutex<Option<Capabilities>>,
     cache_dir: PathBuf,
     temp_dir: PathBuf,
+    recovery_dir: PathBuf,
 }
 
 #[derive(Serialize)]
@@ -79,6 +80,7 @@ fn get_state(state: State<AppState>) -> StateView {
 fn new_project(app: AppHandle, state: State<AppState>, name: String) -> Result<StateView, String> {
     let mut e = state.engine.lock().unwrap();
     *e = Engine::new(&name, ProjectSettings::default(), e.tools.clone());
+    ffworks_core::recovery::clear(&state.recovery_dir);
     allow_media(&app, &e);
     Ok(view(&e))
 }
@@ -87,6 +89,7 @@ fn new_project(app: AppHandle, state: State<AppState>, name: String) -> Result<S
 fn open_project(app: AppHandle, state: State<AppState>, path: String) -> Result<StateView, String> {
     let mut e = state.engine.lock().unwrap();
     *e = Engine::load(Path::new(&path), e.tools.clone()).map_err(s)?;
+    ffworks_core::recovery::clear(&state.recovery_dir);
     allow_media(&app, &e);
     Ok(view(&e))
 }
@@ -96,6 +99,7 @@ fn save_project(state: State<AppState>, path: Option<String>) -> Result<StateVie
     let mut e = state.engine.lock().unwrap();
     let target = path.map(PathBuf::from).or_else(|| e.path().map(Path::to_path_buf)).ok_or("no file chosen")?;
     e.save(&target).map_err(s)?;
+    ffworks_core::recovery::clear(&state.recovery_dir);
     Ok(view(&e))
 }
 
@@ -191,6 +195,27 @@ async fn render_preview(app: AppHandle, state: State<'_, AppState>, start: Strin
         .map_err(s)?;
     let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
     Ok(PreviewInfo { path: r.path.to_string_lossy().into_owned(), start: r.start, end: r.end, render_hash, cached: r.cached, scale_div })
+}
+
+/// Autosave left behind by an abnormal exit, if any.
+#[tauri::command]
+fn find_recovery(state: State<AppState>) -> Option<ffworks_core::recovery::RecoveryInfo> {
+    ffworks_core::recovery::find(&state.recovery_dir)
+}
+
+#[tauri::command]
+fn recover_project(app: AppHandle, state: State<AppState>) -> Result<StateView, String> {
+    let info = ffworks_core::recovery::find(&state.recovery_dir).ok_or("no recovery data found")?;
+    let mut e = state.engine.lock().unwrap();
+    *e = ffworks_core::recovery::load(&info, e.tools.clone()).map_err(s)?;
+    // keep the autosave until the user saves: a second crash must not lose the recovered work
+    allow_media(&app, &e);
+    Ok(view(&e))
+}
+
+#[tauri::command]
+fn discard_recovery(state: State<AppState>) {
+    ffworks_core::recovery::clear(&state.recovery_dir);
 }
 
 #[tauri::command]
@@ -330,6 +355,18 @@ pub fn run() {
                 caps: Mutex::new(None),
                 cache_dir: base.join("analysis"),
                 temp_dir: base.join("tmp"),
+                recovery_dir: base.join("recovery"),
+            });
+            // Autosave unsaved work periodically (spec §47). Never touches the saved project file.
+            let secs = std::env::var("FFWORKS_AUTOSAVE_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20).max(1);
+            let h = app.handle().clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(secs));
+                let st = h.state::<AppState>();
+                let mut e = st.engine.lock().unwrap();
+                if let Err(err) = e.autosave(&st.recovery_dir) {
+                    eprintln!("autosave failed: {err}");
+                }
             });
             #[cfg(feature = "uitest")]
             if let Ok(script_path) = std::env::var("FFWORKS_UITEST_SCRIPT") {
@@ -347,12 +384,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
+            find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
+            find_recovery, recover_project, discard_recovery, list_effects, render_preview, list_export_presets, preview_command, start_export, cancel_job, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

@@ -4,6 +4,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useEffect } from "react";
 import { api } from "./api";
 import { APP_NAME } from "./brand";
+import { RecoveryDialog } from "./components/RecoveryDialog";
 import { Diagnostics } from "./components/Diagnostics";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
@@ -54,9 +55,16 @@ export default function App() {
   useEffect(() => {
     let un: (() => void) | undefined;
     void getCurrentWindow().onCloseRequested(async (ev) => {
-      if (useProject.getState().view?.dirty) {
+      if (!useProject.getState().view?.dirty) {
+        await api.discardRecovery(); // clean exit: a stale autosave (e.g. after undoing back to the saved state) is not a crash
+        return;
+      }
+      {
         ev.preventDefault();
-        if (await ask("This project has unsaved changes. Close without saving?", { title: APP_NAME, kind: "warning" })) await getCurrentWindow().destroy();
+        if (await ask("This project has unsaved changes. Close without saving?", { title: APP_NAME, kind: "warning" })) {
+          await api.discardRecovery(); // a deliberate discard must not look like a crash next launch
+          await getCurrentWindow().destroy();
+        }
       }
     }).then((u) => (un = u));
     return () => un?.();
@@ -99,6 +107,7 @@ export default function App() {
       <Timeline />
       <ExportDialog />
       <Diagnostics />
+      <RecoveryDialog />
       <Toasts />
     </div>
   );

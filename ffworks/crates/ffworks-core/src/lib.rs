@@ -13,6 +13,7 @@ pub mod patch;
 pub mod preview;
 pub mod process;
 pub mod project;
+pub mod recovery;
 pub mod render_graph;
 pub mod time;
 

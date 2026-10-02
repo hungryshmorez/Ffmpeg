@@ -30,15 +30,37 @@ pub struct Engine {
     /// Number of undo entries at the last save; `None` once that state is unreachable.
     saved_at: Option<usize>,
     recording: Option<Vec<Command>>,
+    /// Bumped on every state change; autosave skips when unchanged.
+    revision: u64,
+    autosaved_rev: Option<u64>,
 }
 
 impl Engine {
     pub fn new(name: &str, settings: ProjectSettings, tools: Tools) -> Engine {
-        Engine { project: Project::new(name, settings), tools, path: None, undo: vec![], redo: vec![], saved_at: Some(0), recording: None }
+        Engine { project: Project::new(name, settings), tools, path: None, undo: vec![], redo: vec![], saved_at: Some(0), recording: None, revision: 0, autosaved_rev: None }
     }
 
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
+    }
+
+    /// Engine restored from an autosave: unsaved by definition (`saved_at` is unreachable).
+    pub fn from_recovered(project: Project, path: Option<PathBuf>, tools: Tools) -> Engine {
+        Engine { project, tools, path, undo: vec![], redo: vec![], saved_at: None, recording: None, revision: 1, autosaved_rev: None }
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// Write an autosave if there are unsaved changes since the last one. Returns whether a file was written.
+    pub fn autosave(&mut self, dir: &Path) -> Result<bool> {
+        if !self.is_dirty() || self.autosaved_rev == Some(self.revision) {
+            return Ok(false);
+        }
+        crate::recovery::write(dir, &self.project, self.path.as_deref())?;
+        self.autosaved_rev = Some(self.revision);
+        Ok(true)
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -61,6 +83,7 @@ impl Engine {
         inv.reverse();
         self.undo.push(Entry { label: cmd.label(), forward: fwd, inverse: inv });
         self.redo.clear();
+        self.revision += 1;
         if self.saved_at.is_some_and(|s| s >= self.undo.len()) {
             self.saved_at = None;
         }
@@ -114,6 +137,7 @@ impl Engine {
             apply(&mut self.project, p)?;
         }
         self.redo.push(e);
+        self.revision += 1;
         Ok(())
     }
 
@@ -123,6 +147,7 @@ impl Engine {
             apply(&mut self.project, p)?;
         }
         self.undo.push(e);
+        self.revision += 1;
         Ok(())
     }
 
@@ -179,7 +204,7 @@ impl Engine {
         let doc = migrate(doc)?;
         let project: Project = serde_json::from_value(doc)?;
         project.validate()?;
-        Ok(Engine { project, tools, path: Some(path.to_path_buf()), undo: vec![], redo: vec![], saved_at: Some(0), recording: None })
+        Ok(Engine { project, tools, path: Some(path.to_path_buf()), undo: vec![], redo: vec![], saved_at: Some(0), recording: None, revision: 0, autosaved_rev: None })
     }
 }
 

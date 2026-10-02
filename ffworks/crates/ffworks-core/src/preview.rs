@@ -55,6 +55,7 @@ pub struct PreviewResult {
 }
 
 /// Render (or reuse) a preview of `[start, end)` at `1/scale_div` resolution.
+#[allow(clippy::too_many_arguments)]
 pub fn render(
     tools: &Tools,
     caps: Option<&Capabilities>,

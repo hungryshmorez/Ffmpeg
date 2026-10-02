@@ -60,3 +60,5 @@ export type JobEvent = { jobId: string; operation: string; output: string } & (
   | { state: "failed"; message: string }
   | { state: "canceled" }
 );
+
+export interface RecoveryInfo { saved_unix: number; original_path: string | null; name: string; clips: number }
