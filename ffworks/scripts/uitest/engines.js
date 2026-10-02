@@ -75,10 +75,10 @@
     const f0 = await inv("frei0r_status");
     step("the dialog reports frei0r support and found plugins", !!st && f0.ffmpegHasFilter && f0.installed > 20 && /can load frei0r/.test(st.textContent), st && st.textContent);
     step("glitch0r is among the usable plugins", f0.offered.includes("Glitch0r"), f0.offered.slice(0, 8).join());
-    const ta = $("#f0dirs"); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "__BUILDS__/f0"); ta.dispatchEvent(new Event("input", { bubbles: true })); await sleep(100);
+    const ta = $("#f0dirs"); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "__BUILDS__/f0"); ta.dispatchEvent(new Event("input", { bubbles: true })); await sleep(800);
     btn(/^Save and rescan$/, $(".engines-dialog")).click();
-    await waitFor(async () => true); await sleep(600);
-    const saved = await inv("get_settings");
+    let saved = await inv("get_settings");
+    for (let i = 0; i < 40 && !(saved.frei0r_dirs || []).length; i++) { await sleep(250); saved = await inv("get_settings"); }
     step("extra plugin folders are saved in the settings", JSON.stringify(saved.frei0r_dirs) === JSON.stringify(["__BUILDS__/f0"]), JSON.stringify(saved.frei0r_dirs));
     btn(/^Close$/, $(".engines-dialog")).click(); await sleep(200);
     const clip = $$(".track.video .clip")[0];
