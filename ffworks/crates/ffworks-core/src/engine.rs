@@ -26,6 +26,12 @@ struct Entry {
     inverse: Vec<Patch>,
 }
 
+/// An open group of commands (see [`Engine::begin_group`]).
+pub struct Group {
+    base: usize,
+    redo: Vec<Entry>,
+}
+
 pub struct Engine {
     pub project: Project,
     pub tools: Tools,
@@ -287,6 +293,37 @@ impl Engine {
             // Inverse patches were produced from valid states, so failure here would be an engine bug.
             apply(&mut self.project, p).expect("rollback patch must apply");
         }
+    }
+
+    /// Start a group: everything dispatched until [`end_group`](Self::end_group) becomes ONE undo step, and
+    /// [`abort_group`](Self::abort_group) takes all of it back. Groups do not nest.
+    pub fn begin_group(&mut self) -> Group {
+        Group { base: self.undo.len(), redo: std::mem::take(&mut self.redo) }
+    }
+
+    /// Merge what ran since `group` began into one undo step named `label` (nothing happened: no step).
+    pub fn end_group(&mut self, group: Group, label: &str) {
+        let tail: Vec<Entry> = self.undo.drain(group.base.min(self.undo.len())..).collect();
+        if tail.is_empty() {
+            self.redo = group.redo;
+            return;
+        }
+        let forward = tail.iter().flat_map(|e| e.forward.clone()).collect();
+        let inverse = tail.iter().rev().flat_map(|e| e.inverse.clone()).collect();
+        self.undo.push(Entry { label: label.into(), forward, inverse });
+        if self.saved_at.is_some_and(|s| s > group.base) {
+            self.saved_at = None;
+        }
+    }
+
+    /// Undo everything since `group` began, leaving the history as it was.
+    pub fn abort_group(&mut self, group: Group) {
+        while self.undo.len() > group.base {
+            if self.undo().is_err() {
+                break;
+            }
+        }
+        self.redo = group.redo;
     }
 
     pub fn undo_label(&self) -> Option<&str> {

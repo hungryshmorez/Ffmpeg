@@ -15,6 +15,7 @@ scenesdetect = "0.4"
 ebur128 = "0.1"
 rustfft = "6"
 fs4 = "0.13"
+rhai = { version = "1.26.1", default-features = false, features = ["std", "no_module", "serde"] }
 
 [dev-dependencies]
 tempfile = "3"

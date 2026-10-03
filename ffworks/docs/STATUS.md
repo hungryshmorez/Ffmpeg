@@ -1,6 +1,6 @@
 # Status (update this at the end of every working session)
 
-_Last updated after adjustment layers: 317 Rust tests, 60 UI unit tests, 30 GUI scripts, clippy clean (core + CLI; the Tauri crate needs the webkit dev packages to lint)._
+_Last updated after Rhai scripting: 326 Rust tests, 60 UI unit tests, 31 GUI scripts, clippy clean (core + CLI; the Tauri crate needs the webkit dev packages to lint)._
 
 ## Done (tested)
 Phase 0 architecture doc · Phase 1 editor (import/probe/metadata, thumbnails, waveforms, multitrack timeline: place/trim/split/move/ripple-delete/linked A/V/lock/mute/snap, volume, undo/redo, save/load, export H.264/VP9/WAV/MP3 with progress/cancel/verify, Command Inspector, headless CLI) ·
@@ -9,7 +9,7 @@ Effects (11, with parameter metadata registry) + opacity · processed preview (c
 ## Left (by spec phase)
 * **Phase 2 remainder:** image-sequence and subtitle import · quick export · copy/paste effects, multi-clip edit · remaining common effects. (Keyframes, transform, crop, blend, speed/reverse/freeze are done: see ARCHITECTURE.md.)
 * **Phase 3:** full filter browser · visual filter-graph editor + raw nodes (use `@xyflow/react`) · GPU detection/hw encoders · scopes · adjustment layers · nested sequences/compound clips · effect-chain presets · more exports (H.265, ProRes, DNxHR, GIF, image sequence) · docking/workspaces · command palette · shortcut editor.
-* **Phase 4:** DSL + JSON automation · script editor · recorder UI (engine `start_recording/stop_recording` exists) · macros · batch · watch folders · blueprints · dry run/diff · variables/loops/conditions · permissions.
+* **Phase 4:** script editor panel · blueprints · dry-run diff view. (Rhai scripting with variables/loops/conditions/permissions, JSON command lists, recorder, macros, batch and watch folders are done.)
 * **Phase 5:** silence/black-frame/duplicate-frame/transient detection · audio auto-sync (cross-correlation). (beats, scenes, loudness done)
 * **Phase 6:** expressions (`fasteval`) · modulators · parameter linking · audio-reactive · custom effect builder · MIDI (`midir`).
 * **Phase 7:** glitch presets · temporal/feedback effects · variation generator + contact sheet (pixel sort: see REUSE.md).
@@ -94,6 +94,14 @@ Effects panel → "Datamosh lab…" (video clips). FFglitch (a separate GPL tool
 * **Found by measuring:** FFglitch hands `-sp` parameters to `setup()` as `args.params`; the first version read `args.factor`, silently used its defaults, and the tests still passed until they compared amplify ×1 against ×4 and drift +6 against −6. The old trial script had the same latent flaw (hidden because its default matched).
 * **Tests:** 6 real-FFglitch tests in `tests/moshlab.rs` (they skip with a printed note without FFglitch, and *fail* when `FFWORKS_REQUIRE_FFGLITCH` is set, which CI does), 4 unit tests, GUI `mosh.sh`. CI downloads the pinned Linux 0.10.2 build; the Windows job bundles the pinned Win64 zip (ffedit/ffgac, ~60 MB uncompressed) and runs the same tests with the bundled tools after uploading the installer.
 * **Unverified:** everything on Windows (argument quoting of the `-sp` JSON through `ffedit.exe`, pipes into `ffgac.exe`) until CI reports; the look on real footage was judged by pixel differences, not by eye; H.264 sources are fine (they are re-encoded), H.264 *output* is not possible (FFglitch cannot edit it).
+
+## Scripting (Rhai) — done, Linux-verified
+Palette → "Run a script (Rhai) on the project…" and CLI `ffworks script <project|new> <file.rhai> [--dry-run] [--save out] [--selected <clip>] [--allow-analysis]`. [Rhai](https://rhai.rs) (MIT/Apache-2.0) gives real variables, loops, conditions, functions and maps on top of the existing JSON command lists (`ffworks run`, macros stay as they are).
+* **Same command bus:** every function a script calls issues an ordinary `Command`; the whole run is **one undo step** (`Engine::begin_group/end_group`), and any error (syntax, runtime, refused command, limit) rolls every change back (`abort_group`) so nothing half-applies. Save/load/render are therefore unchanged.
+* **Reads:** `project()`, `tracks()`, `clips()`, `media()`, `selected()`, `print(...)`. **Writes:** `add_effect`, `set_param`, `remove_effect`, `set_opacity`, `set_gain`, `set_speed`, `add_marker`, `split`, `delete`, `move_clip`, `add_track`, `place`, `add_title`, `add_solid`, `add_adjustment` (the creators return the new id), `animate_lfo`, and `command(#{ type: "...", ... })` for every other command (same JSON as the command lists; a wrong shape says which part is wrong).
+* **Permissions and limits:** a script has no file, network, process or module access (Rhai built without modules; `import_media`/`relink_media` are refused because they read files). Two permissions: *edit* (off = dry run, every edit is refused) and *analysis* (needed for `animate_from_audio` / `animate_from_beats`, which run FFmpeg over the project's audio; the CLI flag `--allow-analysis` grants it, the app does not grant it). Limits: 3 million operations, 32 call levels, 20 s run time, 2000 commands, 200 KB source; an endless loop is stopped, not hung.
+* **Tests:** 9 integration tests in `tests/script.rs` (loops/conditions/undo as one step, read functions, creators and ids, adjustment + LFO helper, the generic `command`, errors with line numbers, rollback on failure, no way to reach files/modules/programs, dry run, limits), the CLI by hand (new project → save → dry run), GUI `scripts/uitest/script.sh`.
+* **Not done:** a script editor panel (scripts are files you pick), macro variables inside recorded JSON macros, scripting of analysis results beyond the two follow commands, a plugin/extension API (Extism) and a local API.
 
 ## LADSPA audio plugins (done, Linux-verified)
 * Installed LADSPA plugins are offered as audio effects (category "LADSPA"), run by FFmpeg's `ladspa` filter (`crates/ffworks-core/src/ladspa.rs`, ids `la:<library>:<label>`). The control table (`assets/ladspa/plugins.json`) was read from the swh, TAP and CMT plugin sets through the LADSPA C API by `scripts/ladspa/dump.py`: 139 mono/stereo effects in 99 libraries; 122 are offered. Unbounded controls get a finite slider range around their default; switches and whole-number controls step by 1.

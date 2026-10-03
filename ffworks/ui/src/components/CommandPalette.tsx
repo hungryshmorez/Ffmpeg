@@ -34,6 +34,15 @@ function buildActions(): PaletteAction[] {
       if (typeof p !== "string") return;
       try { proj.setView(await api.runMacro(p, ui.selected)); proj.toast("info", "Macro applied (one undo step)"); } catch (e) { proj.toast("error", String(e)); }
     })() },
+    { id: "script-run", label: "Run a script (Rhai) on the project…", keywords: "macro automation rhai loop condition", run: () => void (async () => {
+      const p = await open({ title: "Script to run", filters: [{ name: "Rhai script", extensions: ["rhai"] }] });
+      if (typeof p !== "string") return;
+      try {
+        const r = await api.runScript(p, ui.selected, false);
+        proj.setView(r.view);
+        proj.toast("info", `Script ran: ${r.commands} commands, one undo step${r.log.length ? ` — ${r.log[r.log.length - 1]}` : ""}`);
+      } catch (e) { proj.toast("error", String(e)); }
+    })() },
     { id: "snapshots", label: "Snapshots (save and restore the timeline)…", keywords: "version backup history", run: () => ui.setSnapshotsOpen(true) },
     { id: "saveas", label: "Save project as…", run: () => void saveProject(true) },
     { id: "import", label: "Import media…", run: () => void importViaDialog() },

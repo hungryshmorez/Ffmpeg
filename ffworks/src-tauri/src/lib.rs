@@ -190,6 +190,25 @@ fn run_macro(state: State<AppState>, path: String, selected: Option<String>) -> 
     Ok(view(&e))
 }
 
+/// What a script run reports back: what it printed, how many commands it issued, and the project afterwards.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScriptOutcome {
+    log: Vec<String>,
+    commands: usize,
+    view: StateView,
+}
+
+/// Run a Rhai script file against the open project as ONE undo step (all or nothing). Scripts can edit but cannot touch files, the network or other programs.
+#[tauri::command]
+async fn run_script(state: State<'_, AppState>, path: String, selected: Option<String>, allow_analysis: bool) -> Result<ScriptOutcome, String> {
+    let source = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
+    let mut e = state.engine.lock().unwrap();
+    let name = std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).unwrap_or("script").to_string();
+    let report = ffworks_core::script::run(&mut e, &source, selected.as_deref(), ffworks_core::script::Permissions { edit: true, analysis: allow_analysis }, &format!("Script {name}")).map_err(s)?;
+    Ok(ScriptOutcome { log: report.log, commands: report.commands, view: view(&e) })
+}
+
 /// Read a SubRip/WebVTT file and put its cues on a new "Subtitles" track as title clips (one undo step).
 #[tauri::command]
 fn import_subtitles(state: State<AppState>, path: String, offset: f64) -> Result<StateView, String> {
@@ -1191,12 +1210,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

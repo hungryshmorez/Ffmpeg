@@ -23,6 +23,7 @@ export const api = {
   packageProject: (folder: string) => invoke<string>("package_project", { folder }),
   startRecording: () => invoke<void>("start_recording"),
   stopRecording: (path: string | null) => invoke<number>("stop_recording", { path }),
+  runScript: (path: string, selected: string | null, allowAnalysis: boolean) => invoke<{ log: string[]; commands: number; view: StateView }>("run_script", { path, selected, allowAnalysis }),
   runMacro: (path: string, selected: string | null) => invoke<StateView>("run_macro", { path, selected }),
   importSubtitles: (path: string, offset: number) => invoke<StateView>("import_subtitles", { path, offset }),
   syncOffset: (reference: string, clip: string) => invoke<{ lag: number; confidence: number; start: number }>("sync_offset", { reference, clip }),

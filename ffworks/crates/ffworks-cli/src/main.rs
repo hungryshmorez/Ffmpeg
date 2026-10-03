@@ -8,6 +8,8 @@
 //!                                                               tokens ({project} {date}...); --keep never overwrites
 //!   ffworks run <project|new> <commands.json> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]
 //!                                                             apply a JSON list of commands (one undo step each, all or nothing)
+//!   ffworks script <project|new> <script.rhai> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>] [--allow-analysis]
+//!                                                             run a Rhai script (loops, conditions, variables) as one undo step
 //!   ffworks detect <media> <silence|black|freeze> [level] [min-seconds]
 //!   ffworks sync <reference-media> <other-media>              how much later the second recording is
 //!   ffworks package <project> <folder>                        copy the project and all its media into one folder
@@ -158,6 +160,25 @@ fn run() -> ffworks_core::Result<()> {
                 println!("saved {target}");
             }
         }
+        Some("script") => {
+            let (project, file) = (args.get(1).ok_or_else(|| usage("script <project|new> <script.rhai> [--dry-run] [--save out]"))?, args.get(2).ok_or_else(|| usage("script <project|new> <script.rhai>"))?);
+            let dry = args.iter().any(|a| a == "--dry-run");
+            let save = args.iter().position(|a| a == "--save").and_then(|i| args.get(i + 1)).cloned();
+            let selected = args.iter().position(|a| a == "--selected").and_then(|i| args.get(i + 1)).cloned();
+            let mut eng = if project == "new" { Engine::new("Untitled", ProjectSettings::default(), tools.clone()) } else { Engine::load(Path::new(project), tools.clone())? };
+            let source = std::fs::read_to_string(file).map_err(|e| Error::io(Path::new(file), e))?;
+            let perms = ffworks_core::script::Permissions { edit: true, analysis: args.iter().any(|a| a == "--allow-analysis") };
+            let report = ffworks_core::script::run(&mut eng, &source, selected.as_deref(), perms, &format!("script {file}"))?;
+            for line in &report.log {
+                println!("{line}");
+            }
+            println!("script issued {} commands{}", report.commands, if dry { " (dry run, nothing saved)" } else { "" });
+            if !dry {
+                let target = save.or_else(|| (project != "new").then(|| project.clone())).ok_or_else(|| Error::validation("a new project needs --save <file>"))?;
+                eng.save(Path::new(&target))?;
+                println!("saved {target}");
+            }
+        }
         Some("detect") => {
             let (media, kind) = (args.get(1).ok_or_else(|| usage("detect <media> <silence|black|freeze>"))?, args.get(2).ok_or_else(|| usage("detect <media> <silence|black|freeze>"))?);
             let kind = match kind.as_str() {
@@ -244,7 +265,7 @@ fn run() -> ffworks_core::Result<()> {
                 return Err(Error::validation(format!("{failed} file(s) failed")));
             }
         }
-        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
+        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|script|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
     }
     Ok(())
 }

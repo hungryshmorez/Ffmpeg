@@ -13,7 +13,7 @@ A native desktop nonlinear editor built around FFmpeg. Authority order: project 
 cargo test --workspace            # ~250 tests incl. real-FFmpeg e2e (slow: run in the background; CARGO_INCREMENTAL=0 saves disk) (needs ffmpeg+ffprobe on PATH)
 cargo clippy --workspace --all-targets   # keep at 0 warnings
 (cd ui && npx tsc --noEmit && npx vitest run)
-scripts/uitest/run.sh | recovery.sh | relink.sh | beats.sh | transitions.sh | analysis.sh | filters.sh | graph.sh | random.sh | engines.sh | demo.sh | detect.sh | fxcopy.sh | subs.sh | sync.sh | palette.sh | seq.sh | scopes.sh | addfilter.sh | multi.sh | macro.sh | snapshots.sh | variations.sh | shortcuts.sh | reactive.sh | exportname.sh | unfinished.sh | pixelsort.sh | mosh.sh | adjustment.sh   # GUI tests (more: clipfx audio generated markers proxy), see below
+scripts/uitest/run.sh | recovery.sh | relink.sh | beats.sh | transitions.sh | analysis.sh | filters.sh | graph.sh | random.sh | engines.sh | demo.sh | detect.sh | fxcopy.sh | subs.sh | sync.sh | palette.sh | seq.sh | scopes.sh | addfilter.sh | multi.sh | macro.sh | snapshots.sh | variations.sh | shortcuts.sh | reactive.sh | exportname.sh | unfinished.sh | pixelsort.sh | mosh.sh | adjustment.sh | script.sh   # GUI tests (more: clipfx audio generated markers proxy), see below
 ```
 GUI tests build the UI with `VITE_UITEST=1`, build the Tauri app with `--features custom-protocol,uitest`, run it under Xvfb (`DISPLAY=:99`) in a real WebKitGTK webview and drive the real UI through an injected script. Linux sandbox needs `libwebkit2gtk-4.1-dev` etc. (apt) and `xvfb`.
 
@@ -23,6 +23,7 @@ GUI tests build the UI with `VITE_UITEST=1`, build the Tauri app with `--feature
 * **One `-i` per clip use** (linked A/V share one). Never feed several branches from one input via `split`/`asplit` — late branches get starved (silent audio). Limit 200 inputs per render.
 * Effects FFmpeg cannot express (pixel sort) are *baked*: `effects::to_filter` returns a `bake::MARK` entry, `bake::prepare` (called by `compile_project` and `preview::render`) turns it into a pre-render stage in `FfmpegJob.stages`, `jobs::run_job` runs the stages first. `ffmpeg::compile` refuses a graph with an unbaked mark — call `bake::prepare` before it.
 * FFglitch (mosh lab) passes `-sp` JSON to scripts as `args.params`, and its arrays are not iterable. Its tests need `FFWORKS_FFGLITCH` (and fail rather than skip with `FFWORKS_REQUIRE_FFGLITCH`).
+* Scripts (`script.rs`, Rhai) go through `Engine::begin_group/end_group/abort_group`: one undo step, all or nothing. They get no file/network/process access; any new script function must issue a `Command`, never touch the disk.
 * Time is exact rational (`time.rs`). Never use float seconds as truth.
 * FFmpeg's `ladspa` filter ignores the LADSPA "multiple of sample rate" hint (checks raw bounds): plugins with such controls are excluded, not worked around.
 * Run `node --check` on a GUI test script before building: a JS syntax error makes the app just sit there until the timeout.

@@ -507,7 +507,14 @@ mod queue_tests {
         if slow {
             s.encoder_preset = Some("veryslow".into());
         }
-        compile(&g, &RenderOptions { output: out, settings: s, range: None, scale_div: 1 }, None).unwrap()
+        let mut job = compile(&g, &RenderOptions { output: out, settings: s, range: None, scale_div: 1 }, None).unwrap();
+        if slow {
+            // `veryslow` alone is not slow on a flat colour: a fast CI runner finished it before the tests looked. Noisy frames
+            // are what make x264 work, so the slow job always outlasts the few milliseconds the tests need.
+            job.filter_graph = job.filter_graph.replacen("null[vout]", "noise=alls=100:allf=t+u,format=yuv420p[vout]", 1);
+            assert!(job.filter_graph.contains("noise=alls=100"), "the slow job's graph changed shape");
+        }
+        job
     }
 
     fn wait_until(q: &JobQueue, id: &str, pred: impl Fn(&JobState) -> bool, secs: u64) -> bool {
