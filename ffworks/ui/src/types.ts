@@ -157,3 +157,6 @@ export interface GlitchStatus {
   dir: string | null;
   bundled: boolean;
 }
+
+/** The local HTTP API (off by default): where to reach it and the secret callers must send. */
+export interface LocalApi { enabled: boolean; url: string | null; token: string | null; port: number }

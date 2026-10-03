@@ -12,11 +12,13 @@ use ffworks_core::project::{Project, ProjectSettings};
 use ffworks_core::Rational;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 struct AppState {
-    engine: Mutex<Engine>,
+    engine: Arc<Mutex<Engine>>,
+    /// The local API server while it is on (see `ffworks_core::api`).
+    api: Mutex<Option<ffworks_core::api::ApiServer>>,
     queue: JobQueue,
     caps: Mutex<Option<Capabilities>>,
     /// Hardware encoders that really work on this machine (probed once per FFmpeg build, see `hwenc`).
@@ -196,6 +198,60 @@ fn set_active_sequence(state: State<AppState>, id: String) -> Result<StateView, 
     let mut e = state.engine.lock().unwrap();
     e.set_active_sequence(&id).map_err(s)?;
     Ok(view(&e))
+}
+
+/// Default port of the local API.
+const API_PORT: u16 = 47831;
+
+fn api_info(state: &AppState) -> serde_json::Value {
+    let on = state.api.lock().unwrap();
+    let st = ffworks_core::settings::Settings::load(&state.settings_file);
+    match on.as_ref() {
+        Some(a) => serde_json::json!({ "enabled": true, "url": a.url(), "token": a.token(), "port": st.local_api_port.unwrap_or(API_PORT) }),
+        None => serde_json::json!({ "enabled": false, "url": null, "token": null, "port": st.local_api_port.unwrap_or(API_PORT) }),
+    }
+}
+
+/// Start the local API with the saved port and token (making a token the first time).
+fn start_api(app: &AppHandle, state: &AppState) -> Result<(), String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    let token = st.local_api_token.clone().unwrap_or_else(ffworks_core::api::new_token);
+    if st.local_api_token.is_none() {
+        st.local_api_token = Some(token.clone());
+        st.save(&state.settings_file).map_err(s)?;
+    }
+    let handle = app.clone();
+    let on_change: ffworks_core::api::OnChange = Arc::new(move || {
+        let _ = handle.emit("project-changed", ());
+    });
+    let server = ffworks_core::api::serve(Arc::clone(&state.engine), st.local_api_port.unwrap_or(API_PORT), token, ffworks_core::api::Allow::default(), Some(on_change)).map_err(s)?;
+    *state.api.lock().unwrap() = Some(server);
+    Ok(())
+}
+
+/// Whether the local API is on, and where and with which token to reach it.
+#[tauri::command]
+fn local_api_status(state: State<AppState>) -> serde_json::Value {
+    api_info(&state)
+}
+
+/// Turn the local API on or off (remembered for next time). `new_token` replaces the secret.
+#[tauri::command]
+fn set_local_api(app: AppHandle, state: State<AppState>, enabled: bool, new_token: bool) -> Result<serde_json::Value, String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    if new_token {
+        st.local_api_token = None;
+    }
+    st.local_api = enabled;
+    st.save(&state.settings_file).map_err(s)?;
+    // stop first: the port is released before a restart needs it
+    if let Some(mut old) = state.api.lock().unwrap().take() {
+        old.stop();
+    }
+    if enabled {
+        start_api(&app, &state)?;
+    }
+    Ok(api_info(&state))
 }
 
 /// What a script run reports back: what it printed, how many commands it issued, and the project afterwards.
@@ -1176,7 +1232,8 @@ pub fn run() {
                 let _ = emitter.emit("job-state", snap);
             });
             app.manage(AppState {
-                engine: Mutex::new(Engine::new("Untitled", ProjectSettings::default(), tools)),
+                engine: Arc::new(Mutex::new(Engine::new("Untitled", ProjectSettings::default(), tools))),
+                api: Mutex::new(None),
                 queue,
                 caps: Mutex::new(None),
                 hw: Mutex::new(None),
@@ -1191,6 +1248,12 @@ pub fn run() {
                 mosh_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("mosh"),
                 mosh_cancel: Mutex::new(None),
             });
+            if loaded.local_api {
+                let st = app.state::<AppState>();
+                if let Err(e) = start_api(app.handle(), &st) {
+                    eprintln!("local API could not start: {e}");
+                }
+            }
             // Autosave unsaved work periodically (spec §47). Never touches the saved project file.
             let secs = std::env::var("FFWORKS_AUTOSAVE_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20).max(1);
             let h = app.handle().clone();
@@ -1218,12 +1281,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, set_active_sequence, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, set_active_sequence, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, set_active_sequence, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, set_active_sequence, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

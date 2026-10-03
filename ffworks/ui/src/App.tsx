@@ -50,6 +50,13 @@ export default function App() {
     void api.getState().then((v) => useProject.getState().setView(v)).catch((e) => useProject.getState().toast("error", String(e)));
   }, []);
 
+  // Edits made through the local API arrive as an event; refetch the project.
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    void api.onProjectChanged(() => void api.getState().then((v) => useProject.getState().setView(v)).catch(() => undefined)).then((u) => (un = u));
+    return () => un?.();
+  }, []);
+
   // Mirror the Rust render queue.
   useEffect(() => {
     let un: (() => void) | undefined;

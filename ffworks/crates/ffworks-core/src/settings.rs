@@ -28,6 +28,15 @@ pub struct Settings {
     /// Extra folders holding frei0r plugins (glitch0r, pixeliz0r...), searched before the standard ones.
     #[serde(default)]
     pub frei0r_dirs: Vec<String>,
+    /// Whether the local API (see `api`) is on. Off by default.
+    #[serde(default)]
+    pub local_api: bool,
+    /// Port of the local API (47831 when unset).
+    #[serde(default)]
+    pub local_api_port: Option<u16>,
+    /// Secret callers of the local API must send; made once, kept until the user asks for a new one.
+    #[serde(default)]
+    pub local_api_token: Option<String>,
     /// Named effect stacks saved from a clip ("My glitch look") that can be applied to any clip of the same kind.
     #[serde(default)]
     pub effect_presets: std::collections::BTreeMap<String, EffectPreset>,

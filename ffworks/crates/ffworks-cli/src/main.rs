@@ -10,6 +10,8 @@
 //!                                                             apply a JSON list of commands (one undo step each, all or nothing)
 //!   ffworks script <project|new> <script.rhai> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>] [--allow-analysis]
 //!                                                             run a Rhai script (loops, conditions, variables) as one undo step
+//!   ffworks serve <project|new> [--port N] [--token T] [--allow-analysis]
+//!                                                             local HTTP API on 127.0.0.1 for the project (see core/src/api.rs); Ctrl-C stops it
 //!   ffworks detect <media> <silence|black|freeze> [level] [min-seconds]
 //!   ffworks sync <reference-media> <other-media>              how much later the second recording is
 //!   ffworks package <project> <folder>                        copy the project and all its media into one folder
@@ -179,6 +181,20 @@ fn run() -> ffworks_core::Result<()> {
                 println!("saved {target}");
             }
         }
+        Some("serve") => {
+            let project = args.get(1).ok_or_else(|| usage("serve <project|new> [--port N] [--token T] [--allow-analysis]"))?;
+            let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+            let port: u16 = flag("--port").map(|p| p.parse().map_err(|_| Error::validation("--port must be a number from 0 to 65535"))).transpose()?.unwrap_or(0);
+            let token = flag("--token").unwrap_or_else(ffworks_core::api::new_token);
+            let eng = if project == "new" { Engine::new("Untitled", ProjectSettings::default(), tools.clone()) } else { Engine::load(Path::new(project), tools.clone())? };
+            let engine = std::sync::Arc::new(std::sync::Mutex::new(eng));
+            let server = ffworks_core::api::serve(engine, port, token, ffworks_core::api::Allow { analysis: args.iter().any(|a| a == "--allow-analysis") }, None)?;
+            println!("listening on {}\ntoken: {}\nexample: curl -H 'Authorization: Bearer {}' {}/v1/status", server.url(), server.token(), server.token(), server.url());
+            // runs until the process is stopped
+            loop {
+                std::thread::park();
+            }
+        }
         Some("detect") => {
             let (media, kind) = (args.get(1).ok_or_else(|| usage("detect <media> <silence|black|freeze>"))?, args.get(2).ok_or_else(|| usage("detect <media> <silence|black|freeze>"))?);
             let kind = match kind.as_str() {
@@ -265,7 +281,7 @@ fn run() -> ffworks_core::Result<()> {
                 return Err(Error::validation(format!("{failed} file(s) failed")));
             }
         }
-        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|script|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
+        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|script|serve|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
     }
     Ok(())
 }

@@ -17,6 +17,7 @@ rustfft = "6"
 fs4 = "0.13"
 rhai = { version = "1.26.1", default-features = false, features = ["std", "no_module", "serde"] }
 fasteval = "0.2"
+tiny_http = "0.12"
 
 [dev-dependencies]
 tempfile = "3"

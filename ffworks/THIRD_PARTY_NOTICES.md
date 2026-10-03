@@ -28,6 +28,7 @@ Titles use **DejaVu Sans** and **DejaVu Sans Bold** (embedded in the binary; use
 | [xfade-easing](https://github.com/scriptituk/xfade-easing) (© 2025 Raymond Luckhurst) and the [gl-transitions](https://github.com/gl-transitions/gl-transitions) shaders it ports (© gl-transitions contributors) | 48 GL transitions as `xfade` custom expressions (`crates/ffworks-core/assets/glx/`, licences alongside) | MIT |
 | [`rhai`](https://github.com/rhaiscript/rhai) (© Jonathan Turner, Stephen Chung and contributors) | embedded scripting language for user scripts | MIT OR Apache-2.0 |
 | [`fasteval`](https://github.com/likebike/fasteval) (© Christopher Sebastian) | formulas for keyframe expressions | MIT |
+| [`tiny_http`](https://github.com/tiny-http/tiny-http) (© Pierre Krieger and contributors) | the local API's HTTP server | MIT OR Apache-2.0 |
 | Tauri, React, Zustand, Vite and their dependencies | application shell and UI | MIT / Apache-2.0 |
 
 Complete dependency licenses can be listed with `cargo license` and `npx license-checker` in `ffworks/` and `ffworks/ui/`.
