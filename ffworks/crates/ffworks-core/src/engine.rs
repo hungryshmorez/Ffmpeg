@@ -174,6 +174,22 @@ impl Engine {
                 };
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
             }
+            Command::AnimateFromMidi { clip, param, path, source, channel, track, low, high, decay, offset } => {
+                let (start, dur) = {
+                    let (_, c) = self.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+                    crate::clipprops::check_value(c, param, *low, true)?;
+                    crate::clipprops::check_value(c, param, *high, true)?;
+                    (c.start.as_f64(), c.duration.as_f64())
+                };
+                let size = std::fs::metadata(path).map_err(|e| Error::io(path, e))?.len();
+                if size > crate::midi::MAX_FILE_BYTES {
+                    return Err(Error::validation(format!("{path} is too large for a MIDI file ({size} bytes)")));
+                }
+                let file = crate::midi::parse(&std::fs::read(path).map_err(|e| Error::io(path, e))?)?;
+                let opts = crate::midi::Options { source: crate::midi::Source::parse(source)?, channel: *channel, track: *track, low: *low, high: *high, decay: *decay, offset: *offset };
+                let keys = crate::midi::keys(&file, &opts, self.project.settings.fps, start, dur)?;
+                self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
+            }
             Command::AnimateFromAudio { clip, param, source, low, high, smooth, band } => {
                 let keys = self.audio_keys(clip, param, source.as_deref(), *low, *high, *smooth, band.as_deref().unwrap_or("all"))?;
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)

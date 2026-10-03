@@ -4,6 +4,7 @@ import { evalKeyframes, keyNear } from "../keyframes";
 import { usePlayhead, useProject } from "../state/stores";
 import type { Clip, ClipProps, Interp } from "../types";
 import { CommitSlider } from "./CommitSlider";
+import { MidiFollow } from "./MidiFollow";
 
 export interface FieldSpec { param: string; label: string; unit?: string; min: number; max: number; step: number; value: number; animatable: boolean }
 
@@ -38,6 +39,7 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
   const [rate, setRate] = useState(1);
   const [phase, setPhase] = useState(0);
   const [formula, setFormula] = useState(false);
+  const [midi, setMidi] = useState(false);
   const [expr, setExpr] = useState("p");
   const [source, setSource] = useState("");
   const [clamp, setClamp] = useState(true);
@@ -86,16 +88,20 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
           >◆</button>
         )}
         {spec.animatable && (
-          <button className={`small ${follow ? "on" : ""}`} aria-label={`Follow audio for ${spec.label}`} aria-pressed={follow} title="Make this parameter follow the loudness of the clip's audio (creates keyframes)" onClick={() => { setFollow(!follow); setLfo(false); }}>♪</button>
+          <button className={`small ${follow ? "on" : ""}`} aria-label={`Follow audio for ${spec.label}`} aria-pressed={follow} title="Make this parameter follow the loudness of the clip's audio (creates keyframes)" onClick={() => { setFollow(!follow); setLfo(false); setFormula(false); setMidi(false); }}>♪</button>
         )}
         {spec.animatable && (
-          <button className={`small ${lfo ? "on" : ""}`} aria-label={`LFO for ${spec.label}`} aria-pressed={lfo} title="Make this parameter oscillate (sine, triangle, saw, square, random); creates keyframes" onClick={() => { setLfo(!lfo); setFollow(false); setFormula(false); }}>∿</button>
+          <button className={`small ${lfo ? "on" : ""}`} aria-label={`LFO for ${spec.label}`} aria-pressed={lfo} title="Make this parameter oscillate (sine, triangle, saw, square, random); creates keyframes" onClick={() => { setLfo(!lfo); setFollow(false); setFormula(false); setMidi(false); }}>∿</button>
         )}
         {spec.animatable && (
-          <button className={`small ${formula ? "on" : ""}`} aria-label={`Formula for ${spec.label}`} aria-pressed={formula} title="Drive this parameter with a formula in time (t, p, n, d, fps, v, sin, noise…), optionally following another parameter; creates keyframes" onClick={() => { setFormula(!formula); setLfo(false); setFollow(false); }}>ƒ</button>
+          <button className={`small ${formula ? "on" : ""}`} aria-label={`Formula for ${spec.label}`} aria-pressed={formula} title="Drive this parameter with a formula in time (t, p, n, d, fps, v, sin, noise…), optionally following another parameter; creates keyframes" onClick={() => { setFormula(!formula); setLfo(false); setFollow(false); setMidi(false); }}>ƒ</button>
+        )}
+        {spec.animatable && (
+          <button className={`small ${midi ? "on" : ""}`} aria-label={`MIDI for ${spec.label}`} aria-pressed={midi} title="Drive this parameter from a MIDI file (a controller, note velocity, held notes, pitch or the pitch wheel); creates keyframes" onClick={() => { setMidi(!midi); setLfo(false); setFollow(false); setFormula(false); }}>♬</button>
         )}
         {animated && <button className="small" aria-label={`${open ? "Hide" : "Show"} keyframes for ${spec.label}`} title="Keyframe list" onClick={() => setOpen(!open)}>{kfs.length}</button>}
       </div>
+      {midi && <MidiFollow clip={clip} spec={spec} animated={animated} onDone={() => { setMidi(false); setOpen(true); }} />}
       {formula && (
         <div className="kf-follow" aria-label={`Formula for ${spec.label}`}>
           <label>{spec.label} = <input aria-label="Formula" className="wide" type="text" spellCheck={false} maxLength={500} value={expr} onChange={(e) => setExpr(e.currentTarget.value)} /></label>

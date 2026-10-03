@@ -81,6 +81,8 @@ pub enum Command {
     /// Make `param` jump to `high` on every beat of `source` (same default as above) and fall back to `low` over `decay`
     /// seconds. Beats come from FFWORKS's onset detector. Stored as keyframes. One undo step.
     AnimateFromBeats { clip: Id, param: String, #[serde(default)] source: Option<Id>, low: f64, high: f64, decay: f64 },
+    /// Keyframes from a Standard MIDI File on disk: `source` is `cc:N`, `velocity`, `gate`, `pitch` or `bend`; `channel` is 1-16.
+    AnimateFromMidi { clip: Id, param: String, path: String, source: String, #[serde(default)] channel: Option<u8>, #[serde(default)] track: Option<usize>, low: f64, high: f64, #[serde(default)] decay: f64, #[serde(default)] offset: f64 },
     /// Make `param` oscillate: `shape` (sine, triangle, saw, square, random) at `rate` Hz between `low` and `high`, starting
     /// `phase` of a cycle in; `seed` only matters for random. Stored as keyframes (at most 200). One undo step.
     AnimateFromLfo { clip: Id, param: String, shape: String, rate: f64, low: f64, high: f64, #[serde(default)] phase: f64, #[serde(default)] seed: u64 },
@@ -183,6 +185,7 @@ impl Command {
             Command::SetKeyframes { param, keys, .. } => format!("Set {} keyframes on {param}", keys.len()),
             Command::AnimateFromAudio { param, .. } => format!("Animate {param} from audio"),
             Command::AnimateFromBeats { param, .. } => format!("Pulse {param} on beats"),
+            Command::AnimateFromMidi { param, .. } => format!("Follow MIDI with {param}"),
             Command::AnimateFromLfo { param, shape, .. } => format!("{shape} LFO on {param}"),
             Command::AnimateFromExpression { param, .. } => format!("Formula on {param}"),
             Command::RemoveKeyframe { param, .. } => format!("Remove keyframe {param}"),
@@ -214,7 +217,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
     let sid = seq.id.clone();
     let fps = p.settings.fps;
     match cmd {
-        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } | Command::AnimateFromLfo { .. } | Command::AnimateFromExpression { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } | Command::AnimateFromMidi { .. } | Command::AnimateFromLfo { .. } | Command::AnimateFromExpression { .. } => Err(Error::validation("batch is handled by the engine")),
         Command::NestClips { clips, name } => crate::nest::plan_nest(p, clips, name.as_deref()),
         Command::UnnestClip { clip } => crate::nest::plan_unnest(p, clip),
         Command::FitCompound { media } => crate::nest::plan_fit(p, media),

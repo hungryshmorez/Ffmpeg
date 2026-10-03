@@ -14,7 +14,9 @@ Rule: **search first, adopt if the license (MIT/BSD/Apache) and quality allow, b
 | Need | Source | Plan |
 |---|---|---|
 | Expression evaluator | [`fasteval`](https://github.com/likebike/fasteval) (MIT) | Phase 6 modulators/expressions |
-| MIDI | [`midir`](https://github.com/Boddlnagg/midir) (MIT) | Phase 6 |
+| MIDI files | [`midly`](https://github.com/negamartin/midly) (Unlicense) | adopted (`midi.rs`) |
+| MIDI devices (live input) | [`midir`](https://github.com/Boddlnagg/midir) (MIT) | open: needs hardware to verify |
+| SQLite | [`rusqlite`](https://github.com/rusqlite/rusqlite) (MIT, bundled SQLite) | adopted (`library.rs`) |
 | Node graph UI | [`@xyflow/react`](https://github.com/xyflow/xyflow) (MIT) | **Adopted** for the Phase 3 filter-graph editor (MIT, v12); still planned for Phases 4/6 (blueprints, compositor) |
 | Plugin sandbox | [Extism](https://extism.org) (BSD-3) | adopted (`plugin.rs`) |
 | Pixel sorting | [`patsore/pixel-sorter`](https://github.com/patsore/pixel-sorter) (MIT) | Phase 7 reference algorithm (decode → sort → encode helper job) |

@@ -96,6 +96,20 @@
     setNum(fp2.querySelector("[aria-label='Formula']"), "sin("); await sleep(200);
     [...fp2.querySelectorAll("button")].find((b) => /Replace|Apply/.test(b.textContent)).click(); await sleep(800);
     step("a broken formula is refused with a toast and keeps the curve", (view().undoLabel || "") === "Formula on opacity" && !!$$(".toast").find((t) => /expression/i.test(t.textContent)), $$(".toast").map((t) => t.textContent).join("|"));
+    // MIDI: the panel, and the command (the native file dialog cannot be driven here, so the file goes straight to the command)
+    await P().dispatch({ type: "clear_keyframes", clip: c2().id, param: "opacity" }); await sleep(300);
+    const mb = await waitFor(() => $("[data-param='opacity'] button[aria-label^='MIDI for']"));
+    step("an animatable field offers a MIDI button", !!mb);
+    mb.click(); await sleep(300);
+    const mp = $("[data-param='opacity'] .kf-follow[aria-label^='Follow MIDI for']");
+    step("the MIDI panel has the file, source, channel, range and offset", !!mp && ["Choose a MIDI file", "MIDI source", "Controller number", "MIDI channel", "Value at minimum", "Value at maximum", "MIDI file offset in seconds"].every((l) => mp.querySelector(`[aria-label='${l}']`)));
+    step("Apply waits for a file", !!mp && [...mp.querySelectorAll("button")].find((b) => /Apply/.test(b.textContent)).disabled === true);
+    await P().dispatch({ type: "animate_from_midi", clip: c2().id, param: "opacity", path: "__MIDI__", source: "cc:1", channel: null, track: null, low: 0, high: 1, decay: 0, offset: rat(c2().start) });
+    const mk = await waitFor(() => c2().keyframes.opacity, 15000);
+    step("the MIDI controller sweep (0 to 127 over 2 s, file shifted to start with the clip) became keyframes: half way up after 1 s", !!mk && Math.abs(evalK(mk, 1) - 0.5) < 0.02 && evalK(mk, 0) < 0.02 && evalK(mk, 2.5) > 0.98, mk && `${evalK(mk, 0)} ${evalK(mk, 1)} ${evalK(mk, 2.5)}`);
+    step("it is one undo step", /Follow MIDI with opacity/.test(view().undoLabel || ""), view().undoLabel);
+    P().setView(await window.__TAURI_INTERNALS__.invoke("undo")); await sleep(300);
+    step("undo removes the keyframes", !(c2().keyframes.opacity || []).length);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await window.__TAURI_INTERNALS__.invoke("uitest_report", { report: JSON.stringify(R) });
 })();

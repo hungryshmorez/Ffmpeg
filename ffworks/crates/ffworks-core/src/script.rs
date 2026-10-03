@@ -93,7 +93,7 @@ pub(crate) fn vet(perms: Permissions, cmd: &Command) -> std::result::Result<(), 
         return Err(Refusal::ReadOnly);
     }
     match cmd {
-        Command::ImportMedia { .. } | Command::RelinkMedia { .. } => Err(Refusal::ReadsFiles),
+        Command::ImportMedia { .. } | Command::RelinkMedia { .. } | Command::AnimateFromMidi { .. } => Err(Refusal::ReadsFiles),
         Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } if !perms.analysis => Err(Refusal::NeedsAnalysis),
         _ => Ok(()),
     }
@@ -103,7 +103,7 @@ impl Ctx {
     fn send(&self, cmd: Command) -> Res<()> {
         match vet(self.perms, &cmd) {
             Err(Refusal::ReadOnly) => return Err(fail("this script is running read-only (a dry run): editing is not allowed")),
-            Err(Refusal::ReadsFiles) => return Err(fail("scripts cannot read files from disk (import_media / relink_media are not allowed)")),
+            Err(Refusal::ReadsFiles) => return Err(fail("scripts cannot read files from disk (import_media / relink_media / animate_from_midi are not allowed)")),
             Err(Refusal::NeedsAnalysis) => return Err(fail("this command analyses the project's audio with FFmpeg; run the script with analysis allowed")),
             Ok(()) => {}
         }

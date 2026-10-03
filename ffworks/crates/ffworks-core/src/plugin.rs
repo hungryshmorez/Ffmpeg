@@ -177,7 +177,7 @@ pub fn run(eng: &mut Engine, pkg: &PluginPackage, action_id: &str, selected: Opt
         match vet(perms, &cmd) {
             Ok(()) => cmds.push(cmd),
             Err(Refusal::ReadOnly) => return Err(Error::validation(format!("plugin \"{name}\" is not allowed to edit the project"))),
-            Err(Refusal::ReadsFiles) => return Err(Error::validation(format!("plugin \"{name}\" tried to read a file from disk (import_media / relink_media are not allowed)"))),
+            Err(Refusal::ReadsFiles) => return Err(Error::validation(format!("plugin \"{name}\" tried to read a file from disk (import_media / relink_media / animate_from_midi are not allowed)"))),
             Err(Refusal::NeedsAnalysis) => return Err(Error::validation(format!("plugin \"{name}\" tried to analyse the project's media, which it was not given permission to do"))),
         }
     }

@@ -30,6 +30,7 @@ Titles use **DejaVu Sans** and **DejaVu Sans Bold** (embedded in the binary; use
 | [`fasteval`](https://github.com/likebike/fasteval) (© Christopher Sebastian) | formulas for keyframe expressions | MIT |
 | [`extism`](https://github.com/extism/extism) (© Dylibso, Inc. and contributors) and its [`wasmtime`](https://github.com/bytecodealliance/wasmtime) runtime (© Bytecode Alliance) | runs plugins as sandboxed WebAssembly | BSD-3-Clause; Apache-2.0 WITH LLVM-exception |
 | [`rusqlite`](https://github.com/rusqlite/rusqlite) (© rusqlite contributors) with bundled [SQLite](https://sqlite.org) (public domain) | the media library index | MIT; SQLite public domain |
+| [`midly`](https://github.com/negamartin/midly) (© negamartin) | reads Standard MIDI Files for MIDI-driven parameters | Unlicense |
 | [`tiny_http`](https://github.com/tiny-http/tiny-http) (© Pierre Krieger and contributors) | the local API's HTTP server | MIT OR Apache-2.0 |
 | Tauri, React, Zustand, Vite and their dependencies | application shell and UI | MIT / Apache-2.0 |
 
