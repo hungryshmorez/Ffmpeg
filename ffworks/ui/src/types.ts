@@ -178,3 +178,8 @@ export interface FrameArgs {
   keepFirst: boolean;
   kill?: number;
 }
+
+/** One number a motion-vector effect takes. */
+export interface MoshFxParam { id: string; label: string; min: number; max: number; default: number; step: number }
+/** A motion-vector effect of the datamosh lab (from the engine, so the list and the ranges live in one place). */
+export interface MoshFx { id: string; name: string; about: string; params: MoshFxParam[] }

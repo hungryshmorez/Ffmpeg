@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs, MoshFx } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -58,7 +58,8 @@ export const api = {
   createProxy: (mediaId: string) => invoke<string>("create_proxy", { mediaId }),
   ffglitchStatus: () => invoke<GlitchStatus>("ffglitch_status"),
   setFfglitchDir: (dir: string) => invoke<GlitchStatus>("set_ffglitch_dir", { dir }),
-  makeMosh: (clip: string, mosh: { kind: "amplify" | "drift" | "transfer"; factor?: number; x?: number; y?: number; donor?: string }) => invoke<StateView>("make_mosh", { clip, ...mosh }),
+  makeMosh: (clip: string, mosh: { kind: "amplify" | "drift" | "transfer" | "fx"; factor?: number; x?: number; y?: number; donor?: string; fx?: string; params?: Record<string, number> }) => invoke<StateView>("make_mosh", { clip, ...mosh }),
+  listMoshEffects: () => invoke<MoshFx[]>("list_mosh_effects"),
   cancelMosh: () => invoke<boolean>("cancel_mosh"),
   makeCorruption: (clip: string, o: { codec: string; bits: number | null; dropEvery: number | null; keyframeEvery: number }) => invoke<StateView>("make_corruption", { clip, ...o }),
   cancelCorruption: () => invoke<boolean>("cancel_corruption"),

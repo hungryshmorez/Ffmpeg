@@ -68,6 +68,72 @@ pub enum Mode {
     Drift { x: i32, y: i32 },
     /// Move this picture with the motion of another clip (same length is used; the shorter of the two wins).
     Transfer { donor: Source },
+    /// One of the vector effects in [`FX`] (mirror, noise, shake, zoom …); `params` holds that effect's numbers by id, anything
+    /// left out takes its default.
+    Fx { fx: String, params: serde_json::Map<String, serde_json::Value> },
+}
+
+/// One number a vector effect takes.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct FxParam {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub min: f64,
+    pub max: f64,
+    pub default: f64,
+    pub step: f64,
+}
+
+/// A motion-vector effect: a script over the vectors of every predicted frame.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct FxDef {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub about: &'static str,
+    pub params: &'static [FxParam],
+}
+
+const fn num(id: &'static str, label: &'static str, min: f64, max: f64, default: f64, step: f64) -> FxParam {
+    FxParam { id, label, min, max, default, step }
+}
+const SEED: FxParam = num("seed", "Random seed", 0.0, 1_000_000.0, 1.0, 1.0);
+
+/// The vector effects (the techniques of Datamosher Pro's FFglitch effects, reimplemented as our own scripts; see
+/// `THIRD_PARTY_NOTICES.md`). Vectors are in half-pixel units; a P-frame block is predicted from the previous picture at its
+/// position plus its vector, so errors keep compounding frame after frame. That compounding *is* the look.
+pub const FX: &[FxDef] = &[
+    FxDef { id: "mirror", name: "Mirror", about: "Horizontal movement is reversed: everything that moves left moves right", params: &[] },
+    FxDef { id: "noise", name: "Noise", about: "Every block gets a random push: a noisy, grainy mosh", params: &[num("amount", "Push (half-pixels)", 1.0, 64.0, 8.0, 1.0), SEED] },
+    FxDef { id: "shake", name: "Shake", about: "The whole picture is thrown about a little differently every frame", params: &[num("amount", "Shake (half-pixels)", 1.0, 64.0, 12.0, 1.0), SEED] },
+    FxDef { id: "vibrate", name: "Vibrate", about: "Some blocks move the opposite way, chosen at random every frame", params: &[num("share", "Share of blocks", 0.05, 1.0, 0.5, 0.05), SEED] },
+    FxDef { id: "zoom", name: "Zoom", about: "Blocks are pushed away from the centre (or toward it with a negative number): the picture zooms as it moshes", params: &[num("strength", "Zoom (half-pixels at the edge)", -32.0, 32.0, 3.0, 0.5)] },
+    FxDef { id: "stretch", name: "Stretch", about: "Movement is scaled differently across and down: smears one way", params: &[num("x", "Across ×", -8.0, 8.0, 2.0, 0.5), num("y", "Down ×", -8.0, 8.0, 1.0, 0.5)] },
+    FxDef { id: "shear", name: "Shear", about: "Movement across grows from the top to the bottom: the picture tilts as it moshes", params: &[num("strength", "Tilt (half-pixels at the edge)", -32.0, 32.0, 4.0, 0.5)] },
+    FxDef { id: "shift", name: "Shift", about: "A random share of blocks is pushed upward every frame", params: &[num("amount", "Push (half-pixels)", 1.0, 64.0, 16.0, 1.0), num("share", "Share of blocks", 0.05, 1.0, 0.3, 0.05), SEED] },
+    FxDef { id: "stop", name: "Stop", about: "All movement is removed: only the colour changes keep arriving, so the old picture freezes in place", params: &[] },
+    FxDef { id: "fluid", name: "Fluid", about: "Neighbouring blocks are averaged: movement turns smooth and liquid", params: &[num("passes", "Smoothing passes", 1.0, 8.0, 2.0, 1.0)] },
+    FxDef { id: "delay", name: "Delay", about: "Each frame moves the way the picture did a few frames ago", params: &[num("frames", "Frames behind", 1.0, 60.0, 8.0, 1.0)] },
+];
+
+/// The effect's numbers with defaults filled in, every one range-checked; unknown ids are refused.
+pub fn resolve_fx(fx: &str, params: &serde_json::Map<String, serde_json::Value>) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let def = FX.iter().find(|d| d.id == fx).ok_or_else(|| Error::validation(format!("unknown motion effect '{fx}'")))?;
+    if let Some(extra) = params.keys().find(|k| !def.params.iter().any(|p| p.id == k.as_str())) {
+        return Err(Error::validation(format!("{} has no setting called '{extra}'", def.name)));
+    }
+    let mut out = serde_json::Map::new();
+    out.insert("fx".into(), fx.into());
+    for p in def.params {
+        let v = match params.get(p.id) {
+            None => p.default,
+            Some(v) => v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| Error::validation(format!("{} must be a number", p.label)))?,
+        };
+        if !(p.min..=p.max).contains(&v) {
+            return Err(Error::validation(format!("{} must be from {} to {}", p.label, p.min, p.max)));
+        }
+        out.insert(p.id.into(), v.into());
+    }
+    Ok(out)
 }
 
 #[derive(Clone, Debug)]
@@ -126,6 +192,120 @@ export function glitch_frame(frame) {
 }
 "#;
 
+/// All vector effects in one script; `args.params.fx` picks one. FFglitch arrays are indexable but not iterable, so loops are
+/// indexed; `rnd()` is a seeded generator so the same settings always give the same picture.
+const FX_JS: &str = r#"
+let P = { fx: "stop" };
+let rnd = Math.random;
+let history = [];
+function seeded(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function clamp(v) { return Math.max(-MAX, Math.min(MAX, Math.round(v))); }
+export function setup(args) {
+  const p = args && args.params;
+  if (p) {
+    P = p;
+    // numbers arrive as strings (FFglitch's -sp JSON has no floating point)
+    const names = ["amount", "seed", "share", "strength", "x", "y", "passes", "frames"];
+    for (let i = 0; i < names.length; i++) if (P[names[i]] !== undefined) P[names[i]] = Number(P[names[i]]);
+  }
+  rnd = seeded(P.seed === undefined ? 1 : P.seed);
+  return { features: ["mv"], mb_type: false };
+}
+function snapshot(fwd, rows) {
+  const out = [];
+  for (let r = 0; r < rows; r++) {
+    const row = fwd[r], line = [];
+    for (let c = 0; c < row.length; c++) line.push(row[c] === null ? null : [row[c][0], row[c][1]]);
+    out.push(line);
+  }
+  return out;
+}
+function fluid(fwd, rows) {
+  let cur = snapshot(fwd, rows);
+  for (let pass = 0; pass < P.passes; pass++) {
+    const next = [];
+    for (let r = 0; r < rows; r++) {
+      const line = [];
+      for (let c = 0; c < cur[r].length; c++) {
+        if (cur[r][c] === null) { line.push(null); continue; }
+        let sx = 0, sy = 0, n = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const rr = r + dr, cc = c + dc;
+            if (rr < 0 || rr >= rows || cc < 0 || cc >= cur[rr].length || cur[rr][cc] === null) continue;
+            sx += cur[rr][cc][0]; sy += cur[rr][cc][1]; n++;
+          }
+        }
+        line.push([sx / n, sy / n]);
+      }
+      next.push(line);
+    }
+    cur = next;
+  }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cur[r].length; c++) {
+      if (cur[r][c] === null || fwd[r][c] === null) continue;
+      fwd[r][c][0] = clamp(cur[r][c][0]);
+      fwd[r][c][1] = clamp(cur[r][c][1]);
+    }
+  }
+}
+function delay(fwd, rows) {
+  history.push(snapshot(fwd, rows));
+  if (history.length > P.frames + 1) history.shift();
+  if (history.length <= P.frames) return;
+  const old = history[0];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < fwd[r].length; c++) {
+      if (fwd[r][c] === null || old[r][c] === null) continue;
+      fwd[r][c][0] = clamp(old[r][c][0]);
+      fwd[r][c][1] = clamp(old[r][c][1]);
+    }
+  }
+}
+export function glitch_frame(frame) {
+  const fwd = frame.mv?.forward;
+  if (!fwd) return;
+  const rows = fwd.length;
+  const fx = P.fx;
+  if (fx === "fluid") { fluid(fwd, rows); return; }
+  if (fx === "delay") { delay(fwd, rows); return; }
+  const jx = fx === "shake" ? (rnd() * 2 - 1) * P.amount : 0;
+  const jy = fx === "shake" ? (rnd() * 2 - 1) * P.amount : 0;
+  for (let r = 0; r < rows; r++) {
+    const row = fwd[r];
+    const cols = row.length;
+    for (let c = 0; c < cols; c++) {
+      const mv = row[c];
+      if (mv === null) continue;
+      const nx = ((c + 0.5) / cols) * 2 - 1;
+      const ny = ((r + 0.5) / rows) * 2 - 1;
+      let x = mv[0], y = mv[1];
+      if (fx === "mirror") x = -x;
+      else if (fx === "noise") { x += (rnd() * 2 - 1) * P.amount; y += (rnd() * 2 - 1) * P.amount; }
+      else if (fx === "shake") { x += jx; y += jy; }
+      else if (fx === "vibrate") { if (rnd() < P.share) { x = -x; y = -y; } }
+      else if (fx === "zoom") { x -= nx * P.strength; y -= ny * P.strength; }
+      else if (fx === "stretch") { x *= P.x; y *= P.y; }
+      else if (fx === "shear") { x += ny * P.strength; }
+      else if (fx === "shift") { if (rnd() < P.share) y -= P.amount; }
+      else if (fx === "stop") { x = 0; y = 0; }
+      mv[0] = clamp(x);
+      mv[1] = clamp(y);
+    }
+  }
+}
+"#;
+
 fn script(body: &str) -> String {
     format!("const MAX = {MAX_VECTOR};\n{body}")
 }
@@ -143,6 +323,7 @@ pub fn validate(req: &Request) -> Result<()> {
         Mode::Amplify { factor } if !factor.is_finite() || !(0.0..=16.0).contains(factor) => Err(Error::validation("motion amount must be between 0 and 16")),
         Mode::Drift { x, y } if x.abs() > 256 || y.abs() > 256 => Err(Error::validation("drift must be within ±256 (half-pixel units per frame)")),
         Mode::Transfer { donor } if bad_len(donor) => Err(Error::validation("the clip lending its motion is empty")),
+        Mode::Fx { fx, params } => resolve_fx(fx, params).map(|_| ()),
         _ => Ok(()),
     }
 }
@@ -365,6 +546,13 @@ fn run_stages(tools: &Tools, g: &GlitchTools, req: &Request, work: &Path, pids: 
             std::fs::write(&js, script(DRIFT_JS)).map_err(|e| Error::io(&js, e))?;
             ffedit(vec!["-i".into(), s(&base), "-f".into(), "mv".into(), "-sp".into(), format!("{{\"x\":{x},\"y\":{y}}}"), "-s".into(), s(&js), "-o".into(), s(&edited), "-y".into()], "editing the motion")?
         }
+        Mode::Fx { fx, params } => {
+            let js = work.join("mosh.js");
+            std::fs::write(&js, script(FX_JS)).map_err(|e| Error::io(&js, e))?;
+            // FFglitch's -sp JSON has no floating point numbers: every value goes over as a string and the script converts it
+            let json = serde_json::Value::Object(resolve_fx(fx, params)?.into_iter().map(|(k, v)| (k, if v.is_number() { v.to_string().into() } else { v })).collect()).to_string();
+            ffedit(vec!["-i".into(), s(&base), "-f".into(), "mv".into(), "-sp".into(), json, "-s".into(), s(&js), "-o".into(), s(&edited), "-y".into()], "editing the motion")?
+        }
         Mode::Transfer { donor } => {
             let donor_src = Source { duration: source.duration, ..donor.clone() };
             let donor_avi = work.join("donor.avi");
@@ -430,6 +618,30 @@ mod tests {
             // FFglitch arrays are indexable but not iterable
             assert!(!js.contains("for (const") && !js.contains(" of "));
         }
+    }
+
+    #[test]
+    fn vector_effects_fill_defaults_and_refuse_bad_numbers() {
+        let none = serde_json::Map::new();
+        let r = resolve_fx("noise", &none).unwrap();
+        assert_eq!((r["fx"].as_str(), r["amount"].as_f64(), r["seed"].as_f64()), (Some("noise"), Some(8.0), Some(1.0)));
+        let mut p = serde_json::Map::new();
+        p.insert("amount".into(), 500.into());
+        assert!(resolve_fx("noise", &p).unwrap_err().to_string().contains("must be from 1 to 64"));
+        p.clear();
+        p.insert("wobble".into(), 1.into());
+        assert!(resolve_fx("noise", &p).unwrap_err().to_string().contains("no setting called 'wobble'"));
+        assert!(resolve_fx("sparkle", &none).is_err());
+        p.clear();
+        p.insert("amount".into(), "lots".into());
+        assert!(resolve_fx("noise", &p).is_err());
+        for def in FX {
+            assert!(resolve_fx(def.id, &none).is_ok(), "{} runs with its defaults", def.id);
+            assert!(def.params.iter().all(|q| q.min <= q.default && q.default <= q.max), "{}", def.id);
+            assert!(script(FX_JS).contains(&format!("\"{}\"", def.id)), "the script handles {}", def.id);
+        }
+        let js = script(FX_JS);
+        assert!(!js.contains("for (const") && !js.contains(" of "), "FFglitch arrays are not iterable");
     }
 
     #[test]

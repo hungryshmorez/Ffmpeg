@@ -156,3 +156,85 @@ fn the_result_is_placed_on_a_new_track_beside_the_original() {
     eng.dispatch(Command::SetClipSpeed { clip: clip.clone(), speed: secs(2) }).unwrap();
     assert!(moshlab::source_of(&eng, &clip).unwrap_err().to_string().contains("normal speed"));
 }
+
+fn fx(name: &str, params: &[(&str, f64)]) -> Mode {
+    let mut m = serde_json::Map::new();
+    for (k, v) in params {
+        m.insert((*k).into(), (*v).into());
+    }
+    Mode::Fx { fx: name.into(), params: m }
+}
+
+#[test]
+fn every_vector_effect_runs_with_its_defaults_and_changes_the_picture() {
+    let Some(g) = glitch() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let src = moving(dir.path(), "a.mp4", "testsrc2", 3);
+    let plain = dir.path().join("plain.mkv");
+    run(&g, &req(&src, 3, Mode::Amplify { factor: 1.0 }, &plain));
+    let reference = gray(&plain, 2.5);
+    for def in moshlab::FX {
+        let out = dir.path().join(format!("{}.mkv", def.id));
+        run(&g, &req(&src, 3, fx(def.id, &[]), &out));
+        let info = probe(&tools(), &out).unwrap();
+        assert_eq!((info.video[0].width, info.video[0].height, info.video[0].codec.as_str()), (320, 240, "ffv1"), "{}", def.id);
+        let d = mse(&reference, &gray(&out, 2.5));
+        eprintln!("{}: mse against the plain picture {d:.0}", def.id);
+        assert!(d > 150.0, "{} changes the picture (mse {d})", def.id);
+    }
+}
+
+/// Centre of the bright patch's mass, across (everything brighter than the gray background counts, by how much).
+fn patch_x(video: &Path, t: f64) -> f64 {
+    let g = gray(video, t);
+    let (mut sum, mut weight) = (0.0, 0.0);
+    for (i, v) in g.iter().enumerate() {
+        let w = (*v as f64 - 150.0).max(0.0);
+        sum += w * (i % 320) as f64;
+        weight += w;
+    }
+    assert!(weight > 2000.0, "the bright patch is still in the picture in {} at {t} s (weight {weight}, brightest {})", video.display(), g.iter().max().unwrap());
+    sum / weight
+}
+
+#[test]
+fn zoom_pushes_blocks_away_from_the_centre_and_a_negative_number_pulls_them_in() {
+    let Some(g) = glitch() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    // a still picture: gray with a white patch right of centre; every vector starts at zero
+    let src = dir.path().join("patch.mp4");
+    let o = Proc::new(tools().ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=gray:s=320x240:r=25,drawbox=x=216:y=108:w=32:h=24:color=white:t=fill", "-t", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "50"]).arg(&src).output().unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let (out_, in_, still) = (dir.path().join("out.mkv"), dir.path().join("in.mkv"), dir.path().join("still.mkv"));
+    run(&g, &req(&src, 3, fx("zoom", &[("strength", 6.0)]), &out_));
+    run(&g, &req(&src, 3, fx("zoom", &[("strength", -6.0)]), &in_));
+    run(&g, &req(&src, 3, Mode::Amplify { factor: 1.0 }, &still));
+    let (x0, x_out, x_in) = (patch_x(&still, 0.8), patch_x(&out_, 0.8), patch_x(&in_, 0.8));
+    eprintln!("patch across: still {x0:.1}, zoom +6 {x_out:.1}, zoom -6 {x_in:.1}");
+    assert!(x_out > x0 + 3.0, "positive zoom moves the patch away from the centre ({x0} -> {x_out})");
+    assert!(x_in < x0 - 3.0, "negative zoom moves it toward the centre ({x0} -> {x_in})");
+}
+
+#[test]
+fn random_vector_effects_are_repeatable_per_seed() {
+    let Some(g) = glitch() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let src = moving(dir.path(), "a.mp4", "testsrc2", 3);
+    let (a, b, c) = (dir.path().join("a.mkv"), dir.path().join("b.mkv"), dir.path().join("c.mkv"));
+    run(&g, &req(&src, 3, fx("noise", &[("seed", 5.0)]), &a));
+    run(&g, &req(&src, 3, fx("noise", &[("seed", 5.0)]), &b));
+    run(&g, &req(&src, 3, fx("noise", &[("seed", 6.0)]), &c));
+    assert!(mse(&gray(&a, 2.5), &gray(&b, 2.5)) < 1.0, "the same seed gives the same picture");
+    assert!(mse(&gray(&a, 2.5), &gray(&c, 2.5)) > 150.0, "another seed gives another picture");
+}
+
+#[test]
+fn a_bad_effect_setting_is_refused_before_anything_runs() {
+    let Some(g) = glitch() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let src = moving(dir.path(), "a.mp4", "testsrc2", 2);
+    let out = dir.path().join("o.mkv");
+    let e = moshlab::run(&tools(), &g, &req(&src, 2, fx("noise", &[("amount", 9999.0)]), &out), &CancelToken::new(), &mut |_| {}).unwrap_err().to_string();
+    assert!(e.contains("must be from 1 to 64"), "{e}");
+    assert!(!out.exists());
+}

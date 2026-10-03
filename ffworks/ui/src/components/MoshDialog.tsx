@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { activeSequence } from "../state/sequences";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
-import type { GlitchStatus } from "../types";
+import type { GlitchStatus, MoshFx } from "../types";
 
-type Kind = "amplify" | "drift" | "transfer";
+type Kind = "amplify" | "drift" | "transfer" | "fx";
 
 /**
  * Datamosh lab: rewrites the motion vectors inside the clip's compressed video with FFglitch and puts the result on a new
@@ -23,12 +23,18 @@ export function MoshDialog() {
   const [x, setX] = useState(6);
   const [y, setY] = useState(0);
   const [donor, setDonor] = useState("");
+  const [effects, setEffects] = useState<MoshFx[]>([]);
+  const [fxId, setFxId] = useState("mirror");
+  const [fxValues, setFxValues] = useState<Record<string, Record<string, number>>>({});
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     if (!clipId) return;
     void api.ffglitchStatus().then((st) => { setStatus(st); setDir(st.dir ?? ""); }).catch((e) => toast("error", String(e)));
+  }, [clipId, toast]);
+  useEffect(() => {
+    if (clipId) void api.listMoshEffects().then(setEffects).catch((e) => toast("error", String(e)));
   }, [clipId, toast]);
   useEffect(() => {
     if (!busy) return;
@@ -39,6 +45,9 @@ export function MoshDialog() {
 
   const clips = activeSequence(view.project)?.tracks.filter((t) => t.kind === "video").flatMap((t) => t.clips) ?? [];
   const others = clips.filter((c) => c.id !== clipId);
+  const fx = effects.find((f) => f.id === fxId);
+  const fxNow: Record<string, number> = Object.fromEntries((fx?.params ?? []).map((p) => [p.id, fxValues[fxId]?.[p.id] ?? p.default]));
+  const fxValid = !!fx && fx.params.every((p) => { const v = fxNow[p.id] ?? NaN; return Number.isFinite(v) && v >= p.min && v <= p.max; });
   const saveDir = async () => {
     try { setStatus(await api.setFfglitchDir(dir)); } catch (e) { toast("error", String(e)); }
   };
@@ -46,7 +55,7 @@ export function MoshDialog() {
     setBusy(true);
     setProgress(0);
     try {
-      setView(await api.makeMosh(clipId, kind === "amplify" ? { kind, factor } : kind === "drift" ? { kind, x, y } : { kind, donor }));
+      setView(await api.makeMosh(clipId, kind === "amplify" ? { kind, factor } : kind === "drift" ? { kind, x, y } : kind === "fx" ? { kind, fx: fxId, params: fxNow } : { kind, donor }));
       toast("info", "Datamosh clip added on a new track");
       close();
     } catch (e) {
@@ -75,8 +84,26 @@ export function MoshDialog() {
                 <option value="amplify">Amplify the motion</option>
                 <option value="drift">Push everything in a direction</option>
                 <option value="transfer">Borrow the motion of another clip</option>
+                <option value="fx">Motion effect (mirror, noise, zoom, fluid …)</option>
               </select>
             </div>
+            {kind === "fx" && (
+              <>
+                <div className="field row">
+                  <select aria-label="Motion effect" value={fxId} onChange={(e) => setFxId(e.target.value)}>
+                    {effects.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                  <span className="muted grow">{fx?.about}</span>
+                </div>
+                {fx && fx.params.length > 0 && (
+                  <div className="field row">
+                    {fx.params.map((p) => (
+                      <label key={p.id}>{p.label} <input aria-label={p.label} type="number" className="num" min={p.min} max={p.max} step={p.step} value={fxNow[p.id]} onChange={(e) => setFxValues({ ...fxValues, [fxId]: { ...fxValues[fxId], [p.id]: Number(e.target.value) } })} /></label>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
             {kind === "amplify" && (
               <div className="field row"><label>Motion × <input aria-label="Motion multiplier" type="number" className="num" min={0} max={16} step={0.5} value={factor} onChange={(e) => setFactor(Number(e.target.value))} /></label><span className="muted">1 = as filmed, 0 = frozen vectors</span></div>
             )}
@@ -102,7 +129,7 @@ export function MoshDialog() {
         <div className="row end">
           {busy && <span className="muted grow" role="status">Making the mosh… {Math.round(progress * 100)}%</span>}
           {busy && <button onClick={() => void api.cancelMosh()}>Cancel</button>}
-          <button className="primary" disabled={busy || !status?.found || (kind === "transfer" && !donor)} onClick={() => void make()}>Make datamosh clip</button>
+          <button className="primary" disabled={busy || !status?.found || (kind === "transfer" && !donor) || (kind === "fx" && !fxValid)} onClick={() => void make()}>Make datamosh clip</button>
           <button disabled={busy} onClick={close}>Close</button>
         </div>
       </div>

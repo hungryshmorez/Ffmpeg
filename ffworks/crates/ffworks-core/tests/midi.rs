@@ -236,7 +236,7 @@ fn scripts_cannot_read_midi_files_from_disk() {
     let path = dir.path().join("song.mid");
     std::fs::write(&path, smf(vec![vec![cc(0, 0, 1, 0), cc(beat(4), 0, 1, 127)]])).unwrap();
     let (mut eng, clip) = engine_with_clip();
-    let src = format!(r#"command(#{{ type: "animate_from_midi", clip: "{clip}", param: "opacity", path: "{}", source: "cc:1", low: 0.1, high: 0.9 }});"#, path.display());
+    let src = format!(r#"command(#{{ type: "animate_from_midi", clip: "{clip}", param: "opacity", path: "{}", source: "cc:1", low: 0.1, high: 0.9 }});"#, path.display().to_string().replace('\\', "/"));
     let err = ffworks_core::script::run(&mut eng, &src, None, ffworks_core::script::Permissions::EDIT, "s").unwrap_err().to_string();
     assert!(err.contains("cannot read files from disk"), "{err}");
 }
