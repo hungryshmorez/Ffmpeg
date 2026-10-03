@@ -56,11 +56,15 @@ pub struct Params {
     pub seed: u64,
     /// Draw new random blocks on every frame instead of keeping one pattern.
     pub flicker: bool,
+    /// Turns the sorting direction by this many degrees (positive = clockwise) from `direction`. Spans then follow diagonal
+    /// lines of pixels, one pixel apart.
+    #[serde(default)]
+    pub angle: f32,
 }
 
 impl Default for Params {
     fn default() -> Self {
-        Params { direction: Direction::Horizontal, key: Key::Luma, mode: Mode::Threshold, low: 64, high: 204, length: 120, variation: 0.5, reverse: false, mix: 1.0, seed: 1, flicker: false }
+        Params { direction: Direction::Horizontal, key: Key::Luma, mode: Mode::Threshold, low: 64, high: 204, length: 120, variation: 0.5, reverse: false, mix: 1.0, seed: 1, flicker: false, angle: 0.0 }
     }
 }
 
@@ -82,6 +86,7 @@ impl Params {
             mix: get("mix").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mix),
             seed: get("seed").map(|v| v.max(0.0).round() as u64).unwrap_or(d.seed),
             flicker: get("flicker").is_some_and(|v| v >= 0.5),
+            angle: get("angle").map(|v| v.clamp(-90.0, 90.0) as f32).unwrap_or(d.angle),
         }
     }
 }
@@ -236,30 +241,131 @@ fn sort_rows(buf: &mut [u8], w: usize, p: &Params, salt: u64) {
     });
 }
 
-/// Pixel-sort one RGB24 frame in place. `frame` is its index in the clip (only used when the blocks flicker).
-pub fn sort_frame(buf: &mut [u8], w: usize, h: usize, p: &Params, frame: u64) {
-    assert_eq!(buf.len(), w * h * 3, "frame buffer does not match {w}x{h} RGB24");
-    let salt = if p.flicker { frame + 1 } else { 0 };
-    match p.direction {
-        Direction::Horizontal => sort_rows(buf, w, p, salt),
-        Direction::Vertical => {
-            // sort columns by turning them into rows, and back
-            let mut t = vec![0u8; buf.len()];
-            for y in 0..h {
-                for x in 0..w {
-                    let (s, d) = ((y * w + x) * 3, (x * h + y) * 3);
-                    t[d..d + 3].copy_from_slice(&buf[s..s + 3]);
+/// How a frame of one size is cut into lines for given settings. Planning is the costly part for angled sorts (every pixel
+/// is assigned to a line once), so a bake makes one plan and reuses it for every frame.
+pub struct Plan {
+    w: usize,
+    h: usize,
+    kind: Kind,
+}
+
+enum Kind {
+    Rows,
+    Columns,
+    /// Pixel indices of all lines one after another, and where each line starts (`starts.len() == lines + 1`).
+    Lines { order: Vec<u32>, starts: Vec<usize> },
+}
+
+impl Plan {
+    pub fn new(w: usize, h: usize, p: &Params) -> Plan {
+        let kind = if p.angle.abs() < 0.5 {
+            match p.direction {
+                Direction::Horizontal => Kind::Rows,
+                Direction::Vertical => Kind::Columns,
+            }
+        } else {
+            let base = if p.direction == Direction::Vertical { 90.0 } else { 0.0 };
+            let (order, starts) = angled_lines(w, h, (base + p.angle as f64).to_radians());
+            Kind::Lines { order, starts }
+        };
+        Plan { w, h, kind }
+    }
+
+    /// Pixel-sort one RGB24 frame in place. `frame` is its index in the clip (only used when the blocks flicker).
+    pub fn sort(&self, buf: &mut [u8], p: &Params, frame: u64) {
+        let (w, h) = (self.w, self.h);
+        assert_eq!(buf.len(), w * h * 3, "frame buffer does not match {w}x{h} RGB24");
+        let salt = if p.flicker { frame + 1 } else { 0 };
+        match &self.kind {
+            Kind::Rows => sort_rows(buf, w, p, salt),
+            Kind::Columns => {
+                // sort columns by turning them into rows, and back
+                let mut t = vec![0u8; buf.len()];
+                for y in 0..h {
+                    for x in 0..w {
+                        let (s, d) = ((y * w + x) * 3, (x * h + y) * 3);
+                        t[d..d + 3].copy_from_slice(&buf[s..s + 3]);
+                    }
+                }
+                sort_rows(&mut t, h, p, salt);
+                for y in 0..h {
+                    for x in 0..w {
+                        let (s, d) = ((x * h + y) * 3, (y * w + x) * 3);
+                        buf[d..d + 3].copy_from_slice(&t[s..s + 3]);
+                    }
                 }
             }
-            sort_rows(&mut t, h, p, salt);
-            for y in 0..h {
-                for x in 0..w {
-                    let (s, d) = ((x * h + y) * 3, (y * w + x) * 3);
-                    buf[d..d + 3].copy_from_slice(&t[s..s + 3]);
+            Kind::Lines { order, starts } => {
+                // gather the lines one after another, sort them in parallel, scatter back
+                let mut g = vec![0u8; buf.len()];
+                for (i, &px) in order.iter().enumerate() {
+                    let px = px as usize * 3;
+                    g[i * 3..i * 3 + 3].copy_from_slice(&buf[px..px + 3]);
+                }
+                sort_ragged(&mut g, starts, p, salt);
+                for (i, &px) in order.iter().enumerate() {
+                    let px = px as usize * 3;
+                    buf[px..px + 3].copy_from_slice(&g[i * 3..i * 3 + 3]);
                 }
             }
         }
     }
+}
+
+/// Cut a `w` x `h` frame into parallel lines running at `theta` radians (0 = left to right, positive turns towards the
+/// bottom), one pixel apart. Every pixel is on exactly one line, ordered along it.
+fn angled_lines(w: usize, h: usize, theta: f64) -> (Vec<u32>, Vec<usize>) {
+    let (sn, cs) = theta.sin_cos();
+    let mut items: Vec<(i32, i64, u32)> = Vec::with_capacity(w * h);
+    for y in 0..h {
+        for x in 0..w {
+            let (xf, yf) = (x as f64, y as f64);
+            let across = (-xf * sn + yf * cs).round() as i32;
+            let along = ((xf * cs + yf * sn) * 1024.0).round() as i64;
+            items.push((across, along, (y * w + x) as u32));
+        }
+    }
+    items.sort_unstable();
+    let order: Vec<u32> = items.iter().map(|i| i.2).collect();
+    let mut starts = vec![0usize];
+    for i in 1..items.len() {
+        if items[i].0 != items[i - 1].0 {
+            starts.push(i);
+        }
+    }
+    starts.push(items.len());
+    (order, starts)
+}
+
+/// Sort lines of different lengths (`starts` are pixel offsets; `buf` holds them back to back), spread over worker threads.
+fn sort_ragged(buf: &mut [u8], starts: &[usize], p: &Params, salt: u64) {
+    let lines = starts.len() - 1;
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(lines.max(1)).min(16);
+    let per = lines.div_ceil(threads.max(1)).max(1);
+    std::thread::scope(|s| {
+        let mut rest = buf;
+        for first in (0..lines).step_by(per) {
+            let last = (first + per).min(lines);
+            let (chunk, tail) = rest.split_at_mut((starts[last] - starts[first]) * 3);
+            rest = tail;
+            s.spawn(move || {
+                let (mut scratch, mut spans) = (Vec::new(), Vec::new());
+                let mut at = 0;
+                for l in first..last {
+                    let len = (starts[l + 1] - starts[l]) * 3;
+                    let mut rng = Rng(p.seed.wrapping_mul(0x2545_F491_4F6C_DD1D) ^ salt.wrapping_mul(0x9E37_79B9) ^ (l as u64).wrapping_mul(0x85EB_CA6B));
+                    sort_line(&mut chunk[at..at + len], p, &mut rng, &mut scratch, &mut spans);
+                    at += len;
+                }
+            });
+        }
+    });
+}
+
+/// Pixel-sort one RGB24 frame in place. `frame` is its index in the clip (only used when the blocks flicker). For many
+/// frames of one size make a [`Plan`] once instead.
+pub fn sort_frame(buf: &mut [u8], w: usize, h: usize, p: &Params, frame: u64) {
+    Plan::new(w, h, p).sort(buf, p, frame);
 }
 
 #[cfg(test)]
@@ -316,6 +422,52 @@ mod tests {
         let mut f = vec![30, 30, 30, 5, 5, 5, 10, 10, 10, 9, 9, 9, 20, 20, 20, 7, 7, 7];
         sort_frame(&mut f, 2, 3, &Params { direction: Direction::Vertical, ..line_mode() }, 0);
         assert_eq!(lumas(&f), vec![10, 5, 20, 7, 30, 9]);
+    }
+
+    #[test]
+    fn angled_lines_cover_every_pixel_once_and_follow_the_angle() {
+        let (w, h) = (23, 17);
+        for deg in [-60.0f64, -45.0, -10.0, 10.0, 30.0, 45.0, 80.0] {
+            let (order, starts) = angled_lines(w, h, deg.to_radians());
+            let mut seen = vec![false; w * h];
+            for &i in &order {
+                assert!(!std::mem::replace(&mut seen[i as usize], true), "pixel {i} is on two lines at {deg}°");
+            }
+            assert!(seen.iter().all(|s| *s), "a pixel is on no line at {deg}°");
+            assert_eq!(*starts.last().unwrap(), w * h);
+            let (sn, cs) = deg.to_radians().sin_cos();
+            for l in 0..starts.len() - 1 {
+                let line = &order[starts[l]..starts[l + 1]];
+                let along = |i: u32| (i as usize % w) as f64 * cs + (i as usize / w) as f64 * sn;
+                assert!(line.windows(2).all(|p| along(p[0]) <= along(p[1]) + 1e-6), "a line is not ordered along {deg}°");
+            }
+        }
+    }
+
+    #[test]
+    fn a_forty_five_degree_sort_orders_the_pixels_on_each_diagonal() {
+        let (w, h) = (16, 16);
+        let mut f: Vec<u8> = (0..w * h).flat_map(|i| { let v = ((i * 7919 + 13) % 251) as u8; [v, v, v] }).collect();
+        let p = Params { mode: Mode::Line, angle: 45.0, ..Params::default() };
+        let plan = Plan::new(w, h, &p);
+        plan.sort(&mut f, &p, 0);
+        let Kind::Lines { order, starts } = &plan.kind else { panic!("an angled sort plans lines") };
+        for l in 0..starts.len() - 1 {
+            let v: Vec<u8> = order[starts[l]..starts[l + 1]].iter().map(|&i| f[i as usize * 3]).collect();
+            assert!(v.windows(2).all(|p| p[0] <= p[1]), "line {l} is not sorted: {v:?}");
+        }
+    }
+
+    #[test]
+    fn a_tiny_angle_is_the_plain_sort_and_a_big_one_is_not() {
+        let src: Vec<u8> = (0..20 * 12 * 3).map(|i| ((i * 7919) % 251) as u8).collect();
+        let base = Params { mode: Mode::Line, ..Params::default() };
+        let (mut a, mut b, mut c) = (src.clone(), src.clone(), src.clone());
+        sort_frame(&mut a, 20, 12, &base, 0);
+        sort_frame(&mut b, 20, 12, &Params { angle: 0.2, ..base.clone() }, 0);
+        sort_frame(&mut c, 20, 12, &Params { angle: 30.0, ..base }, 0);
+        assert_eq!(a, b);
+        assert_ne!(a, c);
     }
 
     #[test]

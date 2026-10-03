@@ -94,6 +94,7 @@ fn builtin_registry() -> Vec<EffectDef> {
             p("mix", "Amount", 0.0, 1.0, 1.0, 0.01, ""),
             p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, ""),
             p("flicker", "New blocks every frame (0 off, 1 on)", 0.0, 1.0, 0.0, 1.0, ""),
+            p("angle", "Angle (turns the direction, degrees)", -90.0, 90.0, 0.0, 1.0, "°"),
         ]),
         e("chroma_shift", "Chroma shift (colour bleed)", "Glitch", &["chromashift"], vec![p("amount", "Shift", -40.0, 40.0, 8.0, 1.0, "px")]),
         e("scroll", "Scroll (wrap around)", "Glitch", &["scroll"], vec![p("speed", "Horizontal speed", -0.1, 0.1, 0.02, 0.005, "/frame")]),

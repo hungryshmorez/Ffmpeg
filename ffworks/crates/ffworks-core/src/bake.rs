@@ -431,6 +431,7 @@ fn pipe_frames(tools: &Tools, stage: &BakeStage, decode_args: &[String], partial
     };
 
     let (w, h) = (stage.width as usize, stage.height as usize);
+    let plan = pixelsort::Plan::new(w, h, &stage.sort);
     let mut frame = vec![0u8; w * h * 3];
     let mut out = dec.stdout.take().expect("piped");
     let mut sink = enc.stdin.take().expect("piped");
@@ -453,7 +454,7 @@ fn pipe_frames(tools: &Tools, stage: &BakeStage, decode_args: &[String], partial
             failure = Some(Error::validation("the picture feeding the pixel sort ended in the middle of a frame"));
             break;
         }
-        pixelsort::sort_frame(&mut frame, w, h, &stage.sort, n);
+        plan.sort(&mut frame, &stage.sort, n);
         if sink.write_all(&frame).is_err() {
             break; // the encoder died; its exit status says why
         }

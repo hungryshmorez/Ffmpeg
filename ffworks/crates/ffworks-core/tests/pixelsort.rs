@@ -302,3 +302,47 @@ fn cancelling_stops_the_sort_and_leaves_no_files_behind() {
     let leftovers: Vec<_> = job.stages.iter().flat_map(|s| s.output.parent().map(|p| std::fs::read_dir(p).map(|r| r.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.to_string_lossy().contains(&s.key)).collect::<Vec<_>>().len()).unwrap_or(0))).collect();
     assert_eq!(leftovers.iter().sum::<usize>(), 0, "no partial bake files");
 }
+
+/// Fraction of pixels whose down-right neighbour is darker by more than `slack` (steps along a 45° diagonal).
+fn falling_diagonal(frame: &[u8], slack: i32) -> f64 {
+    let (mut n, mut bad) = (0u32, 0u32);
+    for y in 0..H - 1 {
+        for x in 0..W - 1 {
+            n += 1;
+            bad += u32::from((frame[(y + 1) * W + x + 1] as i32) < frame[y * W + x] as i32 - slack);
+        }
+    }
+    bad as f64 / n as f64
+}
+
+#[test]
+fn an_angled_sort_orders_the_pixels_along_the_diagonal() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = pattern(dir.path(), "n.mkv", NOISE, 1);
+    assert!(falling_diagonal(&luma_frame(&src, 0.2), 3) > 0.3, "the source is not ordered along the diagonal");
+    let (mut eng, c) = one_clip(&src);
+    add(&mut eng, &c, "pixel_sort", &[("mode", 1.0), ("angle", 45.0)]);
+    let out = dir.path().join("o.mkv");
+    export(&eng, &out);
+    let f = luma_frame(&out, 0.2);
+    assert!(falling_diagonal(&f, 3) < 0.005, "diagonals ascend: {}", falling_diagonal(&f, 3));
+    // rows were not what was sorted: a row sort would leave under 0.5% falling steps, this leaves clearly more
+    assert!(falling(&f, false, 3) > 0.02, "rows are not fully ordered: {}", falling(&f, false, 3));
+    // (that the pixels are only moved, never changed, is the unit test's job: the YUV round trip alters values a little)
+}
+
+#[test]
+fn the_sort_angle_shows_as_a_setting_and_a_zero_angle_changes_nothing() {
+    let def = ffworks_core::effects::find("pixel_sort").unwrap();
+    assert!(def.params.iter().any(|p| p.id == "angle" && p.min == -90.0 && p.max == 90.0));
+    let dir = tempfile::tempdir().unwrap();
+    let src = pattern(dir.path(), "n.mkv", NOISE, 1);
+    let (mut a, ca) = one_clip(&src);
+    add(&mut a, &ca, "pixel_sort", &[("mode", 1.0)]);
+    let (mut b, cb) = one_clip(&src);
+    add(&mut b, &cb, "pixel_sort", &[("mode", 1.0), ("angle", 0.0)]);
+    let (oa, ob) = (dir.path().join("a.mkv"), dir.path().join("b.mkv"));
+    export(&a, &oa);
+    export(&b, &ob);
+    assert_eq!(luma_frame(&oa, 0.2), luma_frame(&ob, 0.2));
+}

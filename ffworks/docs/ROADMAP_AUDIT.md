@@ -27,7 +27,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 4: Rhai scripting with variables/loops/conditions and a permissions model: DONE (see STATUS.md). Open: a script editor panel, variables inside recorded macros, blueprints.
 * Phase 5: transient detection, drift correction for auto-sync.
 * Phase 6: live modulators (compiled to FFmpeg expressions) and live links, MIDI. Expressions and baked parameter links: DONE (ƒ button). LFO modulators baked to keyframes: DONE. Audio-reactive: DONE for loudness (whole or per band) and beat pulses ("Follow audio" → keyframes).
-* Phases 7-9: pixel sort DONE (built-in sorter on every platform, see STATUS.md; angled sorts/keyframed settings/masks open), real motion-vector datamosh / FFglitch motion transfer DONE as the mosh lab (new file, not a live effect; amplify, drift, borrow another clip's motion), corruption lab open.
+* Phases 7-9: pixel sort DONE (built-in sorter on every platform, see STATUS.md; angled sorts DONE; keyframed settings/masks open), real motion-vector datamosh / FFglitch motion transfer DONE as the mosh lab (new file, not a live effect; amplify, drift, borrow another clip's motion), corruption lab open.
 * Phase 10: local API: DONE (see STATUS.md). Plugin system (Extism/WASM) open: scripts and the API are the extension points for now.
 * DONE: unfinished exports are journalled and offered again after a crash or close.
 * DONE: export naming templates + never-overwrite versioning (dialog and CLI).

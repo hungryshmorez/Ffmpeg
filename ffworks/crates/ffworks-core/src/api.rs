@@ -59,11 +59,18 @@ impl ApiServer {
     pub fn url(&self) -> String {
         format!("http://{}", self.addr)
     }
-    /// Stop listening and wait for the server thread.
+    /// Stop listening and wait until the port is really closed (tiny_http releases its socket on a thread of its own, a moment
+    /// after the server is dropped, so the port can briefly still accept connections).
     pub fn stop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
         if let Some(t) = self.thread.take() {
             let _ = t.join();
+            for _ in 0..100 {
+                if std::net::TcpStream::connect_timeout(&self.addr, std::time::Duration::from_millis(50)).is_err() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
         }
     }
 }
