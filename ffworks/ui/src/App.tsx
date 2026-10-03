@@ -20,6 +20,7 @@ import { SnapshotsDialog } from "./components/SnapshotsDialog";
 import { LibraryDialog } from "./components/LibraryDialog";
 import { VariationsDialog } from "./components/VariationsDialog";
 import { MoshDialog } from "./components/MoshDialog";
+import { CorruptDialog } from "./components/CorruptDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -176,6 +177,7 @@ export default function App() {
       <ShortcutsDialog />
       <VariationsDialog />
       <MoshDialog />
+      <CorruptDialog />
       <QueuePanel />
       <RecoveryDialog />
       <UnfinishedExportsDialog />

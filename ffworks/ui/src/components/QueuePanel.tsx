@@ -4,8 +4,8 @@ import { useJobs, useProject } from "../state/stores";
 import type { JobEvent, JobLog } from "../types";
 
 const basename = (p: string) => p.split(/[\\/]/).pop() ?? p;
-/** Previews and analyses run as queue tasks: no FFmpeg log of their own, and their "output" is a description, not a path. */
-const isTask = (j: JobEvent) => j.operation === "preview" || j.operation.startsWith("analysis:");
+/** Previews, analyses and labs run as queue tasks: no FFmpeg log of their own, and their "output" is a description, not a path. */
+const isTask = (j: JobEvent) => j.operation === "preview" || j.operation.startsWith("analysis:") || j.operation.startsWith("lab:");
 const active = (j: JobEvent) => j.state === "queued" || j.state === "rendering";
 
 export function QueuePanel() {

@@ -45,7 +45,8 @@
     return [...new Set(out)];
   };
   const check = (name, found) => step(name, found.length === 0, found.length + " problem(s):\n" + found.join("\n"));
-  const closeAll = async () => { window.__ffworks.useJobs.getState().setQueueOpen(false); for (const k of ["setSnapshotsOpen", "setShortcutsOpen", "setPaletteOpen", "setDemoOpen", "setEnginesOpen", "setFavsOpen", "setFiltersOpen", "setExportOpen", "setDiagOpen", "setLibraryOpen"]) U()[k]?.(false); await sleep(150); };
+  const closeAll = async () => { window.__ffworks.useJobs.getState().setQueueOpen(false); for (const k of ["setSnapshotsOpen", "setShortcutsOpen", "setPaletteOpen", "setDemoOpen", "setEnginesOpen", "setFavsOpen", "setFiltersOpen", "setExportOpen", "setDiagOpen", "setLibraryOpen"]) U()[k]?.(false);
+    U().setCorruptClip?.(null); await sleep(150); };
   try {
     await waitFor(() => $(".app") && view());
     // positive control: the scanner must see what it is looking for
@@ -74,6 +75,10 @@
       (setter === "setQueueOpen" ? window.__ffworks.useJobs.getState() : U())[setter](true); await sleep(700);
       check(`the ${name} dialog`, scan());
     }
+    await closeAll();
+    U().select(view().project.sequences[0].tracks[0].clips[0].id);
+    U().setCorruptClip(view().project.sequences[0].tracks[0].clips[0].id); await sleep(700);
+    check("the corruption lab dialog", scan());
     await closeAll();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true })); await sleep(500);
     check("the command palette", scan());

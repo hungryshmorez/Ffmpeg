@@ -59,6 +59,9 @@ export const api = {
   setFfglitchDir: (dir: string) => invoke<GlitchStatus>("set_ffglitch_dir", { dir }),
   makeMosh: (clip: string, mosh: { kind: "amplify" | "drift" | "transfer"; factor?: number; x?: number; y?: number; donor?: string }) => invoke<StateView>("make_mosh", { clip, ...mosh }),
   cancelMosh: () => invoke<boolean>("cancel_mosh"),
+  makeCorruption: (clip: string, o: { codec: string; bits: number | null; dropEvery: number | null; keyframeEvery: number }) => invoke<StateView>("make_corruption", { clip, ...o }),
+  cancelCorruption: () => invoke<boolean>("cancel_corruption"),
+  onCorruptionProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("corruption-progress", (ev) => cb(ev.payload)),
   /** Fraction (0..1) of the mosh run, by stage. */
   onMoshProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("mosh-progress", (ev) => cb(ev.payload)),
   clearProxies: () => invoke<number>("clear_proxies"),

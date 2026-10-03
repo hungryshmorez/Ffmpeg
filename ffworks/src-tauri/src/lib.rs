@@ -44,6 +44,8 @@ struct AppState {
     mosh_cancel: Mutex<Option<CancelToken>>,
     /// Queue job of the preview render in progress (a new preview cancels the old one).
     preview_job: Mutex<Option<String>>,
+    /// Queue job of the corruption-lab run in progress.
+    corruption_job: Mutex<Option<String>>,
 }
 
 #[derive(Serialize)]
@@ -755,6 +757,49 @@ async fn make_mosh(app: AppHandle, state: State<'_, AppState>, clip: String, kin
     Ok(view(&e))
 }
 
+/// Corruption lab: damage the compressed packets of a clip's own footage (bits flipped, packets dropped) and decode the wreck
+/// into a new file on a new "Corruption" track. Runs as a queue task (cancel it there or with `cancel_corruption`); progress
+/// arrives as `corruption-progress`. Needs only FFmpeg.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn make_corruption(app: AppHandle, state: State<'_, AppState>, clip: String, codec: String, bits: Option<u32>, drop_every: Option<u32>, keyframe_every: u32) -> Result<StateView, String> {
+    use ffworks_core::corruptlab::{self, Settings};
+    let (source, name, st, tools) = {
+        let e = state.engine.lock().unwrap();
+        let source = ffworks_core::moshlab::source_for(&e, &clip, "corruption lab").map_err(s)?;
+        let name = e.project.active().ok().and_then(|q| q.find_clip(&clip).map(|(_, c)| c.name.clone())).unwrap_or_default();
+        (source, name, e.project.settings.clone(), e.tools.clone())
+    };
+    std::fs::create_dir_all(&state.mosh_dir).map_err(s)?;
+    let output = state.mosh_dir.join(format!("corrupt_{}.mkv", uuid_like()));
+    let request = corruptlab::Request { source, settings: Settings { codec, bits, drop_every, keyframe_every }, width: st.width, height: st.height, fps: st.fps, output: output.clone() };
+    corruptlab::validate(&request).map_err(s)?;
+    let emitter = app.clone();
+    *state.corruption_job.lock().unwrap() = None;
+    let result = queued(&state, "lab:corruption", format!("Corruption lab: {name}"), Some(&state.corruption_job), move |cancel, progress| {
+        corruptlab::run(&tools, &request, cancel, &mut |f| {
+            let _ = emitter.emit("corruption-progress", f);
+            progress(ffworks_core::jobs::JobState::Rendering { fraction: Some(f), fps: None, elapsed_secs: 0.0, eta_secs: None });
+        })
+    })
+    .await;
+    *state.corruption_job.lock().unwrap() = None;
+    result?;
+    let mut e = state.engine.lock().unwrap();
+    ffworks_core::moshlab::place_on_track(&mut e, &clip, &output, "Corruption").map_err(s)?;
+    allow_media(&app, &e);
+    Ok(view(&e))
+}
+
+/// Stop the corruption-lab run in progress (the same job can be cancelled from the Queue panel).
+#[tauri::command]
+fn cancel_corruption(state: State<AppState>) -> bool {
+    match state.corruption_job.lock().unwrap().take() {
+        Some(id) => state.queue.cancel(&id),
+        None => false,
+    }
+}
+
 /// Stop the mosh run in progress.
 #[tauri::command]
 fn cancel_mosh(state: State<AppState>) -> bool {
@@ -1395,6 +1440,7 @@ pub fn run() {
                 ),
                 mosh_cancel: Mutex::new(None),
                 preview_job: Mutex::new(None),
+                corruption_job: Mutex::new(None),
             });
             if loaded.local_api {
                 let st = app.state::<AppState>();
@@ -1429,12 +1475,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, search_library, forget_missing_library, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, search_library, forget_missing_library, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, make_corruption, cancel_corruption, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, search_library, forget_missing_library, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, search_library, forget_missing_library, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, make_corruption, cancel_corruption, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

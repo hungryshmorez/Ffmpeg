@@ -263,17 +263,22 @@ fn make_intermediate(tools: &Tools, g: &GlitchTools, req: &Request, s: &Source, 
 /// The part of a video clip that gets moshed: its own source range at normal speed. Speed changes, reverse, freeze, titles,
 /// stills and generated clips are refused with the reason, rather than moshing something other than what the clip shows.
 pub fn source_of(eng: &crate::engine::Engine, clip: &str) -> Result<Source> {
+    source_for(eng, clip, "mosh lab")
+}
+
+/// [`source_of`] for any lab that rewrites a clip's own source range (`lab` names it in the error messages).
+pub fn source_for(eng: &crate::engine::Engine, clip: &str, lab: &str) -> Result<Source> {
     let seq = eng.project.active()?;
     let (_, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
     if c.kind != crate::project::TrackKind::Video {
-        return Err(Error::validation("only video clips can be moshed"));
+        return Err(Error::validation(format!("the {lab} works on video clips only")));
     }
     let m = eng.project.media(&c.media)?;
     if c.title.is_some() || m.is_generated() || m.info.still || crate::imgseq::is_pattern(&m.path) {
-        return Err(Error::validation("titles, solid colours, stills and image sequences have no motion to mosh"));
+        return Err(Error::validation(format!("titles, solid colours, stills and image sequences cannot go through the {lab}")));
     }
     if c.speed != Rational::from_int(1) || c.reverse || c.freeze.is_some() {
-        return Err(Error::validation("the mosh lab works on the clip at normal speed: reset speed, reverse and freeze first"));
+        return Err(Error::validation(format!("the {lab} works on the clip at normal speed: reset speed, reverse and freeze first")));
     }
     Ok(Source { path: PathBuf::from(&m.path), start: c.source_in, duration: c.duration })
 }
@@ -281,14 +286,19 @@ pub fn source_of(eng: &crate::engine::Engine, clip: &str) -> Result<Source> {
 /// Import the finished file and put it on a new video track at the same place and length as `clip`. Returns the new media id.
 /// Three undo steps (import, new track, placement); the original clip is left as it was.
 pub fn place(eng: &mut crate::engine::Engine, clip: &str, output: &Path) -> Result<String> {
+    place_on_track(eng, clip, output, "Datamosh")
+}
+
+/// [`place`] onto a new track called `track_name`.
+pub fn place_on_track(eng: &mut crate::engine::Engine, clip: &str, output: &Path, track_name: &str) -> Result<String> {
     use crate::commands::Command;
     let (start, duration) = {
         let (_, c) = eng.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
         (c.start, c.duration)
     };
     let media = eng.import_media(output)?;
-    eng.dispatch(Command::AddTrack { kind: crate::project::TrackKind::Video, name: Some("Datamosh".into()) })?;
-    let track = eng.project.active()?.tracks.iter().rev().find(|t| t.kind == crate::project::TrackKind::Video && t.name == "Datamosh").map(|t| t.id.clone()).ok_or_else(|| Error::validation("the new track was not created"))?;
+    eng.dispatch(Command::AddTrack { kind: crate::project::TrackKind::Video, name: Some(track_name.into()) })?;
+    let track = eng.project.active()?.tracks.iter().rev().find(|t| t.kind == crate::project::TrackKind::Video && t.name == track_name).map(|t| t.id.clone()).ok_or_else(|| Error::validation("the new track was not created"))?;
     eng.dispatch(Command::PlaceClip { media: media.clone(), track, start, source_in: Some(Rational::ZERO), duration: Some(duration), with_audio: false, audio_track: None })?;
     Ok(media)
 }

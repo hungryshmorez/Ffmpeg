@@ -94,6 +94,8 @@ interface UiStore {
   variationsClip: string | null;
   moshClip: string | null;
   setMoshClip: (c: string | null) => void;
+  corruptClip: string | null;
+  setCorruptClip: (c: string | null) => void;
   setVariationsClip: (c: string | null) => void;
   snapshotsOpen: boolean;
   libraryOpen: boolean;
@@ -140,6 +142,8 @@ export const useUi = create<UiStore>((set) => ({
   variationsClip: null,
   moshClip: null,
   setMoshClip: (moshClip) => set({ moshClip }),
+  corruptClip: null,
+  setCorruptClip: (corruptClip) => set({ corruptClip }),
   setVariationsClip: (variationsClip) => set({ variationsClip }),
   snapshotsOpen: false,
   libraryOpen: false,
