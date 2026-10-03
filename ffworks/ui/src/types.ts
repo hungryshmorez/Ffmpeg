@@ -188,3 +188,6 @@ export interface MoshFx { id: string; name: string; about: string; params: MoshF
 
 /** What a script run (or dry run) reports: what it printed, how many commands it issued, their names in order, and the project after. */
 export interface ScriptOutcome { log: string[]; commands: number; changes: string[]; view: StateView }
+
+/** How the lag between two recordings changes along them (separate recorders' clocks), and the speed that cancels it. */
+export interface DriftResult { lag_start: number; lag_later: number; at: number; drift: number; speed: number; confidence: number }

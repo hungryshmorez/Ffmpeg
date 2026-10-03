@@ -47,6 +47,13 @@
     step("its linked video moved with it", Math.abs(rat(nV.start) - rat(nB.start)) < 0.001, `${rat(nV.start)} vs ${rat(nB.start)}`);
     P().setView(await inv("undo")); await sleep(300);
     step("the move is one undo step", rat(aud().find((c) => c.id === aB.id).start) === 14);
+    // drift: these fixtures are 8 s long, far too short, so the engine refuses with the reason (the measurement itself is tested on 100 s files)
+    const drift = $$("button").find((b) => b.textContent.trim() === "Measure drift");
+    step("a Measure drift button appears once a reference is chosen", !!drift);
+    drift.click();
+    const refused = await waitFor(() => $$(".toast.error").find((t) => /at least 60 seconds/.test(t.textContent)), 30000);
+    step("recordings too short to compare are refused with the reason", !!refused, refused && refused.textContent);
+
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

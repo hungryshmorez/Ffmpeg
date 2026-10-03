@@ -4,7 +4,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { fromSec, toSec } from "../time";
 import { usePlayhead, useProject } from "../state/stores";
-import type { Clip, Command, DetectKind, Loudness, SceneAnalysis } from "../types";
+import type { Clip, Command, DetectKind, DriftResult, Loudness, SceneAnalysis } from "../types";
 
 const TARGET_LUFS = -14;
 
@@ -68,6 +68,7 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
   };
   const [syncRef, setSyncRef] = useState("");
   const [sync, setSync] = useState<{ lag: number; confidence: number; start: number } | null>(null);
+  const [drift, setDrift] = useState<DriftResult | null>(null);
   const others = audio ? ((view ? activeSequence(view.project) : undefined)?.tracks.filter((t) => t.kind === "audio").flatMap((t) => t.clips).filter((c) => c.id !== audio.id) ?? []) : [];
   const target = kind === "silence" || kind === "transients" ? audio ?? video : video ?? audio;
   const markRanges = () => {
@@ -141,7 +142,7 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
         <div className="field" aria-label="Auto-sync">
           <label>Auto-sync to</label>
           <div className="row">
-            <select aria-label="Reference clip" value={syncRef} onChange={(e) => { setSyncRef(e.target.value); setSync(null); }}>
+            <select aria-label="Reference clip" value={syncRef} onChange={(e) => { setSyncRef(e.target.value); setSync(null); setDrift(null); }}>
               <option value="">choose a clip…</option>
               {others.map((c) => <option key={c.id} value={c.id}>{c.name} @ {toSec(c.start).toFixed(1)} s</option>)}
             </select>
@@ -151,6 +152,17 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
             <>
               <p className="muted" data-testid="sync-summary">{sync.lag >= 0 ? "later" : "earlier"} by {Math.abs(sync.lag).toFixed(3)} s · confidence {(sync.confidence * 100).toFixed(0)}%{sync.confidence < 0.1 ? " (weak: the recordings may not share sound)" : ""}</p>
               <button onClick={() => void dispatch({ type: "move_clip", clip: audio.id, start: fromSec(sync.start) })} title="Move this clip (and its linked video) so both recordings line up">Move into sync</button>
+            </>
+          )}
+          {syncRef && (
+            <div className="row">
+              <button disabled={busy !== null} title="Compare the lag at the start with the lag near the end: separate recorders' clocks run at slightly different speeds (needs about a minute or more of shared sound)" onClick={() => void run("drift", async () => setDrift(await api.syncDrift(syncRef, audio.id)))}>{busy === "drift" ? "Measuring…" : "Measure drift"}</button>
+            </div>
+          )}
+          {drift && (
+            <>
+              <p className="muted" data-testid="drift-summary">{drift.drift >= 0 ? "slower" : "faster"} clock: {Math.abs(drift.drift * 1000).toFixed(3)} ms per second (about {Math.abs(drift.drift * 3600).toFixed(1)} s per hour) · speed ×{drift.speed.toFixed(6)} · confidence {(drift.confidence * 100).toFixed(0)}%{drift.confidence < 0.1 ? " (weak: not trustworthy)" : ""}</p>
+              <button disabled={Math.abs(drift.drift) < 1e-6 || drift.confidence < 0.1} onClick={() => void dispatch({ type: "set_clip_speed", clip: audio.id, speed: `${Math.round(drift.speed * 1e7)}/10000000` }).then(() => toast("info", "Speed set: the start stays where it is and the end now keeps up"))} title="Play this clip (and its linked video) at the measured speed so it stays in step to the end. Do Move into sync first: the start stays where it is">Set speed ×{drift.speed.toFixed(6)}</button>
             </>
           )}
         </div>

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs, MoshFx, ScriptOutcome } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs, MoshFx, ScriptOutcome, DriftResult } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -41,6 +41,7 @@ export const api = {
   runMacro: (path: string, selected: string | null) => invoke<StateView>("run_macro", { path, selected }),
   importSubtitles: (path: string, offset: number) => invoke<StateView>("import_subtitles", { path, offset }),
   syncOffset: (reference: string, clip: string) => invoke<{ lag: number; confidence: number; start: number }>("sync_offset", { reference, clip }),
+  syncDrift: (reference: string, clip: string) => invoke<DriftResult>("sync_drift", { reference, clip }),
   getEffectPresets: () => invoke<Record<string, EffectPreset>>("get_effect_presets"),
   saveEffectPreset: (name: string, preset: EffectPreset) => invoke<Record<string, EffectPreset>>("save_effect_preset", { name, preset }),
   deleteEffectPreset: (name: string) => invoke<Record<string, EffectPreset>>("delete_effect_preset", { name }),
