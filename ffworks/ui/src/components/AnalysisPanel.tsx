@@ -27,6 +27,7 @@ const DETECTORS: Record<DetectKind, { label: string; unit: string; value: number
   silence: { label: "silence", unit: "dB", value: -35, min: -90, max: -5, step: 1 },
   black: { label: "black frames", unit: "pixel level", value: 0.1, min: 0, max: 0.5, step: 0.01 },
   freeze: { label: "frozen frames", unit: "dB", value: -60, min: -90, max: -20, step: 1 },
+  transients: { label: "audio hits", unit: "sensitivity (higher keeps only the loudest)", value: 1.5, min: 1.1, max: 10, step: 0.1 },
 };
 
 /** Scene detection and loudness for the selected clip: analysis results turn into undoable commands. */
@@ -38,7 +39,7 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
   const [busy, setBusy] = useState<string | null>(null);
   const [threshold, setThreshold] = useState(27);
   const [kind, setKind] = useState<DetectKind>("silence");
-  const [level, setLevel] = useState<Record<DetectKind, number>>({ silence: -35, black: 0.1, freeze: -60 });
+  const [level, setLevel] = useState<Record<DetectKind, number>>({ silence: -35, black: 0.1, freeze: -60, transients: 1.5 });
   const [minLen, setMinLen] = useState(0.5);
   const [found, setFound] = useState<{ kind: DetectKind; ranges: [number, number][] } | null>(null);
 
@@ -68,12 +69,12 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
   const [syncRef, setSyncRef] = useState("");
   const [sync, setSync] = useState<{ lag: number; confidence: number; start: number } | null>(null);
   const others = audio ? ((view ? activeSequence(view.project) : undefined)?.tracks.filter((t) => t.kind === "audio").flatMap((t) => t.clips).filter((c) => c.id !== audio.id) ?? []) : [];
-  const target = kind === "silence" ? audio ?? video : video ?? audio;
+  const target = kind === "silence" || kind === "transients" ? audio ?? video : video ?? audio;
   const markRanges = () => {
     if (!target || !found) return;
     const onTl = rangesOnTimeline(target, found.ranges);
     if (!onTl.length) return toast("info", "Nothing found inside this clip");
-    const commands: Command[] = onTl.map(([a, b]) => ({ type: "add_marker", time: fromSec(a), name: `${found.kind} ${(b - a).toFixed(1)}s`, color: null, note: null }));
+    const commands: Command[] = onTl.map(([a, b]) => ({ type: "add_marker", time: fromSec(a), name: found.kind === "transients" ? "hit" : `${found.kind} ${(b - a).toFixed(1)}s`, color: null, note: null }));
     void dispatch({ type: "batch", label: `Mark ${onTl.length} ${found.kind} ranges`, commands });
   };
   const cutRanges = () => {
@@ -105,18 +106,18 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
         <div className="field" aria-label="Find silence, black or frozen frames">
           <label>Find</label>
           <div className="row">
-            <select aria-label="Detector" value={kind} onChange={(e) => { setKind(e.target.value as DetectKind); setFound(null); }}>
+            <select aria-label="Detector" value={kind} onChange={(e) => { const k = e.target.value as DetectKind; setKind(k); setMinLen(k === "transients" ? 0.18 : 0.5); setFound(null); }}>
               {(Object.keys(DETECTORS) as DetectKind[]).map((k) => <option key={k} value={k}>{DETECTORS[k].label}</option>)}
             </select>
             <input aria-label="Detection level" className="num" type="number" min={DETECTORS[kind].min} max={DETECTORS[kind].max} step={DETECTORS[kind].step} value={level[kind]} onChange={(e) => setLevel({ ...level, [kind]: Number(e.target.value) })} title={`Level (${DETECTORS[kind].unit})`} />
-            <input aria-label="Minimum length" className="num" type="number" min={0.1} max={60} step={0.1} value={minLen} onChange={(e) => setMinLen(Number(e.target.value))} title="Shortest range to report (seconds)" />
+            <input aria-label="Minimum length" className="num" type="number" min={0.1} max={60} step={0.1} value={minLen} onChange={(e) => setMinLen(Number(e.target.value))} title={kind === "transients" ? "Shortest gap between two hits (seconds)" : "Shortest range to report (seconds)"} />
           </div>
           <button disabled={busy !== null || !target} onClick={() => target && void run("find", async () => setFound({ kind, ranges: await api.detectRanges(target.media, kind, level[kind], minLen) }))}>{busy === "find" ? "Searching…" : `Find ${DETECTORS[kind].label}`}</button>
           {found && (
             <>
               <p className="muted" data-testid="range-summary">{found.ranges.length} ranges · {found.ranges.slice(0, 6).map(([a, b]) => `${a.toFixed(1)}–${b.toFixed(1)}`).join(", ")}{found.ranges.length > 6 ? "…" : ""} s</p>
               <button onClick={markRanges} title="Put a marker at the start of every range (one undo step)">Mark ranges</button>
-              <button onClick={cutRanges} title="Cut every range out of this clip and its linked clips and close the gaps (one undo step)">Cut ranges out</button>
+              <button onClick={cutRanges} disabled={found.kind === "transients"} title="Cut every range out of this clip and its linked clips and close the gaps (one undo step)">Cut ranges out</button>
             </>
           )}
         </div>

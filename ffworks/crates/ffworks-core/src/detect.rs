@@ -14,10 +14,16 @@ pub enum Kind {
     Silence,
     Black,
     Freeze,
+    /// Sharp attacks in the sound (drum hits, claps, clicks). Reported as short ranges that start at the hit.
+    Transients,
 }
 
+/// Length of the range reported for one transient hit, seconds.
+pub const HIT_LEN: f64 = 0.05;
+
 /// Run one detector over `media`. `threshold` is dB for silence (e.g. -35), picture-black ratio for black (0.1) and dB noise
-/// for freeze (-60); `min_len` is the shortest range reported, in seconds.
+/// for freeze (-60), and for transients the sensitivity factor (1 to 10; a hit weaker than (f - 1) / (f + 1) of the strongest one is
+/// ignored, so lower finds more and softer hits); `min_len` is the shortest range reported, in seconds (for transients, the shortest gap between two hits).
 pub fn detect(tools: &Tools, media: &Path, duration: f64, kind: Kind, threshold: f64, min_len: f64) -> Result<Vec<(f64, f64)>> {
     detect_with(tools, media, duration, kind, threshold, min_len, &CancelToken::new())
 }
@@ -27,10 +33,18 @@ pub fn detect_with(tools: &Tools, media: &Path, duration: f64, kind: Kind, thres
     if !(min_len > 0.0 && min_len.is_finite()) {
         return Err(Error::validation("minimum length must be above zero"));
     }
+    if kind == Kind::Transients {
+        if !(1.0..=10.0).contains(&threshold) {
+            return Err(Error::validation("transient sensitivity is a factor from 1 to 10"));
+        }
+        let samples = crate::beats::decode_mono(tools, media, cancel)?;
+        return Ok(crate::beats::onsets_with(&samples, min_len, (((threshold - 1.0) / (threshold + 1.0)) as f32).max(0.05)).into_iter().map(|t| (t, (t + HIT_LEN).min(duration.max(t + HIT_LEN)))).collect());
+    }
     let (maps, filter): (&[&str], String) = match kind {
         Kind::Silence => (&["-vn"], format!("silencedetect=noise={threshold}dB:d={min_len}")),
         Kind::Black => (&["-an"], format!("blackdetect=d={min_len}:pic_th=0.98:pix_th={threshold}")),
         Kind::Freeze => (&["-an"], format!("freezedetect=n={threshold}dB:d={min_len}")),
+        Kind::Transients => unreachable!("handled above"),
     };
     let flag = if kind == Kind::Silence { "-af" } else { "-vf" };
     let mut cmd = Command::new(&tools.ffmpeg);
@@ -56,6 +70,7 @@ pub fn parse(log: &str, kind: Kind, duration: f64) -> Vec<(f64, f64)> {
         Kind::Silence => ("silence_start:", "silence_end:"),
         Kind::Black => ("black_start:", "black_end:"),
         Kind::Freeze => ("freeze_start:", "freeze_end:"),
+        Kind::Transients => return vec![],
     };
     let mut out = vec![];
     let mut open: Option<f64> = None;

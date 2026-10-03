@@ -238,15 +238,16 @@ fn run() -> ffworks_core::Result<()> {
             }
         }
         Some("detect") => {
-            let (media, kind) = (args.get(1).ok_or_else(|| usage("detect <media> <silence|black|freeze>"))?, args.get(2).ok_or_else(|| usage("detect <media> <silence|black|freeze>"))?);
+            let (media, kind) = (args.get(1).ok_or_else(|| usage("detect <media> <silence|black|freeze|transients> [level] [min seconds]"))?, args.get(2).ok_or_else(|| usage("detect <media> <silence|black|freeze|transients> [level] [min seconds]"))?);
             let kind = match kind.as_str() {
                 "silence" => Kind::Silence,
                 "black" => Kind::Black,
                 "freeze" => Kind::Freeze,
-                other => return Err(Error::validation(format!("unknown detector '{other}' (silence, black, freeze)"))),
+                "transients" => Kind::Transients,
+                other => return Err(Error::validation(format!("unknown detector '{other}' (silence, black, freeze, transients)"))),
             };
-            let level = args.get(3).and_then(|v| v.parse().ok()).unwrap_or(match kind { Kind::Silence => -35.0, Kind::Black => 0.1, Kind::Freeze => -60.0 });
-            let min: f64 = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(0.5);
+            let level = args.get(3).and_then(|v| v.parse().ok()).unwrap_or(match kind { Kind::Silence => -35.0, Kind::Black => 0.1, Kind::Freeze => -60.0, Kind::Transients => 1.5 });
+            let min: f64 = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(if kind == Kind::Transients { 0.18 } else { 0.5 });
             let dur = ffworks_core::ffprobe::probe(&tools, Path::new(media))?.duration.as_f64();
             for (a, b) in detect(&tools, Path::new(media), dur, kind, level, min)? {
                 println!("{a:.3} {b:.3}");

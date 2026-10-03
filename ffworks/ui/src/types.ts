@@ -134,7 +134,7 @@ export interface RelinkResult { state: StateView; relinked: string[]; unresolved
 export interface BeatAnalysis { beats: number[]; bpm: number; duration: number }
 export interface SceneAnalysis { cuts: number[]; scenes: [number, number][]; threshold: number }
 export interface EffectPreset { kind: "video" | "audio"; effects: { effect: string; params: Record<string, number> }[] }
-export type DetectKind = "silence" | "black" | "freeze";
+export type DetectKind = "silence" | "black" | "freeze" | "transients";
 export interface Loudness { integrated_lufs: number | null; range_lu: number; true_peak_dbtp: number | null }
 
 export interface ProxyStatus { mediaId: string; eligible: boolean; ready: boolean; path: string | null; bytes: number | null }

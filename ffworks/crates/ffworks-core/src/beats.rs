@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 
-const SR: u32 = 44_100;
+pub(crate) const SR: u32 = 44_100;
 const FRAME: usize = 1024;
 const HOP: usize = 512;
 const AVG_WINDOW: usize = 16;
@@ -73,6 +73,12 @@ fn fft(re: &mut [f32], im: &mut [f32]) {
 
 /// Onset times (seconds) from mono samples at `SR`.
 pub fn onsets(samples: &[f32]) -> Vec<f64> {
+    onsets_with(samples, MIN_PEAK_DISTANCE, MIN_STRENGTH)
+}
+
+/// [`onsets`] with the two knobs exposed: `min_distance` is the shortest gap between two onsets in seconds, `min_strength` the
+/// weakest peak reported as a fraction (0 to 1) of the strongest one.
+pub fn onsets_with(samples: &[f32], min_distance: f64, min_strength: f32) -> Vec<f64> {
     let n = samples.len();
     if n < FRAME {
         return vec![];
@@ -105,7 +111,7 @@ pub fn onsets(samples: &[f32]) -> Vec<f64> {
         return vec![];
     }
     flux.iter_mut().for_each(|x| *x /= max);
-    let min_frames = ((MIN_PEAK_DISTANCE * SR as f64 / HOP as f64).round() as i64).max(1);
+    let min_frames = ((min_distance * SR as f64 / HOP as f64).round() as i64).max(1);
     let mut last: i64 = -min_frames - 1;
     let mut out = vec![];
     for i in AVG_WINDOW..flux.len().saturating_sub(AVG_WINDOW) {
@@ -114,7 +120,7 @@ pub fn onsets(samples: &[f32]) -> Vec<f64> {
             continue;
         }
         let avg: f32 = flux[i - AVG_WINDOW..=i + AVG_WINDOW].iter().sum::<f32>() / (2 * AVG_WINDOW + 1) as f32;
-        if flux[i] < MIN_STRENGTH || flux[i] < avg * THRESHOLD_MUL || (i as i64) - last < min_frames {
+        if flux[i] < min_strength || flux[i] < avg * THRESHOLD_MUL || (i as i64) - last < min_frames {
             continue;
         }
         last = i as i64;
@@ -157,6 +163,17 @@ pub fn detect_with(tools: &Tools, media: &Path, cache_dir: &Path, key: &str, can
     Ok(a)
 }
 
+/// The first audio stream of `media` as mono 44.1 kHz samples.
+pub(crate) fn decode_mono(tools: &Tools, media: &Path, cancel: &CancelToken) -> Result<Vec<f32>> {
+    let mut cmd = Command::new(&tools.ffmpeg);
+    cmd.args(["-v", "error", "-nostdin", "-i"]).arg(media).args(["-map", "0:a:0", "-ac", "1", "-ar", &SR.to_string(), "-f", "f32le", "-"]);
+    let out = run_cancellable(&mut cmd, cancel)?;
+    if !out.status.success() {
+        return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: out.status.code(), hint: "audio decode failed (does the file have an audio stream?)".into() });
+    }
+    Ok(out.stdout.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+}
+
 /// Decode the first audio stream of `media` and find its beats (no cache).
 pub fn analyse(tools: &Tools, media: &Path) -> Result<BeatAnalysis> {
     analyse_with(tools, media, &CancelToken::new())
@@ -164,14 +181,7 @@ pub fn analyse(tools: &Tools, media: &Path) -> Result<BeatAnalysis> {
 
 /// [`analyse`] that stops (with [`Error::Canceled`]) when `cancel` is raised.
 pub fn analyse_with(tools: &Tools, media: &Path, cancel: &CancelToken) -> Result<BeatAnalysis> {
-    let mut cmd = Command::new(&tools.ffmpeg);
-    cmd.args(["-v", "error", "-nostdin", "-i"]).arg(media).args(["-map", "0:a:0", "-ac", "1", "-ar", &SR.to_string(), "-f", "f32le", "-"]);
-    let out = run_cancellable(&mut cmd, cancel)?;
-    if !out.status.success() {
-        return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: out.status.code(), hint: "audio decode failed (does the file have an audio stream?)".into() });
-    }
-    let bytes = out.stdout;
-    let samples: Vec<f32> = bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+    let samples = decode_mono(tools, media, cancel)?;
     let beats = onsets(&samples);
     Ok(BeatAnalysis { bpm: estimate_bpm(&beats), beats, duration: samples.len() as f64 / SR as f64 })
 }
