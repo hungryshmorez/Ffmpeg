@@ -8,7 +8,8 @@
 //!                                                               tokens ({project} {date}...); --keep never overwrites
 //!   ffworks run <project|new> <commands.json> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]
 //!                                                             apply a JSON list of commands (one undo step each, all or nothing)
-//!   ffworks plugin <plugin-folder> [<action> <project|new> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]]
+//!   ffworks plugin <plugin-folder> [<action> <project|new> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]
+//!                                [--allow-analysis] [--allow-host <host>]... [--allow-folder /guest=/real]...]
 //!                                                             list a WebAssembly plugin's actions, or run one as one undo step
 //!   ffworks script <project|new> <script.rhai> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>] [--allow-analysis]
 //!                                                             run a Rhai script (loops, conditions, variables) as one undo step
@@ -188,7 +189,8 @@ fn run() -> ffworks_core::Result<()> {
             let pkg = ffworks_core::plugin::load(Path::new(dir))?;
             let (Some(action), Some(project)) = (args.get(2), args.get(3)) else {
                 println!("{} {} - {}", pkg.manifest.name, pkg.manifest.version, pkg.manifest.description);
-                println!("asks for: edit={} analysis={}", pkg.manifest.permissions.edit, pkg.manifest.permissions.analysis);
+                let r = &pkg.manifest.permissions;
+                println!("asks for: edit={} analysis={} network={:?} folders={:?} wasi={}", r.edit, r.analysis, r.network, r.files, pkg.manifest.wasi);
                 for a in &pkg.manifest.actions {
                     println!("  {}  {}", a.id, a.label);
                 }
@@ -198,7 +200,19 @@ fn run() -> ffworks_core::Result<()> {
             let save = args.iter().position(|a| a == "--save").and_then(|i| args.get(i + 1)).cloned();
             let selected = args.iter().position(|a| a == "--selected").and_then(|i| args.get(i + 1)).cloned();
             let mut eng = if project == "new" { Engine::new("Untitled", ProjectSettings::default(), tools.clone()) } else { Engine::load(Path::new(project), tools.clone())? };
-            let report = ffworks_core::plugin::run(&mut eng, &pkg, action, selected.as_deref(), ffworks_core::script::Permissions::EDIT, &format!("Plugin {}: {action}", pkg.manifest.name))?;
+            // what the plugin may do beyond editing is granted here, per run: --allow-analysis, --allow-host H, --allow-folder /guest=/real
+            let mut grants = ffworks_core::plugin::Grants { edit: true, analysis: args.iter().any(|a| a == "--allow-analysis"), ..Default::default() };
+            for (i, a) in args.iter().enumerate() {
+                match (a.as_str(), args.get(i + 1)) {
+                    ("--allow-host", Some(h)) => grants.hosts.push(h.clone()),
+                    ("--allow-folder", Some(f)) => {
+                        let (guest, real) = f.split_once('=').ok_or_else(|| usage("--allow-folder /guest/path=/real/folder"))?;
+                        grants.folders.insert(guest.to_string(), PathBuf::from(real));
+                    }
+                    _ => {}
+                }
+            }
+            let report = ffworks_core::plugin::run_with(&mut eng, &pkg, action, selected.as_deref(), &grants, &format!("Plugin {}: {action}", pkg.manifest.name))?;
             for line in &report.log {
                 println!("{line}");
             }

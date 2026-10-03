@@ -98,6 +98,8 @@ interface UiStore {
   setCorruptClip: (c: string | null) => void;
   setVariationsClip: (c: string | null) => void;
   snapshotsOpen: boolean;
+  pluginsOpen: boolean;
+  setPluginsOpen: (o: boolean) => void;
   libraryOpen: boolean;
   setLibraryOpen: (o: boolean) => void;
   setSnapshotsOpen: (o: boolean) => void;
@@ -146,6 +148,8 @@ export const useUi = create<UiStore>((set) => ({
   setCorruptClip: (corruptClip) => set({ corruptClip }),
   setVariationsClip: (variationsClip) => set({ variationsClip }),
   snapshotsOpen: false,
+  pluginsOpen: false,
+  setPluginsOpen: (pluginsOpen) => set({ pluginsOpen }),
   libraryOpen: false,
   setLibraryOpen: (libraryOpen) => set({ libraryOpen }),
   setSnapshotsOpen: (snapshotsOpen) => set({ snapshotsOpen }),

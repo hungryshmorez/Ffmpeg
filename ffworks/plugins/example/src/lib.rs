@@ -90,3 +90,21 @@ pub fn hog() -> FnResult<String> {
     big.resize(256 * 1024 * 1024, 7);
     Ok(format!("{}", big.iter().map(|b| *b as u64).sum::<u64>()))
 }
+
+/// GET the address passed as the selection and put a marker at the number of seconds it answers with.
+#[plugin_fn]
+pub fn fetch_marker() -> FnResult<String> {
+    let p = input()?;
+    let url = p["selected"].as_str().unwrap_or("").to_string();
+    let res = http::request::<()>(&HttpRequest::new(url), None)?;
+    let body = String::from_utf8_lossy(&res.body()).trim().to_string();
+    let t: f64 = body.parse().map_err(|_| Error::msg(format!("the answer was not a number: {body}")))?;
+    answer(vec![json!({ "type": "add_marker", "time": format!("{}/100", (t * 100.0).round() as i64), "name": "from the web", "color": null, "note": null })], vec![format!("status {}", res.status_code())])
+}
+
+/// A marker at 1 s named by the plugin's own config.
+#[plugin_fn]
+pub fn config_marker() -> FnResult<String> {
+    let label = config::get("label")?.unwrap_or_else(|| "no label".to_string());
+    answer(vec![json!({ "type": "add_marker", "time": "1", "name": label, "color": null, "note": null })], vec![])
+}

@@ -49,6 +49,7 @@ function buildActions(plugins: PluginInfo[]): PaletteAction[] {
       if (typeof dir !== "string") return;
       try { const p = await api.installPlugin(dir); proj.toast("info", `Installed plugin “${p.name}” (${p.actions.length} actions): find them in the command palette`); } catch (e) { proj.toast("error", String(e)); }
     })() },
+    { id: "plugins", label: "Plugins: installed plugins and what they may do…", keywords: "extension wasm extism permissions network folders allow", run: () => ui.setPluginsOpen(true) },
     ...plugins.flatMap((p) => p.actions.map((a) => ({
       id: `plugin:${p.folder}:${a.id}`,
       label: `Plugin ${p.name}: ${a.label}`,

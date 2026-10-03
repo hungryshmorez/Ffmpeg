@@ -45,7 +45,7 @@
     return [...new Set(out)];
   };
   const check = (name, found) => step(name, found.length === 0, found.length + " problem(s):\n" + found.join("\n"));
-  const closeAll = async () => { window.__ffworks.useJobs.getState().setQueueOpen(false); for (const k of ["setSnapshotsOpen", "setShortcutsOpen", "setPaletteOpen", "setDemoOpen", "setEnginesOpen", "setFavsOpen", "setFiltersOpen", "setExportOpen", "setDiagOpen", "setLibraryOpen"]) U()[k]?.(false);
+  const closeAll = async () => { window.__ffworks.useJobs.getState().setQueueOpen(false); for (const k of ["setSnapshotsOpen", "setShortcutsOpen", "setPaletteOpen", "setDemoOpen", "setEnginesOpen", "setFavsOpen", "setFiltersOpen", "setExportOpen", "setDiagOpen", "setLibraryOpen", "setPluginsOpen"]) U()[k]?.(false);
     U().setCorruptClip?.(null); await sleep(150); };
   try {
     await waitFor(() => $(".app") && view());
@@ -70,7 +70,7 @@
     check("with an effect and keyframes on the clip", scan());
     U().select(view().project.sequences[0].tracks[0].clips[1].id); await sleep(600);
     check("with a title clip selected", scan());
-    for (const [name, setter] of [["export", "setExportOpen"], ["diagnostics", "setDiagOpen"], ["snapshots", "setSnapshotsOpen"], ["keyboard shortcuts", "setShortcutsOpen"], ["FFmpeg builds", "setEnginesOpen"], ["favourites", "setFavsOpen"], ["filter browser", "setFiltersOpen"], ["demo mode", "setDemoOpen"], ["render queue", "setQueueOpen"], ["media library", "setLibraryOpen"]]) {
+    for (const [name, setter] of [["export", "setExportOpen"], ["diagnostics", "setDiagOpen"], ["snapshots", "setSnapshotsOpen"], ["keyboard shortcuts", "setShortcutsOpen"], ["FFmpeg builds", "setEnginesOpen"], ["favourites", "setFavsOpen"], ["filter browser", "setFiltersOpen"], ["demo mode", "setDemoOpen"], ["render queue", "setQueueOpen"], ["media library", "setLibraryOpen"], ["plugins", "setPluginsOpen"]]) {
       await closeAll();
       (setter === "setQueueOpen" ? window.__ffworks.useJobs.getState() : U())[setter](true); await sleep(700);
       check(`the ${name} dialog`, scan());

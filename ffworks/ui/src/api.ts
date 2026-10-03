@@ -25,6 +25,7 @@ export const api = {
   stopRecording: (path: string | null) => invoke<number>("stop_recording", { path }),
   searchLibrary: (query: string, limit?: number) => invoke<LibraryEntry[]>("search_library", { query, limit: limit ?? null }),
   forgetMissingLibrary: () => invoke<number>("forget_missing_library"),
+  setPluginGrant: (folder: string, grant: PluginGrant) => invoke<void>("set_plugin_grant", { folder, grant }),
   listPlugins: () => invoke<PluginList>("list_plugins"),
   installPlugin: (folder: string) => invoke<PluginInfo>("install_plugin", { folder }),
   runPlugin: (folder: string, action: string, selected: string | null) => invoke<{ log: string[]; commands: number; view: StateView }>("run_plugin", { folder, action, selected }),
@@ -98,7 +99,8 @@ export const api = {
   onPreviewProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("preview-progress", (ev) => cb(ev.payload)),
 };
 
-export interface PluginInfo { folder: string; name: string; version: string; description: string; actions: { id: string; label: string; export: string }[]; requests: { edit: boolean; analysis: boolean } }
+export interface PluginGrant { analysis: boolean; hosts: string[]; folders: Record<string, string> }
+export interface PluginInfo { folder: string; name: string; version: string; description: string; actions: { id: string; label: string; export: string }[]; requests: { edit: boolean; analysis: boolean; network: string[]; files: string[] }; wasi: boolean; granted: PluginGrant }
 export interface PluginList { dir: string; plugins: PluginInfo[]; broken: [string, string][] }
 
 export interface LibraryEntry { path: string; name: string; fingerprint: string | null; sizeBytes: number | null; duration: number; hasVideo: boolean; hasAudio: boolean; width: number | null; height: number | null; container: string; firstSeenUnix: number; lastSeenUnix: number; exists: boolean }

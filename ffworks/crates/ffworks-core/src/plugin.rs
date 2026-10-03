@@ -16,9 +16,18 @@
 //! use. Nothing the plugin does touches the project until it has returned; then its commands are applied as ONE undo step, all
 //! or nothing, through the same checks scripts have ([`crate::script::Permissions`]).
 //!
-//! **Sandbox.** No WASI, no host functions, no network, no file system. Memory, run time, output size and the number of
-//! commands are capped. The manifest *asks* for permissions; the caller decides what is granted, and the plugin gets the
-//! intersection (a plugin that did not ask for `analysis` never gets it).
+//! **Sandbox.** By default a plugin sees only its input: no network, no files, no host functions. Memory, run time, output
+//! size and the number of commands are capped. The manifest *asks* for permissions; the caller decides what is granted, and the
+//! plugin gets the intersection (a plugin that did not ask for `analysis` never gets it). Beyond editing and analysis a plugin
+//! can ask for:
+//!
+//! * `network`: host names it may call over HTTP(S) with the Extism HTTP API (`"hosts"` it lists; only those the caller also
+//!   grants are reachable, and responses are capped at [`MAX_HTTP_RESPONSE`] bytes);
+//! * `files`: guest paths (`"/data"`) it wants mapped to a folder; the caller grants a real folder for each, and the plugin
+//!   sees only that folder (read **and** write: Extism cannot make it read-only);
+//! * `wasi: true` in the manifest: the WASI system interface (clock, randomness, stdio, and files only through the folders above)
+//!   for modules built with a WASI toolchain (Go, JS, Python, Rust `wasm32-wasip1`);
+//! * `config`: fixed key/value settings the plugin reads with the Extism config API.
 
 use crate::commands::Command;
 use crate::engine::Engine;
@@ -26,6 +35,7 @@ use crate::error::{Error, Result};
 use crate::script::{vet, Permissions, Refusal};
 use extism::{Manifest, Plugin as Instance, Wasm};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
@@ -39,6 +49,10 @@ pub const MAX_PAGES: u32 = 1024;
 pub const MAX_OUTPUT: usize = 4 * 1024 * 1024;
 /// Most commands one call may return.
 pub const MAX_COMMANDS: usize = 2000;
+/// Most bytes one HTTP response to a plugin may hold.
+pub const MAX_HTTP_RESPONSE: u64 = 8 * 1024 * 1024;
+/// Most bytes of variables a plugin may keep between calls.
+pub const MAX_VARS: u64 = 1024 * 1024;
 /// Largest `.wasm` accepted.
 pub const MAX_WASM: u64 = 32 * 1024 * 1024;
 
@@ -49,6 +63,36 @@ pub struct Requested {
     pub edit: bool,
     #[serde(default)]
     pub analysis: bool,
+    /// Host names the plugin wants to reach over HTTP(S).
+    #[serde(default)]
+    pub network: Vec<String>,
+    /// Guest paths (like `/data`) the plugin wants mapped to a folder of the user's.
+    #[serde(default)]
+    pub files: Vec<String>,
+}
+
+/// What the caller allows a plugin to do. The plugin gets the intersection with what its manifest asked for.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Grants {
+    pub edit: bool,
+    pub analysis: bool,
+    /// Hosts that may be called.
+    pub hosts: Vec<String>,
+    /// For each guest path, the real folder it is mapped to.
+    pub folders: BTreeMap<String, PathBuf>,
+}
+
+impl Grants {
+    /// Edit only (what the palette grants by default).
+    pub fn edit_only() -> Grants {
+        Grants { edit: true, ..Default::default() }
+    }
+}
+
+impl From<Permissions> for Grants {
+    fn from(p: Permissions) -> Grants {
+        Grants { edit: p.edit, analysis: p.analysis, ..Default::default() }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -72,6 +116,12 @@ pub struct PluginManifest {
     pub wasm: String,
     #[serde(default)]
     pub permissions: Requested,
+    /// Run with the WASI system interface (needed by modules built with a WASI toolchain).
+    #[serde(default)]
+    pub wasi: bool,
+    /// Fixed settings the plugin reads with the Extism config API.
+    #[serde(default)]
+    pub config: BTreeMap<String, String>,
     pub actions: Vec<Action>,
 }
 
@@ -141,14 +191,39 @@ impl PluginPackage {
         Permissions { edit: granted.edit && self.manifest.permissions.edit, analysis: granted.analysis && self.manifest.permissions.analysis }
     }
 
+    /// The hosts the plugin may call: asked for by the manifest *and* granted.
+    pub fn allowed_hosts(&self, g: &Grants) -> Vec<String> {
+        g.hosts.iter().filter(|h| self.manifest.permissions.network.contains(h)).cloned().collect()
+    }
+
+    /// The folders the plugin may see: guest paths it asked for, with the real (existing) folder the caller granted for each.
+    pub fn allowed_folders(&self, g: &Grants) -> Result<Vec<(String, PathBuf)>> {
+        let mut out = vec![];
+        for guest in &self.manifest.permissions.files {
+            let Some(host) = g.folders.get(guest) else { continue };
+            let real = std::fs::canonicalize(host).map_err(|e| Error::io(host, e))?;
+            if !real.is_dir() {
+                return Err(Error::validation(format!("{} is not a folder (granted to plugin \"{}\" as {guest})", host.display(), self.manifest.name)));
+            }
+            out.push((guest.clone(), real));
+        }
+        Ok(out)
+    }
+
     /// Run one action in the sandbox and return the commands it answered with (nothing is applied).
-    fn call(&self, eng: &Engine, action: &Action, selected: Option<&str>) -> Result<Output> {
+    fn call(&self, eng: &Engine, action: &Action, selected: Option<&str>, grants: &Grants) -> Result<Output> {
         let project = serde_json::to_value(&eng.project)?;
         let input = serde_json::json!({ "api": API_VERSION, "selected": selected.unwrap_or(""), "project": project });
-        let manifest = Manifest::new([Wasm::data(self.wasm.clone())]).with_timeout(MAX_RUNTIME).with_memory_max(MAX_PAGES).disallow_all_hosts();
+        let memory = extism_manifest::MemoryOptions::new().with_max_pages(MAX_PAGES).with_max_http_response_bytes(MAX_HTTP_RESPONSE).with_max_var_bytes(MAX_VARS);
+        let mut manifest = Manifest::new([Wasm::data(self.wasm.clone())]).with_timeout(MAX_RUNTIME).with_memory_options(memory).with_config(self.manifest.config.clone().into_iter());
+        let hosts = self.allowed_hosts(grants);
+        manifest = if hosts.is_empty() { manifest.disallow_all_hosts() } else { manifest.with_allowed_hosts(hosts.into_iter()) };
+        for (guest, host) in self.allowed_folders(grants)? {
+            manifest = manifest.with_allowed_path(host.to_string_lossy().into_owned(), guest);
+        }
         let name = &self.manifest.name;
-        // no WASI and no host functions: the module sees only its input
-        let mut instance = Instance::new(&manifest, [], false).map_err(|e| Error::validation(format!("plugin \"{name}\" could not be loaded: {e}")))?;
+        // no host functions of our own; WASI only when the manifest asks for it
+        let mut instance = Instance::new(&manifest, [], self.manifest.wasi).map_err(|e| Error::validation(format!("plugin \"{name}\" could not be loaded: {e}")))?;
         if !instance.function_exists(&action.export) {
             return Err(Error::validation(format!("plugin \"{name}\" has no export named \"{}\"", action.export)));
         }
@@ -163,10 +238,15 @@ impl PluginPackage {
 /// Run `action` of `pkg` against `eng`; its commands become ONE undo step (named after `label`). `granted` is what the caller
 /// allows; the plugin gets only what its manifest asked for within that. On any error nothing of it is kept.
 pub fn run(eng: &mut Engine, pkg: &PluginPackage, action_id: &str, selected: Option<&str>, granted: Permissions, label: &str) -> Result<Report> {
+    run_with(eng, pkg, action_id, selected, &granted.into(), label)
+}
+
+/// [`run`] with the full set of grants (network hosts and folders as well as editing and analysis).
+pub fn run_with(eng: &mut Engine, pkg: &PluginPackage, action_id: &str, selected: Option<&str>, grants: &Grants, label: &str) -> Result<Report> {
     let name = &pkg.manifest.name;
     let action = pkg.manifest.actions.iter().find(|a| a.id == action_id).ok_or_else(|| Error::validation(format!("plugin \"{name}\" has no action \"{action_id}\"")))?;
-    let perms = pkg.effective(granted);
-    let out = pkg.call(eng, action, selected)?;
+    let perms = pkg.effective(Permissions { edit: grants.edit, analysis: grants.analysis });
+    let out = pkg.call(eng, action, selected, grants)?;
     if out.commands.len() > MAX_COMMANDS {
         return Err(Error::validation(format!("plugin \"{name}\" returned {} commands; the limit is {MAX_COMMANDS}", out.commands.len())));
     }

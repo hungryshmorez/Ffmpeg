@@ -3,7 +3,7 @@
 //! actions used here. Pure engine work (solid clips), no FFmpeg needed.
 use ffworks_core::commands::Command;
 use ffworks_core::engine::Engine;
-use ffworks_core::plugin::{discover, load, run, PluginPackage};
+use ffworks_core::plugin::{discover, load, run, run_with, Grants, PluginPackage};
 use ffworks_core::process::Tools;
 use ffworks_core::project::ProjectSettings;
 use ffworks_core::script::Permissions;
@@ -160,4 +160,84 @@ fn installing_copies_the_plugin_and_replaces_an_older_copy() {
     let (mut eng, _) = project();
     run(&mut eng, &pkg, "markers", None, Permissions::EDIT, "Plugin").unwrap();
     assert_eq!(marker_times(&eng), ["10", "20", "30"]);
+}
+
+fn wasi_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/example-wasi")
+}
+
+/// A local web server that answers every request with `body` and counts them.
+fn web_server(body: &'static str) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/t", server.server_addr().to_ip().unwrap());
+    let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let h = hits.clone();
+    std::thread::spawn(move || {
+        for req in server.incoming_requests() {
+            h.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let _ = req.respond(tiny_http::Response::from_string(body));
+        }
+    });
+    (url, hits)
+}
+
+#[test]
+fn a_plugin_reaches_the_network_only_for_hosts_it_asked_for_and_was_given() {
+    let (url, hits) = web_server("12");
+    let (mut eng, _) = project();
+    let before = snapshot(&eng);
+    let call = |eng: &mut Engine, hosts: &[&str]| run_with(eng, &example(), "fetch-marker", Some(&url), &Grants { edit: true, hosts: hosts.iter().map(|h| h.to_string()).collect(), ..Default::default() }, "Plugin web");
+    // nothing granted: the request never leaves
+    let err = call(&mut eng, &[]).unwrap_err().to_string();
+    assert!(err.contains("Example plugin"), "{err}");
+    // a host the plugin never asked for, even though the caller allows it
+    assert!(call(&mut eng, &["example.org"]).is_err());
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 0, "no request reached the server");
+    assert_eq!(snapshot(&eng), before);
+    // asked for and granted
+    let report = call(&mut eng, &["127.0.0.1"]).unwrap();
+    assert_eq!(report.log, ["status 200"]);
+    assert_eq!(marker_times(&eng), ["12"]);
+    assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+    let pkg = example();
+    assert_eq!(pkg.allowed_hosts(&Grants { hosts: vec!["127.0.0.1".into(), "evil.example".into()], ..Default::default() }), ["127.0.0.1"]);
+}
+
+#[test]
+fn a_plugin_reads_its_fixed_config() {
+    let (mut eng, _) = project();
+    run_action(&mut eng, "config-marker", None, Permissions::EDIT).unwrap();
+    let m = &eng.project.active().unwrap().markers[0];
+    assert_eq!((m.name.as_str(), m.time.to_string().as_str()), ("set in plugin.json", "1"));
+}
+
+#[test]
+fn a_wasi_plugin_sees_only_the_folder_it_was_given() {
+    let pkg = load(&wasi_dir()).unwrap();
+    assert!(pkg.manifest.wasi && pkg.manifest.permissions.files == ["/data"]);
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("marks.txt"), "1\n2.48\n\n4\n").unwrap();
+    let granted = Grants { edit: true, folders: [("/data".to_string(), dir.path().to_path_buf())].into_iter().collect(), ..Default::default() };
+    let (mut eng, _) = project();
+
+    // no folder granted: it cannot read anything
+    let err = run_with(&mut eng, &pkg, "marks", None, &Grants::edit_only(), "p").unwrap_err().to_string();
+    assert!(err.contains("cannot read /data/marks.txt"), "{err}");
+    assert!(eng.project.active().unwrap().markers.is_empty());
+
+    let report = run_with(&mut eng, &pkg, "marks", None, &granted, "p").unwrap();
+    assert_eq!(report.log, ["3 marks"]);
+    assert_eq!(marker_times(&eng), ["1", "62/25", "4"]);
+    assert_eq!(std::fs::read_to_string(dir.path().join("marker-count.txt")).unwrap(), "3\n", "it can write into its folder, and only there");
+
+    // everything else on the machine stays out of reach
+    let err = run_with(&mut eng, &pkg, "escape", None, &granted, "p").unwrap_err().to_string();
+    assert!(err.contains("blocked"), "{err}");
+
+    // a folder granted under a guest path it never asked for is ignored
+    let wrong = Grants { edit: true, folders: [("/other".to_string(), dir.path().to_path_buf())].into_iter().collect(), ..Default::default() };
+    assert!(run_with(&mut eng, &pkg, "marks", None, &wrong, "p").is_err());
+    // a missing folder is a clear error
+    let missing = Grants { edit: true, folders: [("/data".to_string(), dir.path().join("nope"))].into_iter().collect(), ..Default::default() };
+    assert!(run_with(&mut eng, &pkg, "marks", None, &missing, "p").is_err());
 }

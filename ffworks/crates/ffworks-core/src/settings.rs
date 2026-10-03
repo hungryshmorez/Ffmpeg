@@ -37,9 +37,33 @@ pub struct Settings {
     /// Secret callers of the local API must send; made once, kept until the user asks for a new one.
     #[serde(default)]
     pub local_api_token: Option<String>,
+    /// What the user has allowed each installed plugin (by its folder name) beyond editing: see `plugin::Grants`.
+    #[serde(default)]
+    pub plugin_grants: std::collections::BTreeMap<String, PluginGrant>,
     /// Named effect stacks saved from a clip ("My glitch look") that can be applied to any clip of the same kind.
     #[serde(default)]
     pub effect_presets: std::collections::BTreeMap<String, EffectPreset>,
+}
+
+/// What one plugin may do beyond editing the project. Only what the plugin's manifest also asks for takes effect.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginGrant {
+    /// Media analysis with FFmpeg (follow audio / beats).
+    #[serde(default)]
+    pub analysis: bool,
+    /// Host names it may call over HTTP(S).
+    #[serde(default)]
+    pub hosts: Vec<String>,
+    /// Guest path (like `/data`) to the folder on this machine it is mapped to.
+    #[serde(default)]
+    pub folders: std::collections::BTreeMap<String, String>,
+}
+
+impl PluginGrant {
+    pub fn to_grants(&self) -> crate::plugin::Grants {
+        crate::plugin::Grants { edit: true, analysis: self.analysis, hosts: self.hosts.clone(), folders: self.folders.iter().map(|(k, v)| (k.clone(), std::path::PathBuf::from(v))).collect() }
+    }
 }
 
 /// One effect inside a preset: the effect id and its parameter values.

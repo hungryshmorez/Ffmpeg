@@ -52,6 +52,29 @@
     try { await inv("run_plugin", { folder: "example-plugin", action: "spin", selected: null }); } catch (e) { err = String(e); }
     step("a plugin that never finishes is stopped", /timeout/.test(err) && Date.now() - t0 < 40000, err + " " + (Date.now() - t0));
     step("and the app is still usable", (await inv("run_plugin", { folder: "example-plugin", action: "markers", selected: null })).commands === 3);
+
+    // permissions beyond editing: off until the user allows them in the Plugins dialog
+    err = "";
+    try { await inv("run_plugin", { folder: "example-plugin", action: "fetch-marker", selected: "__URL__" }); } catch (e) { err = String(e); }
+    step("a plugin asking for the network is refused until it is allowed", !!err && seq().markers.length === 0 || (view().project.sequences[0].markers.length === 3), err);
+    U().setPluginsOpen(true);
+    const row = await waitFor(() => $("[data-plugin='example-plugin']"));
+    step("the Plugins dialog lists it with what it asks for", !!row && /127\.0\.0\.1/.test(row.textContent), row && row.textContent.slice(0, 200));
+    const box = row && row.querySelector("input[aria-label='Allow Example plugin to contact 127.0.0.1']");
+    step("the host it wants to contact is a checkbox, off by default", !!box && box.checked === false);
+    box.click();
+    await waitFor(() => $("[data-plugin='example-plugin'] input[aria-label='Allow Example plugin to contact 127.0.0.1']:checked"));
+    const saved = (await inv("list_plugins")).plugins[0].granted;
+    step("allowing it is saved", saved.hosts.length === 1 && saved.hosts[0] === "127.0.0.1", JSON.stringify(saved));
+    U().setPluginsOpen(false);
+    const web = await inv("run_plugin", { folder: "example-plugin", action: "fetch-marker", selected: "__URL__" });
+    P().setView(web.view); await sleep(300);
+    step("now it can call the host: a marker at the 7 s the web page said", web.log.join() === "status 200" && seq().markers.some((m) => m.name === "from the web" && m.time === "7"), JSON.stringify(web.log) + JSON.stringify(seq().markers.map((m) => [m.name, m.time])));
+    await inv("set_plugin_grant", { folder: "example-plugin", grant: { analysis: false, hosts: [], folders: {} } });
+    step("taking the permission away is saved too", (await inv("list_plugins")).plugins[0].granted.hosts.length === 0);
+    let bad = "";
+    try { await inv("set_plugin_grant", { folder: "example-plugin", grant: { analysis: false, hosts: [], folders: { "/data": "/definitely/not/a/folder" } } }); } catch (e) { bad = String(e); }
+    step("a folder that does not exist is refused", /not a folder/.test(bad), bad);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

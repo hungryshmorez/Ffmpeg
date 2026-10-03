@@ -3,16 +3,72 @@
   "version": "1.0.0",
   "description": "Shows the plugin interface: markers on a grid, and a half-opacity action for the selected clip. Also holds the misbehaving actions the tests use.",
   "wasm": "plugin.wasm",
-  "permissions": { "edit": true, "analysis": false },
+  "permissions": {
+    "edit": true,
+    "analysis": false,
+    "network": [
+      "127.0.0.1"
+    ],
+    "files": []
+  },
   "actions": [
-    { "id": "markers", "label": "Add a marker every 10 seconds", "export": "markers" },
-    { "id": "half-opacity", "label": "Half opacity on the selected clip", "export": "half_opacity" },
-    { "id": "try-import", "label": "(test) tries to read a file", "export": "try_import" },
-    { "id": "try-analysis", "label": "(test) tries to analyse audio", "export": "try_analysis" },
-    { "id": "half-bad", "label": "(test) a good command then a bad one", "export": "half_bad" },
-    { "id": "garbage", "label": "(test) answers with something that is not JSON", "export": "garbage" },
-    { "id": "spin", "label": "(test) never finishes", "export": "spin" },
-    { "id": "hog", "label": "(test) asks for far too much memory", "export": "hog" },
-    { "id": "missing", "label": "(test) names an export that does not exist", "export": "no_such_export" }
-  ]
+    {
+      "id": "markers",
+      "label": "Add a marker every 10 seconds",
+      "export": "markers"
+    },
+    {
+      "id": "half-opacity",
+      "label": "Half opacity on the selected clip",
+      "export": "half_opacity"
+    },
+    {
+      "id": "try-import",
+      "label": "(test) tries to read a file",
+      "export": "try_import"
+    },
+    {
+      "id": "try-analysis",
+      "label": "(test) tries to analyse audio",
+      "export": "try_analysis"
+    },
+    {
+      "id": "half-bad",
+      "label": "(test) a good command then a bad one",
+      "export": "half_bad"
+    },
+    {
+      "id": "garbage",
+      "label": "(test) answers with something that is not JSON",
+      "export": "garbage"
+    },
+    {
+      "id": "spin",
+      "label": "(test) never finishes",
+      "export": "spin"
+    },
+    {
+      "id": "hog",
+      "label": "(test) asks for far too much memory",
+      "export": "hog"
+    },
+    {
+      "id": "missing",
+      "label": "(test) names an export that does not exist",
+      "export": "no_such_export"
+    },
+    {
+      "id": "fetch-marker",
+      "label": "Add a marker at the time a web address answers with",
+      "export": "fetch_marker"
+    },
+    {
+      "id": "config-marker",
+      "label": "Add a marker named by the plugin's config",
+      "export": "config_marker"
+    }
+  ],
+  "config": {
+    "label": "set in plugin.json"
+  }
 }

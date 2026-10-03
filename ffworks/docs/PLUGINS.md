@@ -48,7 +48,7 @@ A command is the same JSON that command lists, macros, scripts and the local API
 * Nothing changes until your export has returned. Then all commands run as ONE undo step. If any command is refused or fails, none of them are kept.
 * Not allowed: reading files (`import_media`, `relink_media`), analysing media unless the manifest asked for `analysis` and the caller allowed it.
 * Limits: 10 s per call, 64 MiB of memory, 4 MiB of answer, 2000 commands. A plugin that exceeds time or memory is stopped (`timeout`, `oom`).
-* The sandbox has no WASI, no network, no file system and no host functions: the plugin sees only its input.
+* By default the sandbox has no network, no file system and no host functions: the plugin sees only its input. Everything below is **off until the user allows it** (Command palette → "Plugins…", or flags on the CLI), and only what the manifest also asks for takes effect.
 
 ## Building one in Rust
 
@@ -66,3 +66,33 @@ Other languages: any [Extism PDK](https://extism.org/docs/concepts/pdk) (Go, Jav
 ## Installing
 
 Command palette → **Install a plugin from a folder…** copies `plugin.json` and the wasm file into `<app data>/plugins/<name>/` (installing again replaces it). Each action then shows up as **Plugin <name>: <label>**.
+
+## Network, folders, WASI and config (all of Extism's features)
+
+All of [Extism](https://extism.org)'s runtime features are on. Each is a request in `plugin.json` plus a grant by the user:
+
+```json
+{
+  "wasi": true,
+  "config": { "label": "fixed settings the plugin reads with the config API" },
+  "permissions": {
+    "edit": true,
+    "analysis": false,
+    "network": ["api.example.com"],
+    "files": ["/data"]
+  }
+}
+```
+
+* **`network`**: host names the plugin may call with the Extism HTTP API (`http::request`). The user ticks each host in the Plugins dialog (CLI: `--allow-host api.example.com`). A call to any other host fails before it leaves the machine; responses are capped at 8 MiB.
+* **`files`**: guest paths the plugin wants. The user picks a real folder for each (CLI: `--allow-folder /data=/home/me/marks`). The plugin sees **only** that folder, as the guest path, and can read **and write** there (Extism cannot make it read-only). Needs a module built with a WASI toolchain (`wasi: true`); `plugins/example-wasi` is a Rust example built with `wasm32-wasip1`.
+* **`wasi`**: runs the module with the WASI system interface (clock, randomness, stdio, and files only through the folders above). Needed by Go, JavaScript, Python, Zig and Rust-`wasip1` toolchains.
+* **`config`**: fixed key/value settings, read with `config::get("key")`.
+* **`analysis`**: media analysis commands (follow audio / beats), as before.
+
+Times in commands are rational strings (`"1250/100"`), not decimals.
+
+```sh
+ffworks plugin plugins/example fetch-marker new --selected http://127.0.0.1:8000/n --allow-host 127.0.0.1 --save /tmp/p.ffworks
+ffworks plugin plugins/example-wasi marks new --allow-folder /data=/tmp/marks --save /tmp/p.ffworks
+```
