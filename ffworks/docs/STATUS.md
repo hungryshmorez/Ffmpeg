@@ -1,6 +1,6 @@
 # Status (update this at the end of every working session)
 
-_Last updated after the built-in pixel sort: 292 Rust tests, 59 UI unit tests, 28 GUI scripts, clippy clean (core + CLI; the Tauri crate needs the webkit dev packages to lint)._
+_Last updated after adjustment layers: 310 Rust tests, 60 UI unit tests, 30 GUI scripts, clippy clean (core + CLI; the Tauri crate needs the webkit dev packages to lint)._
 
 ## Done (tested)
 Phase 0 architecture doc · Phase 1 editor (import/probe/metadata, thumbnails, waveforms, multitrack timeline: place/trim/split/move/ripple-delete/linked A/V/lock/mute/snap, volume, undo/redo, save/load, export H.264/VP9/WAV/MP3 with progress/cancel/verify, Command Inspector, headless CLI) ·
