@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -45,6 +45,12 @@ export const api = {
   listEffects: () => invoke<EffectDef[]>("list_effects"),
   proxyStatus: () => invoke<ProxyStatus[]>("proxy_status"),
   createProxy: (mediaId: string) => invoke<string>("create_proxy", { mediaId }),
+  ffglitchStatus: () => invoke<GlitchStatus>("ffglitch_status"),
+  setFfglitchDir: (dir: string) => invoke<GlitchStatus>("set_ffglitch_dir", { dir }),
+  makeMosh: (clip: string, mosh: { kind: "amplify" | "drift" | "transfer"; factor?: number; x?: number; y?: number; donor?: string }) => invoke<StateView>("make_mosh", { clip, ...mosh }),
+  cancelMosh: () => invoke<boolean>("cancel_mosh"),
+  /** Fraction (0..1) of the mosh run, by stage. */
+  onMoshProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("mosh-progress", (ev) => cb(ev.payload)),
   clearProxies: () => invoke<number>("clear_proxies"),
   listFonts: () => invoke<FontEntry[]>("list_fonts"),
   listFilters: () => invoke<FilterInfo[]>("list_filters"),

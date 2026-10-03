@@ -141,3 +141,11 @@ export interface FoundEngine { ffmpeg_path: string; ffprobe_path: string; sugges
 
 export interface DemoStep { index: number; start: number; transition: string | null; effects: string[]; fx: { effect: string; params: Record<string, number> }[] }
 export interface DemoBatch { path: string; steps: DemoStep[]; seed: number; duration: number }
+
+/** Whether FFglitch (the mosh lab's tool) is installed, and where it was found. */
+export interface GlitchStatus {
+  found: boolean;
+  ffedit: string | null;
+  dir: string | null;
+  bundled: boolean;
+}

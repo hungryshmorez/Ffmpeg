@@ -19,6 +19,9 @@ pub struct Settings {
     /// Id of the registered build used for everything unless an export names another; when unset, `ffmpeg_path` etc. apply.
     #[serde(default)]
     pub active_engine: Option<String>,
+    /// Folder holding FFglitch's `ffedit` and `ffgac` (the mosh lab); when unset the installer's copy, `FFWORKS_FFGLITCH` and `PATH` are tried.
+    #[serde(default)]
+    pub ffglitch_dir: Option<String>,
     /// Extra folders holding frei0r plugins (glitch0r, pixeliz0r...), searched before the standard ones.
     #[serde(default)]
     pub frei0r_dirs: Vec<String>,

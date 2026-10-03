@@ -9,7 +9,7 @@ Honest status. "Done" = tested with real FFmpeg and/or the GUI scripts. Unverifi
 * DONE: the Windows installer job (tests + `tauri build` + size check with the full FFmpeg and plugins bundled) is green on CI since the palette commit.
 * NOT POSSIBLE: VST plugins (FFmpeg cannot load them). LV2 needs a build with `lv2` (the bundled one lacks it).
 * DONE: LADSPA (Audacity-style) audio plugins: 122 swh/TAP/CMT effects offered when installed (Linux-verified). Not bundled on Windows. 17 sample-rate-scaled plugins excluded because of an FFmpeg `ladspa` filter bug (needs an upstream patch).
-* TODO: FFglitch (separate `ffedit`/`ffgac` tools) as its own engine slot.
+* DONE (Linux-verified): FFglitch (`ffedit`/`ffgac`) as an optional separate tool for the mosh lab: saved folder > installer's `ffglitch/` > `FFWORKS_FFGLITCH` > PATH. Windows: pinned 0.10.2 zip bundled by CI and the lab's tests run there with the bundled tools (result unseen until CI runs).
 * DONE (verified on CI): the Windows job renders every bundled frei0r plugin with the bundled FFmpeg after uploading the installer — 92/92 drivable plugins run, glitch0r renders through the effect stack.
 
 ## B. Done (all with tests; details in STATUS.md)
@@ -27,7 +27,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 4: Rhai/DSL scripting beyond JSON command lists, macro variables/loops/conditions, permissions model.
 * Phase 5: transient detection, drift correction for auto-sync.
 * Phase 6: expressions, modulators, parameter linking, MIDI. Audio-reactive: DONE for loudness (whole or per band) and beat pulses ("Follow audio" → keyframes).
-* Phases 7-9: pixel sort DONE (built-in sorter on every platform, see STATUS.md; angled sorts/keyframed settings/masks open), real motion-vector datamosh / FFglitch motion transfer, corruption lab.
+* Phases 7-9: pixel sort DONE (built-in sorter on every platform, see STATUS.md; angled sorts/keyframed settings/masks open), real motion-vector datamosh / FFglitch motion transfer DONE as the mosh lab (new file, not a live effect; amplify, drift, borrow another clip's motion), corruption lab open.
 * Phase 10: plugin system (Extism), local API.
 * DONE: unfinished exports are journalled and offered again after a crash or close.
 * DONE: export naming templates + never-overwrite versioning (dialog and CLI).

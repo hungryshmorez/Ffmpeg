@@ -29,6 +29,7 @@ pub mod glx;
 pub mod keyframes;
 pub mod macros;
 pub mod migrate;
+pub mod moshlab;
 pub mod package;
 pub mod patch;
 pub mod pixelsort;

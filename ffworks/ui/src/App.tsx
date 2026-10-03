@@ -18,6 +18,7 @@ import { actionFor, chordOf, hasCtrl } from "./state/keymap";
 import { CommandPalette } from "./components/CommandPalette";
 import { SnapshotsDialog } from "./components/SnapshotsDialog";
 import { VariationsDialog } from "./components/VariationsDialog";
+import { MoshDialog } from "./components/MoshDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -165,6 +166,7 @@ export default function App() {
       <SnapshotsDialog />
       <ShortcutsDialog />
       <VariationsDialog />
+      <MoshDialog />
       <QueuePanel />
       <RecoveryDialog />
       <UnfinishedExportsDialog />

@@ -92,6 +92,8 @@ interface UiStore {
   paletteOpen: boolean;
   /** Clip whose variation sheet is open, or null. */
   variationsClip: string | null;
+  moshClip: string | null;
+  setMoshClip: (c: string | null) => void;
   setVariationsClip: (c: string | null) => void;
   snapshotsOpen: boolean;
   setSnapshotsOpen: (o: boolean) => void;
@@ -134,6 +136,8 @@ export const useUi = create<UiStore>((set) => ({
   demoOpen: false,
   paletteOpen: false,
   variationsClip: null,
+  moshClip: null,
+  setMoshClip: (moshClip) => set({ moshClip }),
   setVariationsClip: (variationsClip) => set({ variationsClip }),
   snapshotsOpen: false,
   setSnapshotsOpen: (snapshotsOpen) => set({ snapshotsOpen }),

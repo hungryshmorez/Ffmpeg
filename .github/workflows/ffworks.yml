@@ -20,6 +20,13 @@ jobs:
         with: { node-version: 22 }
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
+      - name: Fetch FFglitch (pinned) for the mosh lab tests
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/ffglitch.zip" https://ffglitch.org/pub/bin/linux64/ffglitch-0.10.2-linux-x86_64.zip
+          echo "28dd39eee7d5be6d6f6b3f126e25563118eb0b47dc174941509f64f90a09bd40  $RUNNER_TEMP/ffglitch.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/ffglitch.zip" -d "$RUNNER_TEMP"
+          echo "FFWORKS_FFGLITCH=$RUNNER_TEMP/ffglitch-0.10.2-linux-x86_64" >> "$GITHUB_ENV"
+          echo "FFWORKS_REQUIRE_FFGLITCH=1" >> "$GITHUB_ENV"
       - run: cargo test --workspace
       - run: npm test --prefix ui
   windows-build:
@@ -98,6 +105,18 @@ jobs:
           "----- BEGIN plugins.json -----"
           Get-Content crates/ffworks-core/assets/frei0r/plugins.json -Raw
           "----- END plugins.json -----"
+      - name: Fetch FFglitch (Win64, pinned) to bundle for the mosh lab
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force src-tauri/ffglitch-bin | Out-Null
+          Invoke-WebRequest "https://ffglitch.org/pub/bin/win64/ffglitch-0.10.2-windows-x86_64.zip" -OutFile ffglitch.zip
+          $got = (Get-FileHash ffglitch.zip -Algorithm SHA256).Hash.ToLower()
+          "ffglitch 0.10.2 sha256: $got" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          if ($got -ne "e5190462eafe9c28428d39f8392a6be93dfd6ac2d59ce08848edec79acf965ca") { throw "FFglitch download checksum mismatch: $got" }
+          Expand-Archive ffglitch.zip -DestinationPath ffglitch-extract
+          $root = Get-ChildItem ffglitch-extract -Directory | Select-Object -First 1
+          Copy-Item "$($root.FullName)/ffedit.exe","$($root.FullName)/ffgac.exe","$($root.FullName)/readme.txt" src-tauri/ffglitch-bin/
+          "FFglitch 0.10.2 is GPL-2.0-or-later (https://ffglitch.org); source: https://ffglitch.org/pub/src/ffglitch-0.10.2.tar.xz. It runs as separate programs." | Set-Content src-tauri/ffglitch-bin/NOTICE.txt
       - run: npm ci --prefix ui
       - run: cargo test -p ffworks-core
       - run: npx --prefix ui tauri build
@@ -119,3 +138,11 @@ jobs:
           $env:FFWORKS_FFPROBE = (Resolve-Path src-tauri/ffmpeg-bin/ffprobe.exe).Path
           $env:FREI0R_PATH = (Resolve-Path src-tauri/frei0r-bin).Path
           cargo test -p ffworks-core --test frei0r -- --nocapture
+      - name: Run the mosh lab with the bundled FFglitch and FFmpeg (after the upload, so a failure here still leaves the installer)
+        shell: pwsh
+        run: |
+          $env:FFWORKS_FFMPEG = (Resolve-Path src-tauri/ffmpeg-bin/ffmpeg.exe).Path
+          $env:FFWORKS_FFPROBE = (Resolve-Path src-tauri/ffmpeg-bin/ffprobe.exe).Path
+          $env:FFWORKS_FFGLITCH = (Resolve-Path src-tauri/ffglitch-bin).Path
+          $env:FFWORKS_REQUIRE_FFGLITCH = "1"
+          cargo test -p ffworks-core --test moshlab -- --nocapture

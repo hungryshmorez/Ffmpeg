@@ -30,6 +30,12 @@ struct AppState {
     /// Exports that had not finished when FFWORKS last closed or crashed, until the user queues or discards them.
     unfinished: Mutex<Vec<ffworks_core::queue::SavedJob>>,
     unfinished_file: PathBuf,
+    /// FFglitch shipped with the installer (<resources>/ffglitch), used when the user has not chosen a folder.
+    bundled_ffglitch: Option<PathBuf>,
+    /// Where mosh-lab results are written (they become project media, so they are not in the cache).
+    mosh_dir: PathBuf,
+    /// Cancel switch of the mosh run in progress.
+    mosh_cancel: Mutex<Option<CancelToken>>,
 }
 
 #[derive(Serialize)]
@@ -444,6 +450,101 @@ fn usable_effects(state: &AppState) -> Vec<ffworks_core::effects::EffectDef> {
 #[tauri::command]
 fn list_effects(state: State<AppState>) -> Vec<ffworks_core::effects::EffectDef> {
     usable_effects(&state)
+}
+
+/// FFglitch tools in use (saved folder, else the installer's copy, else `FFWORKS_FFGLITCH` / `PATH`).
+fn glitch_tools(state: &AppState) -> Option<ffworks_core::moshlab::GlitchTools> {
+    let saved = ffworks_core::settings::Settings::load(&state.settings_file).ffglitch_dir.filter(|d| !d.trim().is_empty()).map(PathBuf::from);
+    ffworks_core::moshlab::GlitchTools::discover(saved.or_else(|| state.bundled_ffglitch.clone()).as_deref())
+}
+
+fn glitch_status_json(state: &AppState) -> serde_json::Value {
+    let t = glitch_tools(state);
+    serde_json::json!({
+        "found": t.is_some(),
+        "ffedit": t.as_ref().map(|t| t.ffedit.to_string_lossy().into_owned()),
+        "dir": ffworks_core::settings::Settings::load(&state.settings_file).ffglitch_dir,
+        "bundled": state.bundled_ffglitch.is_some(),
+    })
+}
+
+/// Whether the mosh lab can run (is FFglitch installed?) and which folder was saved.
+#[tauri::command]
+fn ffglitch_status(state: State<AppState>) -> serde_json::Value {
+    glitch_status_json(&state)
+}
+
+/// Save the folder holding `ffedit` and `ffgac` (empty clears it). Refused when the folder does not hold both.
+#[tauri::command]
+fn set_ffglitch_dir(state: State<AppState>, dir: String) -> Result<serde_json::Value, String> {
+    let dir = dir.trim().to_string();
+    if !dir.is_empty() {
+        let found = ffworks_core::moshlab::GlitchTools::discover(Some(std::path::Path::new(&dir)));
+        if !found.is_some_and(|t| t.ffedit.starts_with(&dir)) {
+            return Err(format!("'{dir}' does not contain both ffedit and ffgac"));
+        }
+    }
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    st.ffglitch_dir = (!dir.is_empty()).then_some(dir);
+    st.save(&state.settings_file).map_err(s)?;
+    Ok(glitch_status_json(&state))
+}
+
+/// Make a datamoshed copy of a video clip with FFglitch and put it on a new track beside the original (see `moshlab`).
+/// `kind` is `amplify` (`factor`), `drift` (`x`, `y`) or `transfer` (`donor` clip). Progress arrives as `mosh-progress`.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn make_mosh(app: AppHandle, state: State<'_, AppState>, clip: String, kind: String, factor: Option<f64>, x: Option<i32>, y: Option<i32>, donor: Option<String>) -> Result<StateView, String> {
+    use ffworks_core::moshlab::{self, Mode};
+    let glitch = glitch_tools(&state).ok_or("FFglitch was not found. Install it and choose its folder first.")?;
+    let (source, mode, req_base, tools) = {
+        let e = state.engine.lock().unwrap();
+        let source = moshlab::source_of(&e, &clip).map_err(s)?;
+        let mode = match kind.as_str() {
+            "amplify" => Mode::Amplify { factor: factor.unwrap_or(2.0) },
+            "drift" => Mode::Drift { x: x.unwrap_or(0), y: y.unwrap_or(0) },
+            "transfer" => Mode::Transfer { donor: moshlab::source_of(&e, &donor.ok_or("choose the clip whose motion to borrow")?).map_err(s)? },
+            other => return Err(format!("unknown mosh kind '{other}'")),
+        };
+        let st = e.project.settings.clone();
+        (source, mode, (st.width, st.height, st.fps), e.tools.clone())
+    };
+    std::fs::create_dir_all(&state.mosh_dir).map_err(s)?;
+    let output = state.mosh_dir.join(format!("mosh_{}.mkv", uuid_like()));
+    let request = moshlab::Request { source, mode, width: req_base.0, height: req_base.1, fps: req_base.2, output: output.clone() };
+    let cancel = CancelToken::new();
+    *state.mosh_cancel.lock().unwrap() = Some(cancel.clone());
+    let emitter = app.clone();
+    let run = tauri::async_runtime::spawn_blocking(move || moshlab::run(&tools, &glitch, &request, &cancel, &mut |f| {
+        let _ = emitter.emit("mosh-progress", f);
+    }))
+    .await
+    .map_err(s);
+    *state.mosh_cancel.lock().unwrap() = None;
+    run?.map_err(|e| match e {
+        ffworks_core::Error::Canceled => "Canceled".to_string(),
+        other => other.to_string(),
+    })?;
+    let mut e = state.engine.lock().unwrap();
+    moshlab::place(&mut e, &clip, &output).map_err(s)?;
+    allow_media(&app, &e);
+    Ok(view(&e))
+}
+
+/// Stop the mosh run in progress.
+#[tauri::command]
+fn cancel_mosh(state: State<AppState>) -> bool {
+    match state.mosh_cancel.lock().unwrap().as_ref() {
+        Some(c) => {
+            c.cancel();
+            true
+        }
+        None => false,
+    }
+}
+
+fn uuid_like() -> String {
+    format!("{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0))
 }
 
 /// frei0r: plugin folders, the plugins found there that FFWORKS can drive, and whether this FFmpeg can load them.
@@ -1048,6 +1149,9 @@ pub fn run() {
                 bundled_frei0r,
                 unfinished: Mutex::new(unfinished),
                 unfinished_file,
+                bundled_ffglitch: app.path().resource_dir().ok().map(|d| d.join("ffglitch")).filter(|d| d.is_dir()),
+                mosh_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("mosh"),
+                mosh_cancel: Mutex::new(None),
             });
             // Autosave unsaved work periodically (spec §47). Never touches the saved project file.
             let secs = std::env::var("FFWORKS_AUTOSAVE_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20).max(1);
@@ -1076,12 +1180,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

@@ -3,7 +3,8 @@
   "bundle": {
     "resources": {
       "ffmpeg-bin/": "ffmpeg/",
-      "frei0r-bin/": "frei0r/"
+      "frei0r-bin/": "frei0r/",
+      "ffglitch-bin/": "ffglitch/"
     }
   }
 }

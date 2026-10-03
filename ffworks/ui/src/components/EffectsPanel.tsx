@@ -98,7 +98,12 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           </div>
         )}
       </div>
-      {clip.kind === "video" && <div className="field"><button onClick={() => useUi.getState().setVariationsClip(clip.id)} title="See a sheet of random looks for this clip and pick one">Look variations…</button></div>}
+      {clip.kind === "video" && (
+        <div className="field row">
+          <button onClick={() => useUi.getState().setVariationsClip(clip.id)} title="See a sheet of random looks for this clip and pick one">Look variations…</button>
+          <button onClick={() => useUi.getState().setMoshClip(clip.id)} title="Rewrite the motion inside this clip's compressed video (needs FFglitch) and put the result on a new track">Datamosh lab…</button>
+        </div>
+      )}
       <RandomBar kind="effects" roll={(pool, count, seed) => api.randomEffects(clip.id, count, pool, seed)} />
       {clip.effects.length === 0 && <p className="muted pad">No effects.</p>}
       {clip.effects.map((fx, i) => {
