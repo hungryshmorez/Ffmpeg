@@ -78,15 +78,34 @@ fn num(d: &Dynamic) -> Res<f64> {
     d.as_float().or_else(|_| d.as_int().map(|i| i as f64)).map_err(|_| fail("expected a number"))
 }
 
+/// Why untrusted code (a script or a plugin) may not issue a command.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Refusal {
+    ReadOnly,
+    ReadsFiles,
+    NeedsAnalysis,
+}
+
+/// The one place that decides which commands untrusted code may issue: nothing when read-only, nothing that reads a file from
+/// disk, and media analysis only with [`Permissions::analysis`].
+pub(crate) fn vet(perms: Permissions, cmd: &Command) -> std::result::Result<(), Refusal> {
+    if !perms.edit {
+        return Err(Refusal::ReadOnly);
+    }
+    match cmd {
+        Command::ImportMedia { .. } | Command::RelinkMedia { .. } => Err(Refusal::ReadsFiles),
+        Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } if !perms.analysis => Err(Refusal::NeedsAnalysis),
+        _ => Ok(()),
+    }
+}
+
 impl Ctx {
     fn send(&self, cmd: Command) -> Res<()> {
-        if !self.perms.edit {
-            return Err(fail("this script is running read-only (a dry run): editing is not allowed"));
-        }
-        match &cmd {
-            Command::ImportMedia { .. } | Command::RelinkMedia { .. } => return Err(fail("scripts cannot read files from disk (import_media / relink_media are not allowed)")),
-            Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } if !self.perms.analysis => return Err(fail("this command analyses the project's audio with FFmpeg; run the script with analysis allowed")),
-            _ => {}
+        match vet(self.perms, &cmd) {
+            Err(Refusal::ReadOnly) => return Err(fail("this script is running read-only (a dry run): editing is not allowed")),
+            Err(Refusal::ReadsFiles) => return Err(fail("scripts cannot read files from disk (import_media / relink_media are not allowed)")),
+            Err(Refusal::NeedsAnalysis) => return Err(fail("this command analyses the project's audio with FFmpeg; run the script with analysis allowed")),
+            Ok(()) => {}
         }
         let n = self.count.get() + 1;
         if n > MAX_COMMANDS {

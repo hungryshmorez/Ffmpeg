@@ -28,7 +28,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 5: transient detection, drift correction for auto-sync.
 * Phase 6: live modulators (compiled to FFmpeg expressions) and live links, MIDI. Expressions and baked parameter links: DONE (ƒ button). LFO modulators baked to keyframes: DONE. Audio-reactive: DONE for loudness (whole or per band) and beat pulses ("Follow audio" → keyframes).
 * Phases 7-9: pixel sort DONE (built-in sorter on every platform, see STATUS.md; angled sorts DONE; keyframed settings/masks open), real motion-vector datamosh / FFglitch motion transfer DONE as the mosh lab (new file, not a live effect; amplify, drift, borrow another clip's motion), corruption lab open.
-* Phase 10: local API: DONE (see STATUS.md). Plugin system (Extism/WASM) open: scripts and the API are the extension points for now.
+* Phase 10: local API: DONE (see STATUS.md). Plugin system (Extism/WASM): DONE (see STATUS.md and docs/PLUGINS.md).
 * DONE: unfinished exports are journalled and offered again after a crash or close.
 * DONE: export naming templates + never-overwrite versioning (dialog and CLI).
 * Cross-cutting: SQLite index, smart rendering across crashes, accessibility pass (names/dialog scan DONE, keyboard clip move/trim DONE; contrast/focus order/screen reader open), colour management (Rec.709 projects: DONE; HDR output/LUTs/ICC open), preview/analysis through the job queue.

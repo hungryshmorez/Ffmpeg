@@ -18,6 +18,7 @@ fs4 = "0.13"
 rhai = { version = "1.26.1", default-features = false, features = ["std", "no_module", "serde"] }
 fasteval = "0.2"
 tiny_http = "0.12"
+extism = { version = "1.30", default-features = false, features = ["wasmtime-default-features"] }
 
 [dev-dependencies]
 tempfile = "3"

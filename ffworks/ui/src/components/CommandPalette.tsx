@@ -1,6 +1,6 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../api";
+import { api, type PluginInfo } from "../api";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
 import { importSubtitlesViaDialog, importViaDialog } from "./MediaBrowser";
 import { filterActions, type PaletteAction } from "./palette";
@@ -10,7 +10,7 @@ import { hintFor } from "../state/keymap";
 import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
 
 /** Everything the toolbar and shortcuts can do, searchable from the keyboard (Ctrl+K). */
-function buildActions(): PaletteAction[] {
+function buildActions(plugins: PluginInfo[]): PaletteAction[] {
   const ui = useUi.getState();
   const proj = useProject.getState();
   const v = proj.view;
@@ -44,6 +44,23 @@ function buildActions(): PaletteAction[] {
         proj.toast("info", `Script ran: ${r.commands} commands, one undo step${r.log.length ? ` — ${r.log[r.log.length - 1]}` : ""}`);
       } catch (e) { proj.toast("error", String(e)); }
     })() },
+    { id: "plugin-install", label: "Install a plugin from a folder…", keywords: "extension wasm extism add-on", run: () => void (async () => {
+      const dir = await open({ directory: true, title: "Plugin folder (contains plugin.json and the .wasm file)" });
+      if (typeof dir !== "string") return;
+      try { const p = await api.installPlugin(dir); proj.toast("info", `Installed plugin “${p.name}” (${p.actions.length} actions): find them in the command palette`); } catch (e) { proj.toast("error", String(e)); }
+    })() },
+    ...plugins.flatMap((p) => p.actions.map((a) => ({
+      id: `plugin:${p.folder}:${a.id}`,
+      label: `Plugin ${p.name}: ${a.label}`,
+      keywords: `extension wasm ${p.description}`,
+      run: () => void (async () => {
+        try {
+          const r = await api.runPlugin(p.folder, a.id, ui.selected);
+          proj.setView(r.view);
+          proj.toast("info", `${p.name}: ${r.commands} commands, one undo step${r.log.length ? ` — ${r.log[r.log.length - 1]}` : ""}`);
+        } catch (e) { proj.toast("error", String(e)); }
+      })(),
+    }))),
     { id: "compound-make", label: "Make a compound clip from the selected clips", keywords: "nest group fold sequence", run: () => void makeCompound() },
     { id: "compound-open", label: "Open the selected compound clip to edit what is inside", keywords: "nest enter sequence", run: () => void openCompound() },
     { id: "compound-leave", label: "Back to the main timeline (leave the compound clip)", keywords: "nest exit close sequence", run: () => void leaveCompound() },
@@ -80,7 +97,9 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
-  const actions = useMemo(() => (open ? buildActions() : []), [open]);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  useEffect(() => { if (open) api.listPlugins().then((l) => setPlugins(l.plugins)).catch(() => setPlugins([])); }, [open]);
+  const actions = useMemo(() => (open ? buildActions(plugins) : []), [open, plugins]);
   const shown = useMemo(() => filterActions(actions, query), [actions, query]);
   useEffect(() => { if (open) { setQuery(""); setIndex(0); setTimeout(() => input.current?.focus(), 0); } }, [open]);
   useEffect(() => setIndex(0), [query]);

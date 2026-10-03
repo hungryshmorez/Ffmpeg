@@ -8,6 +8,8 @@
 //!                                                               tokens ({project} {date}...); --keep never overwrites
 //!   ffworks run <project|new> <commands.json> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]
 //!                                                             apply a JSON list of commands (one undo step each, all or nothing)
+//!   ffworks plugin <plugin-folder> [<action> <project|new> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]]
+//!                                                             list a WebAssembly plugin's actions, or run one as one undo step
 //!   ffworks script <project|new> <script.rhai> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>] [--allow-analysis]
 //!                                                             run a Rhai script (loops, conditions, variables) as one undo step
 //!   ffworks serve <project|new> [--port N] [--token T] [--allow-analysis]
@@ -181,6 +183,32 @@ fn run() -> ffworks_core::Result<()> {
                 println!("saved {target}");
             }
         }
+        Some("plugin") => {
+            let dir = args.get(1).ok_or_else(|| usage("plugin <plugin-folder> [<action> <project|new> [--dry-run] [--save out] [--selected <clip-id>]]"))?;
+            let pkg = ffworks_core::plugin::load(Path::new(dir))?;
+            let (Some(action), Some(project)) = (args.get(2), args.get(3)) else {
+                println!("{} {} - {}", pkg.manifest.name, pkg.manifest.version, pkg.manifest.description);
+                println!("asks for: edit={} analysis={}", pkg.manifest.permissions.edit, pkg.manifest.permissions.analysis);
+                for a in &pkg.manifest.actions {
+                    println!("  {}  {}", a.id, a.label);
+                }
+                return Ok(());
+            };
+            let dry = args.iter().any(|a| a == "--dry-run");
+            let save = args.iter().position(|a| a == "--save").and_then(|i| args.get(i + 1)).cloned();
+            let selected = args.iter().position(|a| a == "--selected").and_then(|i| args.get(i + 1)).cloned();
+            let mut eng = if project == "new" { Engine::new("Untitled", ProjectSettings::default(), tools.clone()) } else { Engine::load(Path::new(project), tools.clone())? };
+            let report = ffworks_core::plugin::run(&mut eng, &pkg, action, selected.as_deref(), ffworks_core::script::Permissions::EDIT, &format!("Plugin {}: {action}", pkg.manifest.name))?;
+            for line in &report.log {
+                println!("{line}");
+            }
+            println!("plugin issued {} commands{}", report.commands, if dry { " (dry run, nothing saved)" } else { "" });
+            if !dry {
+                let target = save.or_else(|| (project != "new").then(|| project.clone())).ok_or_else(|| Error::validation("a new project needs --save <file>"))?;
+                eng.save(Path::new(&target))?;
+                println!("saved {target}");
+            }
+        }
         Some("serve") => {
             let project = args.get(1).ok_or_else(|| usage("serve <project|new> [--port N] [--token T] [--allow-analysis]"))?;
             let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
@@ -281,7 +309,7 @@ fn run() -> ffworks_core::Result<()> {
                 return Err(Error::validation(format!("{failed} file(s) failed")));
             }
         }
-        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|script|serve|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
+        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|script|plugin|serve|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
     }
     Ok(())
 }

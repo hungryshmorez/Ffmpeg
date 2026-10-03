@@ -36,6 +36,8 @@ struct AppState {
     bundled_ffglitch: Option<PathBuf>,
     /// Where mosh-lab results are written (they become project media, so they are not in the cache).
     mosh_dir: PathBuf,
+    /// Installed plugins (one folder each, see `ffworks_core::plugin`).
+    plugins_dir: PathBuf,
     /// Cancel switch of the mosh run in progress.
     mosh_cancel: Mutex<Option<CancelToken>>,
     /// Cancel switch of the preview render in progress (a new preview cancels the old one).
@@ -272,6 +274,68 @@ async fn run_script(state: State<'_, AppState>, path: String, selected: Option<S
     let mut e = state.engine.lock().unwrap();
     let name = std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).unwrap_or("script").to_string();
     let report = ffworks_core::script::run(&mut e, &source, selected.as_deref(), ffworks_core::script::Permissions { edit: true, analysis: allow_analysis }, &format!("Script {name}")).map_err(s)?;
+    Ok(ScriptOutcome { log: report.log, commands: report.commands, view: view(&e) })
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginInfo {
+    folder: String,
+    name: String,
+    version: String,
+    description: String,
+    actions: Vec<ffworks_core::plugin::Action>,
+    requests: ffworks_core::plugin::Requested,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginList {
+    dir: String,
+    plugins: Vec<PluginInfo>,
+    /// Plugin folders that did not load, with the reason.
+    broken: Vec<(String, String)>,
+}
+
+fn plugin_info(p: &ffworks_core::plugin::PluginPackage) -> PluginInfo {
+    PluginInfo {
+        folder: p.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        name: p.manifest.name.clone(),
+        version: p.manifest.version.clone(),
+        description: p.manifest.description.clone(),
+        actions: p.manifest.actions.clone(),
+        requests: p.manifest.permissions.clone(),
+    }
+}
+
+/// The installed plugins (WebAssembly modules run in a sandbox; see `ffworks_core::plugin`).
+#[tauri::command]
+fn list_plugins(state: State<AppState>) -> PluginList {
+    let mut list = PluginList { dir: state.plugins_dir.display().to_string(), plugins: vec![], broken: vec![] };
+    for p in ffworks_core::plugin::discover(&state.plugins_dir) {
+        match p {
+            Ok(p) => list.plugins.push(plugin_info(&p)),
+            Err(b) => list.broken.push(b),
+        }
+    }
+    list
+}
+
+/// Copy a plugin folder (plugin.json + .wasm) into the plugins folder after checking that it loads.
+#[tauri::command]
+fn install_plugin(state: State<AppState>, folder: String) -> Result<PluginInfo, String> {
+    ffworks_core::plugin::install(&state.plugins_dir, std::path::Path::new(&folder)).map(|p| plugin_info(&p)).map_err(s)
+}
+
+/// Run one action of an installed plugin as ONE undo step. Plugins can edit but cannot touch files, the network or other programs.
+#[tauri::command]
+async fn run_plugin(state: State<'_, AppState>, folder: String, action: String, selected: Option<String>) -> Result<ScriptOutcome, String> {
+    if folder.contains(['/', '\\']) || folder.starts_with('.') {
+        return Err("not a plugin folder name".into());
+    }
+    let pkg = ffworks_core::plugin::load(&state.plugins_dir.join(&folder)).map_err(s)?;
+    let mut e = state.engine.lock().unwrap();
+    let report = ffworks_core::plugin::run(&mut e, &pkg, &action, selected.as_deref(), ffworks_core::script::Permissions::EDIT, &format!("Plugin {}", pkg.manifest.name)).map_err(s)?;
     Ok(ScriptOutcome { log: report.log, commands: report.commands, view: view(&e) })
 }
 
@@ -1264,6 +1328,7 @@ pub fn run() {
                 unfinished_file,
                 bundled_ffglitch: app.path().resource_dir().ok().map(|d| d.join("ffglitch")).filter(|d| d.is_dir()),
                 mosh_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("mosh"),
+                plugins_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("plugins"),
                 mosh_cancel: Mutex::new(None),
                 preview_cancel: Mutex::new(None),
             });
@@ -1300,12 +1365,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

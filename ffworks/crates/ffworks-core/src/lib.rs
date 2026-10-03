@@ -37,6 +37,7 @@ pub mod package;
 pub mod patch;
 pub mod nest;
 pub mod pixelsort;
+pub mod plugin;
 pub mod preview;
 pub mod process;
 pub mod project;

@@ -23,6 +23,9 @@ export const api = {
   packageProject: (folder: string) => invoke<string>("package_project", { folder }),
   startRecording: () => invoke<void>("start_recording"),
   stopRecording: (path: string | null) => invoke<number>("stop_recording", { path }),
+  listPlugins: () => invoke<PluginList>("list_plugins"),
+  installPlugin: (folder: string) => invoke<PluginInfo>("install_plugin", { folder }),
+  runPlugin: (folder: string, action: string, selected: string | null) => invoke<{ log: string[]; commands: number; view: StateView }>("run_plugin", { folder, action, selected }),
   runScript: (path: string, selected: string | null, allowAnalysis: boolean) => invoke<{ log: string[]; commands: number; view: StateView }>("run_script", { path, selected, allowAnalysis }),
   setActiveSequence: (id: string) => invoke<StateView>("set_active_sequence", { id }),
   localApiStatus: () => invoke<LocalApi>("local_api_status"),
@@ -89,3 +92,6 @@ export const api = {
   /** Fraction (0..1) of the preview being rendered, reported while a pixel sort is baked and the preview rendered. */
   onPreviewProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("preview-progress", (ev) => cb(ev.payload)),
 };
+
+export interface PluginInfo { folder: string; name: string; version: string; description: string; actions: { id: string; label: string; export: string }[]; requests: { edit: boolean; analysis: boolean } }
+export interface PluginList { dir: string; plugins: PluginInfo[]; broken: [string, string][] }
