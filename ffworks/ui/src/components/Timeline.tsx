@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { fpsOf, fromSec, snapToFrame, timecode, toSec } from "../time";
-import { beatPoints, dbToGain, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
+import { beatPoints, dbToGain, keyEdit, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
 import { addAdjustmentAtPlayhead, addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
 import { usePlayhead, useProject, useUi } from "../state/stores";
@@ -240,7 +240,17 @@ const ClipView = memo(
         onPointerDown={begin("move")}
         role="button"
         tabIndex={0}
-        aria-label={`${clip.kind} clip ${clip.name}`}
+        aria-label={`${clip.kind} clip ${clip.name}, starts at ${timecode(start, fps)}, lasts ${timecode(duration, fps)}`}
+        aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Control+ArrowLeft Control+ArrowRight"
+        onKeyDown={(e) => {
+          const edit = keyEdit(e, start, duration, fps);
+          if (!edit || track.locked) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (edit.kind === "move") void dispatch({ type: "move_clip", clip: clip.id, start: fromSec(edit.start), track: null });
+          else if (edit.kind === "trim-start") void dispatch({ type: "trim_clip", clip: clip.id, edge: "start", to: fromSec(edit.start) });
+          else void dispatch({ type: "trim_clip", clip: clip.id, edge: "end", to: fromSec(edit.end) });
+        }}
         aria-pressed={isSel}
         onFocus={() => select(clip.id)}
         onDoubleClick={() => void openCompound(clip.id)}

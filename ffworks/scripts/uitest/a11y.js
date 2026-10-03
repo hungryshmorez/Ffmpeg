@@ -78,6 +78,30 @@
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true })); await sleep(500);
     check("the command palette", scan());
     $("input[aria-label='Type a command']")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await sleep(300);
+    // keyboard-only editing of a focused clip (the last clip on V1, which has free space after it)
+    await closeAll();
+    const rat = (x) => { const [n, d] = String(x).split("/"); return Number(n) / (d === undefined ? 1 : Number(d)); };
+    const frame = 1 / rat(view().project.settings.fps);
+    const lastClip = () => { const cs = view().project.sequences[0].tracks.find((t) => t.kind === "video").clips; return cs[cs.length - 1]; };
+    const clipEl = () => { const els = $$(".track.video .clip"); return els[els.length - 1]; };
+    const near = (a, b) => Math.abs(a - b) < 1e-6;
+    const press = async (key, mods) => { const t0 = window.__ffworks.usePlayhead.getState().t; clipEl().focus(); clipEl().dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...mods })); await sleep(400); return window.__ffworks.usePlayhead.getState().t === t0; };
+    const s0 = rat(lastClip().start), d0 = rat(lastClip().duration), h0 = view().history.length;
+    step("a clip announces its position and length and its keyboard shortcuts", /starts at .*lasts /.test(clipEl().getAttribute("aria-label")) && /Alt\+ArrowLeft/.test(clipEl().getAttribute("aria-keyshortcuts") || ""), clipEl().getAttribute("aria-label"));
+    const calm = await press("ArrowRight", { altKey: true });
+    step("Alt+→ moves the focused clip one frame later (and the playhead does not move)", near(rat(lastClip().start), s0 + frame) && calm, rat(lastClip().start));
+    await press("ArrowRight", { altKey: true, shiftKey: true });
+    step("Alt+Shift+→ moves it a second", near(rat(lastClip().start), s0 + frame + 1), rat(lastClip().start));
+    await press("ArrowLeft", { ctrlKey: true });
+    step("Ctrl+← trims its end by a frame", near(rat(lastClip().duration), d0 - frame), rat(lastClip().duration));
+    await press("ArrowRight", { ctrlKey: true, shiftKey: true });
+    step("Ctrl+Shift+→ trims its start by a frame", near(rat(lastClip().start), s0 + 2 * frame + 1) && near(rat(lastClip().duration), d0 - 2 * frame), `${rat(lastClip().start)} ${rat(lastClip().duration)}`);
+    step("each key press is one undo step", view().history.length === h0 + 4, `${h0} -> ${view().history.length}`);
+    await press("ArrowLeft", { altKey: true, ctrlKey: true });
+    step("both modifiers together do nothing", view().history.length === h0 + 4);
+    for (let i = 0; i < 4; i++) P().setView(await inv("undo"));
+    await sleep(300);
+    step("four undos put the clip back exactly", rat(lastClip().start) === s0 && rat(lastClip().duration) === d0, `${rat(lastClip().start)} ${rat(lastClip().duration)}`);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

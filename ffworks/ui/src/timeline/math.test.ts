@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cutsInsideClip, rangesOnTimeline } from "../components/AnalysisPanel";
-import { beatPoints, dbToGain, linkedIds, neighbourMarkers, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
+import { beatPoints, dbToGain, keyEdit, linkedIds, neighbourMarkers, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
 import { fromSec, snapToFrame, timecode, toSec } from "../time";
 import type { Clip, Sequence } from "../types";
 
@@ -99,5 +99,32 @@ describe("detected ranges", () => {
   it("maps source ranges onto the timeline, clamps to the clip, drops outside ones", () => {
     const c = { ...clip("v", "10", "6", "video", null, "2"), media: "m" }; // timeline 10..16 from source 2..8
     expect(rangesOnTimeline(c, [[0, 1], [1, 3], [5, 6], [7, 12]])).toEqual([[10, 11], [13, 14], [15, 16]]);
+  });
+});
+
+describe("keyEdit", () => {
+  const k = (key: string, mods: Partial<{ altKey: boolean; ctrlKey: boolean; shiftKey: boolean }>) => ({ key, altKey: false, ctrlKey: false, shiftKey: false, ...mods });
+  it("moves by a frame with Alt and by a second with Alt+Shift", () => {
+    expect(keyEdit(k("ArrowRight", { altKey: true }), 2, 3, 25)).toEqual({ kind: "move", start: 2.04 });
+    expect(keyEdit(k("ArrowLeft", { altKey: true, shiftKey: true }), 2, 3, 25)).toEqual({ kind: "move", start: 1 });
+  });
+  it("never moves before zero", () => {
+    expect(keyEdit(k("ArrowLeft", { altKey: true }), 0, 3, 25)).toBeNull();
+    expect(keyEdit(k("ArrowLeft", { altKey: true, shiftKey: true }), 0.5, 3, 25)).toEqual({ kind: "move", start: 0 });
+  });
+  it("trims the end with Ctrl and the start with Ctrl+Shift, a frame at a time", () => {
+    expect(keyEdit(k("ArrowLeft", { ctrlKey: true }), 2, 3, 25)).toEqual({ kind: "trim-end", end: 4.96 });
+    expect(keyEdit(k("ArrowRight", { ctrlKey: true }), 2, 3, 25)).toEqual({ kind: "trim-end", end: 5.04 });
+    expect(keyEdit(k("ArrowRight", { ctrlKey: true, shiftKey: true }), 2, 3, 25)).toEqual({ kind: "trim-start", start: 2.04 });
+    expect(keyEdit(k("ArrowLeft", { ctrlKey: true, shiftKey: true }), 2, 3, 25)).toEqual({ kind: "trim-start", start: 1.96 });
+  });
+  it("keeps at least one frame", () => {
+    expect(keyEdit(k("ArrowLeft", { ctrlKey: true }), 2, 0.04, 25)).toBeNull();
+    expect(keyEdit(k("ArrowRight", { ctrlKey: true, shiftKey: true }), 2, 0.04, 25)).toBeNull();
+  });
+  it("ignores other keys, no modifier and both modifiers", () => {
+    expect(keyEdit(k("a", { altKey: true }), 2, 3, 25)).toBeNull();
+    expect(keyEdit(k("ArrowLeft", {}), 2, 3, 25)).toBeNull();
+    expect(keyEdit(k("ArrowLeft", { altKey: true, ctrlKey: true }), 2, 3, 25)).toBeNull();
   });
 });
