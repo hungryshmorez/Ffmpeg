@@ -109,10 +109,14 @@ pub const FX: &[FxDef] = &[
     FxDef { id: "zoom", name: "Zoom", about: "Blocks are pushed away from the centre (or toward it with a negative number): the picture zooms as it moshes", params: &[num("strength", "Zoom (half-pixels at the edge)", -32.0, 32.0, 3.0, 0.5)] },
     FxDef { id: "stretch", name: "Stretch", about: "Movement is scaled differently across and down: smears one way", params: &[num("x", "Across ×", -8.0, 8.0, 2.0, 0.5), num("y", "Down ×", -8.0, 8.0, 1.0, 0.5)] },
     FxDef { id: "shear", name: "Shear", about: "Movement across grows from the top to the bottom: the picture tilts as it moshes", params: &[num("strength", "Tilt (half-pixels at the edge)", -32.0, 32.0, 4.0, 0.5)] },
-    FxDef { id: "shift", name: "Shift", about: "A random share of blocks is pushed upward every frame", params: &[num("amount", "Push (half-pixels)", 1.0, 64.0, 16.0, 1.0), num("share", "Share of blocks", 0.05, 1.0, 0.3, 0.05), SEED] },
+    FxDef { id: "shift", name: "Shift", about: "A random share of blocks is pushed downward every frame", params: &[num("amount", "Push (half-pixels)", 1.0, 64.0, 16.0, 1.0), num("share", "Share of blocks", 0.05, 1.0, 0.3, 0.05), SEED] },
     FxDef { id: "stop", name: "Stop", about: "All movement is removed: only the colour changes keep arriving, so the old picture freezes in place", params: &[] },
     FxDef { id: "fluid", name: "Fluid", about: "Neighbouring blocks are averaged: movement turns smooth and liquid", params: &[num("passes", "Smoothing passes", 1.0, 8.0, 2.0, 1.0)] },
     FxDef { id: "delay", name: "Delay", about: "Each frame moves the way the picture did a few frames ago", params: &[num("frames", "Frames behind", 1.0, 60.0, 8.0, 1.0)] },
+    FxDef { id: "sink", name: "Sink", about: "Blocks are pushed downward, more toward the bottom: the picture melts and slides down", params: &[num("strength", "Sink (half-pixels at the bottom)", -32.0, 32.0, 6.0, 0.5)] },
+    FxDef { id: "slam", name: "Slam zoom", about: "A zoom that builds up over a run of frames then snaps back, over and over", params: &[num("strength", "Zoom at the peak (half-pixels at the edge)", -32.0, 32.0, 8.0, 0.5), num("period", "Frames per slam", 2.0, 240.0, 25.0, 1.0)] },
+    FxDef { id: "slice", name: "Slice", about: "Alternate bands of blocks are pushed opposite ways across: the picture shears into strips", params: &[num("amount", "Push (half-pixels)", 1.0, 64.0, 12.0, 1.0), num("band", "Band height (block rows)", 1.0, 30.0, 2.0, 1.0)] },
+    FxDef { id: "echo", name: "Echo", about: "Each frame keeps part of the previous frame's movement: movement lingers and builds into long trails", params: &[num("mix", "How much carries over", 0.0, 0.98, 0.8, 0.02)] },
 ];
 
 /// The effect's numbers with defaults filled in, every one range-checked; unknown ids are refused.
@@ -198,6 +202,8 @@ const FX_JS: &str = r#"
 let P = { fx: "stop" };
 let rnd = Math.random;
 let history = [];
+let frameNo = 0;
+let carry = null;
 function seeded(seed) {
   let a = seed >>> 0;
   return function () {
@@ -214,7 +220,7 @@ export function setup(args) {
   if (p) {
     P = p;
     // numbers arrive as strings (FFglitch's -sp JSON has no floating point)
-    const names = ["amount", "seed", "share", "strength", "x", "y", "passes", "frames"];
+    const names = ["amount", "seed", "share", "strength", "x", "y", "passes", "frames", "period", "band", "mix"];
     for (let i = 0; i < names.length; i++) if (P[names[i]] !== undefined) P[names[i]] = Number(P[names[i]]);
   }
   rnd = seeded(P.seed === undefined ? 1 : P.seed);
@@ -272,13 +278,36 @@ function delay(fwd, rows) {
     }
   }
 }
+function echo(fwd, rows) {
+  const cur = snapshot(fwd, rows);
+  if (carry !== null) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cur[r].length; c++) {
+        if (cur[r][c] === null || carry[r][c] === null) continue;
+        cur[r][c][0] = cur[r][c][0] * (1 - P.mix) + carry[r][c][0] * P.mix;
+        cur[r][c][1] = cur[r][c][1] * (1 - P.mix) + carry[r][c][1] * P.mix;
+      }
+    }
+  }
+  carry = cur;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cur[r].length; c++) {
+      if (cur[r][c] === null || fwd[r][c] === null) continue;
+      fwd[r][c][0] = clamp(cur[r][c][0]);
+      fwd[r][c][1] = clamp(cur[r][c][1]);
+    }
+  }
+}
 export function glitch_frame(frame) {
   const fwd = frame.mv?.forward;
   if (!fwd) return;
   const rows = fwd.length;
   const fx = P.fx;
+  const n = frameNo++;
   if (fx === "fluid") { fluid(fwd, rows); return; }
   if (fx === "delay") { delay(fwd, rows); return; }
+  if (fx === "echo") { echo(fwd, rows); return; }
+  const slam = fx === "slam" ? P.strength * ((n % P.period) / P.period) : 0;
   const jx = fx === "shake" ? (rnd() * 2 - 1) * P.amount : 0;
   const jy = fx === "shake" ? (rnd() * 2 - 1) * P.amount : 0;
   for (let r = 0; r < rows; r++) {
@@ -299,6 +328,9 @@ export function glitch_frame(frame) {
       else if (fx === "shear") { x += ny * P.strength; }
       else if (fx === "shift") { if (rnd() < P.share) y -= P.amount; }
       else if (fx === "stop") { x = 0; y = 0; }
+      else if (fx === "sink") { y -= ((ny + 1) / 2) * P.strength; }
+      else if (fx === "slam") { x -= nx * slam; y -= ny * slam; }
+      else if (fx === "slice") { x += (Math.floor(r / P.band) % 2 === 0 ? 1 : -1) * P.amount; }
       mv[0] = clamp(x);
       mv[1] = clamp(y);
     }

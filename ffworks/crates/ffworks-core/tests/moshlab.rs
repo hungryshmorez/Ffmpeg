@@ -215,6 +215,72 @@ fn zoom_pushes_blocks_away_from_the_centre_and_a_negative_number_pulls_them_in()
     assert!(x_in < x0 - 3.0, "negative zoom moves it toward the centre ({x0} -> {x_in})");
 }
 
+fn patch_y(video: &Path, t: f64) -> f64 {
+    let g = gray(video, t);
+    let (mut sum, mut weight) = (0.0, 0.0);
+    for (i, v) in g.iter().enumerate() {
+        let w = (*v as f64 - 150.0).max(0.0);
+        sum += w * (i / 320) as f64;
+        weight += w;
+    }
+    assert!(weight > 2000.0, "the bright patch is still in the picture in {} at {t} s (weight {weight})", video.display());
+    sum / weight
+}
+
+fn still_patch(dir: &Path, x: u32, y: u32) -> PathBuf {
+    let src = dir.join("patch2.mp4");
+    let f = format!("color=c=gray:s=320x240:r=25,drawbox=x={x}:y={y}:w=32:h=24:color=white:t=fill");
+    let o = Proc::new(tools().ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", &f, "-t", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "50"]).arg(&src).output().unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    src
+}
+
+#[test]
+fn sink_pushes_the_picture_down_and_slam_zoom_builds_then_resets() {
+    let Some(g) = glitch() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let src = still_patch(dir.path(), 216, 60);
+    let (still, sink, sunk_up) = (dir.path().join("still.mkv"), dir.path().join("sink.mkv"), dir.path().join("sinkup.mkv"));
+    run(&g, &req(&src, 3, Mode::Amplify { factor: 1.0 }, &still));
+    run(&g, &req(&src, 3, fx("sink", &[("strength", 8.0)]), &sink));
+    run(&g, &req(&src, 3, fx("sink", &[("strength", -8.0)]), &sunk_up));
+    let (y0, y_down, y_up) = (patch_y(&still, 0.8), patch_y(&sink, 0.8), patch_y(&sunk_up, 0.8));
+    eprintln!("patch down: still {y0:.1}, sink +8 {y_down:.1}, sink -8 {y_up:.1}");
+    assert!(y_down > y0 + 2.0, "sink moves the patch down ({y0} -> {y_down})");
+    assert!(y_up < y0 - 2.0, "a negative sink lifts it ({y0} -> {y_up})");
+
+    // shift: a vector's sign points at where the picture comes from, so the documented direction has to be measured
+    let shifted = dir.path().join("shift.mkv");
+    run(&g, &req(&src, 3, fx("shift", &[("amount", 16.0), ("share", 1.0)]), &shifted));
+    let y_shift = patch_y(&shifted, 0.8);
+    eprintln!("patch down: still {y0:.1}, shift 16 {y_shift:.1}");
+    assert!(y_shift > y0 + 2.0, "shift pushes the picture downward ({y0} -> {y_shift})");
+
+    // slam: the zoom is strongest late in each run and gone again at its start
+    let src = still_patch(dir.path(), 216, 108);
+    let slam = dir.path().join("slam.mkv");
+    run(&g, &req(&src, 3, fx("slam", &[("strength", 12.0), ("period", 50.0)]), &slam));
+    run(&g, &req(&src, 3, Mode::Amplify { factor: 1.0 }, &still));
+    let x0 = patch_x(&still, 1.5);
+    let late = patch_x(&slam, 1.9);
+    eprintln!("patch across: still {x0:.1}, slam late in a run {late:.1}");
+    assert!(late > x0 + 3.0, "late in a slam the patch has been pushed outward ({x0} -> {late})");
+}
+
+#[test]
+fn slice_and_echo_are_refused_out_of_range_and_run_otherwise() {
+    let none = serde_json::Map::new();
+    for id in ["sink", "slam", "slice", "echo"] {
+        assert!(moshlab::resolve_fx(id, &none).is_ok(), "{id}");
+    }
+    let mut p = serde_json::Map::new();
+    p.insert("mix".into(), 1.0.into());
+    assert!(moshlab::resolve_fx("echo", &p).unwrap_err().to_string().contains("must be from 0 to 0.98"));
+    p.clear();
+    p.insert("period".into(), 1.into());
+    assert!(moshlab::resolve_fx("slam", &p).is_err());
+}
+
 #[test]
 fn random_vector_effects_are_repeatable_per_seed() {
     let Some(g) = glitch() else { return };

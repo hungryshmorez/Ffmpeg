@@ -50,7 +50,7 @@
     await waitFor(() => $("[aria-label='Datamosh lab']"));
     setSelect($("select[aria-label='Kind of mosh']"), "fx"); await sleep(300);
     const fxSel = await waitFor(() => $("select[aria-label='Motion effect']"));
-    step("the motion-effect kind lists all eleven effects from the engine", !!fxSel && fxSel.querySelectorAll("option").length === 11, fxSel && fxSel.innerText);
+    step("the motion-effect kind lists all fifteen effects from the engine", !!fxSel && fxSel.querySelectorAll("option").length === 15, fxSel && fxSel.innerText);
     setSelect(fxSel, "zoom"); await sleep(200);
     const zoom = $("input[aria-label='Zoom (half-pixels at the edge)']");
     step("Zoom shows its own number", !!zoom && zoom.value === "3");
