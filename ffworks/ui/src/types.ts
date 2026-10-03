@@ -14,7 +14,7 @@ export interface FontEntry { name: string; path: string; bundled: boolean }
 export interface GNode { id: string; filter: string; options: [string, string][]; x: number; y: number }
 export interface GEdge { from: string; from_pad: number; to: string; to_pad: number }
 export interface FilterGraph { nodes: GNode[]; edges: GEdge[] }
-export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number>; graph?: FilterGraph }
+export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number>; graph?: FilterGraph; /** Pixel sort mask 3: the project media whose brightness is the mask. */ picture?: string | null }
 export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string; animatable: boolean }
 export interface EffectDef { id: string; name: string; kind: "video" | "audio"; category: string; requires: string[]; params: ParamDef[]; alpha: boolean }
 export type Interp = "linear" | "hold" | "ease_in" | "ease_out" | "ease_in_out";
@@ -86,6 +86,7 @@ export type Command =
   | { type: "set_effect_param"; clip: string; effect_id: string; param: string; value: number }
   | { type: "set_effect_enabled"; clip: string; effect_id: string; enabled: boolean }
   | { type: "set_effect_graph"; clip: string; effect_id: string; graph: FilterGraph }
+  | { type: "set_effect_picture"; clip: string; effect_id: string; media: string | null }
   | { type: "move_effect"; clip: string; effect_id: string; index: number }
   | { type: "set_clip_opacity"; clip: string; opacity: number }
   | { type: "set_clip_param"; clip: string; param: string; value: number }

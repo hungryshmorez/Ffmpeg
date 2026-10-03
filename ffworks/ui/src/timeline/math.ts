@@ -111,13 +111,14 @@ export function beatPoints(seq: Sequence, beatsByMedia: Record<string, readonly 
 }
 
 /** What a keyboard shortcut on a focused clip does to it (seconds), or null for no change / a key that means nothing here. */
-export type KeyEdit = { kind: "move"; start: number } | { kind: "trim-start"; start: number } | { kind: "trim-end"; end: number };
+export type KeyEdit = { kind: "move"; start: number } | { kind: "trim-start"; start: number } | { kind: "trim-end"; end: number } | { kind: "track"; up: boolean };
 
 /**
- * Alt+←/→ moves the clip a frame (Shift: a second); Ctrl+←/→ trims its end a frame; Ctrl+Shift+←/→ trims its start a frame.
- * Never goes before zero or leaves less than one frame.
+ * Alt+←/→ moves the clip a frame (Shift: a second); Ctrl+←/→ trims its end a frame; Ctrl+Shift+←/→ trims its start a frame;
+ * Alt+↑/↓ moves it to the track above / below (same time). Never goes before zero or leaves less than one frame.
  */
 export function keyEdit(e: { key: string; altKey: boolean; ctrlKey: boolean; shiftKey: boolean }, start: number, duration: number, fps: number): KeyEdit | null {
+  if ((e.key === "ArrowUp" || e.key === "ArrowDown") && e.altKey && !e.ctrlKey && !e.shiftKey) return { kind: "track", up: e.key === "ArrowUp" };
   const dir = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
   if (dir === 0 || e.altKey === e.ctrlKey) return null;
   const frame = 1 / fps;

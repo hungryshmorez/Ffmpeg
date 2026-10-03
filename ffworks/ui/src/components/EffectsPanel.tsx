@@ -126,6 +126,17 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
                 <span className="muted"> {fx.graph ? `${fx.graph.nodes.length - 2} filter(s)` : ""}</span>
               </div>
             )}
+            {fx.effect === "pixel_sort" && Math.round(fx.params.mask ?? 0) === 3 && (
+              <div className="field row">
+                <label>Mask picture
+                  <select aria-label="Mask picture" value={fx.picture ?? ""} onChange={(e) => void dispatch({ type: "set_effect_picture", clip: clip.id, effect_id: fx.id, media: e.target.value || null })}>
+                    <option value="">Choose a picture…</option>
+                    {(view?.project.media ?? []).filter((m) => !m.generator && m.info.video.length > 0).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </label>
+                <span className="muted">white sorts, black stays, grays fade the sort in; stretched to the frame</span>
+              </div>
+            )}
             {def?.params.map((p) => {
               const value = fx.params[p.id] ?? p.default;
               if (p.animatable && clipProps) {

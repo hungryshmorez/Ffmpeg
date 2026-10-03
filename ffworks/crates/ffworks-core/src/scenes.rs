@@ -87,6 +87,7 @@ pub fn detect_with(tools: &Tools, media: &Path, duration: f64, cache_dir: &Path,
     });
     let cuts = detect_cuts(&mut frames, W, H, FPS, threshold);
     if cancel.is_canceled() {
+        crate::jobs::kill_pid(child.id());
         let _ = child.kill();
         let _ = child.wait();
         return Err(Error::Canceled);

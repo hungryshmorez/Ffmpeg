@@ -53,6 +53,29 @@ pub fn parse(filter: &str) -> Option<Params> {
     serde_json::from_str(filter.strip_prefix(MARK)?.strip_prefix("pixel_sort:")?).ok()
 }
 
+/// `mark` text with the mask picture filled in (its path and a fingerprint of its content, so a changed picture is not served
+/// from the cache). Marks that do not use a picture mask come back unchanged.
+pub fn with_picture(mark_text: &str, path: &str) -> Result<String> {
+    let mut p = parse(mark_text).ok_or_else(|| Error::validation("unreadable pixel sort settings"))?;
+    if p.mask != 3 {
+        return Ok(mark_text.to_string());
+    }
+    p.picture = Some(path.to_string());
+    p.picture_fp = Some(crate::engine::fingerprint(std::path::Path::new(path)).map_err(|_| Error::validation(format!("the pixel sort mask picture '{path}' cannot be read")))?);
+    Ok(mark(&p))
+}
+
+/// Decode the mask picture to `w`x`h` gray bytes (stretched to the frame).
+fn load_picture(tools: &Tools, path: &str, w: usize, h: usize, cancel: &CancelToken) -> Result<Vec<u8>> {
+    let mut cmd = std::process::Command::new(&tools.ffmpeg);
+    cmd.args(["-v", "error", "-nostdin", "-i", path, "-frames:v", "1", "-vf"]).arg(format!("scale={w}:{h},format=gray")).args(["-f", "rawvideo", "-"]);
+    let out = crate::process::run_cancellable(&mut cmd, cancel)?;
+    if !out.status.success() || out.stdout.len() != w * h {
+        return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: out.status.code(), hint: format!("reading the pixel sort mask picture: {}", explain_failure(&String::from_utf8_lossy(&out.stderr))) });
+    }
+    Ok(out.stdout)
+}
+
 /// One planned pixel sort.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakeStage {
@@ -373,6 +396,11 @@ pub fn run_stage(tools: &Tools, stage: &BakeStage, cancel: &CancelToken, temp_di
 }
 
 fn pipe_frames(tools: &Tools, stage: &BakeStage, decode_args: &[String], partial: &Path, cancel: &CancelToken, on_progress: &mut dyn FnMut(f64)) -> Result<()> {
+    // a mask picture is read before anything is started, so a missing file fails cleanly
+    let mut stage_sort = stage.sort.clone();
+    if let Some(path) = stage_sort.picture.clone() {
+        stage_sort.picture_weights = Some(std::sync::Arc::new(load_picture(tools, &path, stage.width as usize, stage.height as usize, cancel)?));
+    }
     let unavailable = |e: std::io::Error| Error::ToolUnavailable { tool: tools.ffmpeg.display().to_string(), reason: e.to_string() };
     let mut dec = Command::new(&tools.ffmpeg);
     dec.args(decode_args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -440,7 +468,7 @@ fn pipe_frames(tools: &Tools, stage: &BakeStage, decode_args: &[String], partial
     // animated settings are read per frame; the plan (how lines are cut) only changes when the angle or direction does
     let fps_f = stage.fps.split_once('/').and_then(|(n, d)| Some(n.parse::<f64>().ok()? / d.parse::<f64>().ok()?)).filter(|f| *f > 0.0).unwrap_or(25.0);
     let animated = !stage.sort.anim.is_empty();
-    let mut params = stage.sort.at(stage.first_frame as f64 / fps_f);
+    let mut params = stage_sort.at(stage.first_frame as f64 / fps_f);
     let mut plan = pixelsort::Plan::new(w, h, &params);
     let mut frame = vec![0u8; w * h * 3];
     let mut out = dec.stdout.take().expect("piped");
@@ -465,7 +493,7 @@ fn pipe_frames(tools: &Tools, stage: &BakeStage, decode_args: &[String], partial
             break;
         }
         if animated {
-            let next = stage.sort.at((stage.first_frame + n) as f64 / fps_f);
+            let next = stage_sort.at((stage.first_frame + n) as f64 / fps_f);
             if next.angle != params.angle || next.direction != params.direction {
                 plan = pixelsort::Plan::new(w, h, &next);
             }

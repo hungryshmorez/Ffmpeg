@@ -7,6 +7,7 @@ import { usePlayhead, useProject, useUi } from "../state/stores";
 import type { Clip, Generator, Marker, Sequence, Track, Transition } from "../types";
 import { leaveCompound, openCompound } from "./compound";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
+import { activeSequence } from "../state/sequences";
 
 const HEADER_W = 132;
 const ROW_H: Record<string, number> = { video: 54, audio: 48 };
@@ -241,13 +242,22 @@ const ClipView = memo(
         role="button"
         tabIndex={0}
         aria-label={`${clip.kind} clip ${clip.name}, starts at ${timecode(start, fps)}, lasts ${timecode(duration, fps)}`}
-        aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Control+ArrowLeft Control+ArrowRight"
+        aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Control+ArrowLeft Control+ArrowRight Alt+ArrowUp Alt+ArrowDown"
         onKeyDown={(e) => {
           const edit = keyEdit(e, start, duration, fps);
           if (!edit || track.locked) return;
           e.preventDefault();
           e.stopPropagation();
-          if (edit.kind === "move") void dispatch({ type: "move_clip", clip: clip.id, start: fromSec(edit.start), track: null });
+          if (edit.kind === "track") {
+            // video tracks are drawn newest on top, audio tracks oldest on top
+            // read the current tracks, not the ones this memoised clip was drawn with: a track may have been added since
+            const live = useProject.getState().view;
+            const now = live ? (activeSequence(live.project) ?? seq) : seq;
+            const same = now.tracks.filter((t) => t.kind === track.kind);
+            const at = same.findIndex((t) => t.id === track.id);
+            const to = same[track.kind === "video" ? at + (edit.up ? 1 : -1) : at + (edit.up ? -1 : 1)];
+            if (to && !to.locked) void dispatch({ type: "move_clip", clip: clip.id, start: fromSec(start), track: to.id });
+          } else if (edit.kind === "move") void dispatch({ type: "move_clip", clip: clip.id, start: fromSec(edit.start), track: null });
           else if (edit.kind === "trim-start") void dispatch({ type: "trim_clip", clip: clip.id, edge: "start", to: fromSec(edit.start) });
           else void dispatch({ type: "trim_clip", clip: clip.id, edge: "end", to: fromSec(edit.end) });
         }}

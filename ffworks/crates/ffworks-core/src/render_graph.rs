@@ -2,7 +2,7 @@
 //! Both preview and final export compile from this one structure so they share edit semantics (spec §156).
 
 use crate::clipprops::Transform;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::keyframes::Keyframe;
 use crate::project::{Clip, Project, TrackKind};
 use std::collections::{BTreeMap, HashMap};
@@ -152,10 +152,17 @@ pub struct RenderGraph {
 }
 
 /// (filters, required FFmpeg filter names, whether any writes transparency)
-fn effect_filters(c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
+fn effect_filters(project: &Project, c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
     let (mut filters, mut requires, mut alpha) = (vec![], vec![], false);
     for fx in &c.effects {
-        if let Some(f) = crate::effects::to_filter(fx, &c.keyframes)? {
+        if let Some(mut f) = crate::effects::to_filter(fx, &c.keyframes)? {
+            if crate::bake::is_mark(&f) {
+                if let Some(pic) = &fx.picture {
+                    f = crate::bake::with_picture(&f, &project.media(pic)?.path)?;
+                } else if crate::bake::parse(&f).is_some_and(|p| p.mask == 3) {
+                    return Err(Error::validation("pixel sort mask 3 uses a picture: choose one for the effect"));
+                }
+            }
             filters.push(f);
             let def = crate::effects::find(&fx.effect)?;
             requires.extend(def.requires.iter().map(|r| r.to_string()));
@@ -249,8 +256,8 @@ pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
                 let half = tr.half();
                 trims.entry(a.id.clone()).or_default().1 = trims.get(&a.id).map(|x| x.1).unwrap_or(Rational::ZERO) + half;
                 trims.entry(b.id.clone()).or_default().0 = trims.get(&b.id).map(|x| x.0).unwrap_or(Rational::ZERO) + half;
-                let (fa, ra, _) = effect_filters(a)?;
-                let (fb, rb, _) = effect_filters(b)?;
+                let (fa, ra, _) = effect_filters(project, a)?;
+                let (fb, rb, _) = effect_filters(project, b)?;
                 let (ia, ib) = (input_index(&mut g, &a.media, &format!("tr:{}:a", tr.id))?, input_index(&mut g, &b.media, &format!("tr:{}:b", tr.id))?);
                 g.video_transitions.push(VideoTransition {
                     layer,
@@ -296,7 +303,7 @@ pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
                     for c in &t.clips {
                         let Some((start, source_in, duration)) = trimmed(c) else { continue };
                         let input = input_index(&mut g, &c.media, &main_key(c))?;
-                        let (filters, requires, alpha_fx) = effect_filters(c)?;
+                        let (filters, requires, alpha_fx) = effect_filters(project, c)?;
                         g.video.push(VideoSegment {
                             input,
                             layer,
@@ -332,7 +339,7 @@ pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
                     }
                     let Some((start, source_in, duration)) = trimmed(c) else { continue };
                     let input = input_index(&mut g, &c.media, &main_key(c))?;
-                    let (filters, requires, _) = effect_filters(c)?;
+                    let (filters, requires, _) = effect_filters(project, c)?;
                     g.audio.push(AudioSegment {
                         input,
                         start,

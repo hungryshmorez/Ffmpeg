@@ -5,9 +5,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 W=$(mktemp -d "/tmp/ffworks-pixelsort.XXXXXX"); mkdir -p "$W/cache"
 ffmpeg -v error -y -f lavfi -i "nullsrc=s=320x240:r=25:d=4,format=yuv420p,geq=lum='mod(X*97+Y*13,256)':cb=128:cr=128" -c:v ffv1 "$W/noise.mkv"
+ffmpeg -v error -y -f lavfi -i "nullsrc=s=320x240:r=25,format=yuv420p,geq=lum='if(lt(X,160),255,0)':cb=128:cr=128" -frames:v 1 "$W/mask.png"
 (cd ui && VITE_UITEST=1 npx vite build >/dev/null); touch src-tauri/src/lib.rs
 cargo build -p ffworks-app --features custom-protocol,uitest 2>&1 | tail -1
-sed -e "s|__SRC__|$W/noise.mkv|g" -e "s|__OUT__|$W/out.mkv|g" scripts/uitest/pixelsort.js > "$W/t.js"
+sed -e "s|__SRC__|$W/noise.mkv|g" -e "s|__OUT__|$W/out.mkv|g" -e "s|__MASK__|$W/mask.png|g" -e "s|__OUT2__|$W/out2.mkv|g" scripts/uitest/pixelsort.js > "$W/t.js"
 node --check "$W/t.js"
 export DISPLAY=:99 XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/cfg" WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1
 pgrep Xvfb >/dev/null || { Xvfb :99 -screen 0 1600x1000x24 >/dev/null 2>&1 & sleep 2; }

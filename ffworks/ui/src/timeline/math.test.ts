@@ -103,6 +103,13 @@ describe("detected ranges", () => {
 });
 
 describe("keyEdit", () => {
+  it("Alt+Up / Alt+Down move the clip to the track above / below, and nothing else does", () => {
+    expect(keyEdit(k("ArrowUp", { altKey: true }), 2, 3, 25)).toEqual({ kind: "track", up: true });
+    expect(keyEdit(k("ArrowDown", { altKey: true }), 2, 3, 25)).toEqual({ kind: "track", up: false });
+    expect(keyEdit(k("ArrowUp", {}), 2, 3, 25)).toBeNull();
+    expect(keyEdit(k("ArrowUp", { altKey: true, shiftKey: true }), 2, 3, 25)).toBeNull();
+    expect(keyEdit(k("ArrowUp", { ctrlKey: true }), 2, 3, 25)).toBeNull();
+  });
   const k = (key: string, mods: Partial<{ altKey: boolean; ctrlKey: boolean; shiftKey: boolean }>) => ({ key, altKey: false, ctrlKey: false, shiftKey: false, ...mods });
   it("moves by a frame with Alt and by a second with Alt+Shift", () => {
     expect(keyEdit(k("ArrowRight", { altKey: true }), 2, 3, 25)).toEqual({ kind: "move", start: 2.04 });

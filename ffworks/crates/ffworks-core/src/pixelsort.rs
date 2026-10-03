@@ -74,6 +74,15 @@ pub struct Params {
     pub mask_feather: f32,
     /// Sort everything *except* the mask.
     pub mask_invert: bool,
+    /// Mask 3: the picture (file) whose brightness is the mask, and its fingerprint (it is part of the cache key). Filled in
+    /// when the project is compiled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture_fp: Option<String>,
+    /// The picture decoded to the frame size (one gray byte per pixel); loaded by the bake, never saved.
+    #[serde(skip)]
+    pub picture_weights: Option<std::sync::Arc<Vec<u8>>>,
     /// Keyframes of animated parameters, by parameter id, in clip-relative seconds; see [`Params::at`].
     pub anim: BTreeMap<String, Vec<Keyframe>>,
     /// The raw parameter map the animated values are laid over (only kept when `anim` is not empty).
@@ -82,7 +91,7 @@ pub struct Params {
 
 impl Default for Params {
     fn default() -> Self {
-        Params { direction: Direction::Horizontal, key: Key::Luma, mode: Mode::Threshold, low: 64, high: 204, length: 120, variation: 0.5, reverse: false, mix: 1.0, seed: 1, flicker: false, angle: 0.0, mask: 0, mask_x: 0.5, mask_y: 0.5, mask_w: 0.5, mask_h: 0.5, mask_feather: 0.0, mask_invert: false, anim: BTreeMap::new(), base: BTreeMap::new() }
+        Params { direction: Direction::Horizontal, key: Key::Luma, mode: Mode::Threshold, low: 64, high: 204, length: 120, variation: 0.5, reverse: false, mix: 1.0, seed: 1, flicker: false, angle: 0.0, mask: 0, mask_x: 0.5, mask_y: 0.5, mask_w: 0.5, mask_h: 0.5, mask_feather: 0.0, mask_invert: false, picture: None, picture_fp: None, picture_weights: None, anim: BTreeMap::new(), base: BTreeMap::new() }
     }
 }
 
@@ -105,13 +114,16 @@ impl Params {
             seed: get("seed").map(|v| v.max(0.0).round() as u64).unwrap_or(d.seed),
             flicker: get("flicker").is_some_and(|v| v >= 0.5),
             angle: get("angle").map(|v| v.clamp(-90.0, 90.0) as f32).unwrap_or(d.angle),
-            mask: pick("mask", 3).map_or(d.mask, |v| v as u8),
+            mask: pick("mask", 4).map_or(d.mask, |v| v as u8),
             mask_x: get("mask_x").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mask_x),
             mask_y: get("mask_y").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mask_y),
             mask_w: get("mask_w").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mask_w),
             mask_h: get("mask_h").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mask_h),
             mask_feather: get("mask_feather").map(|v| v.clamp(0.0, 400.0) as f32).unwrap_or(d.mask_feather),
             mask_invert: get("mask_invert").is_some_and(|v| v >= 0.5),
+            picture: None,
+            picture_fp: None,
+            picture_weights: None,
             anim: BTreeMap::new(),
             base: BTreeMap::new(),
         }
@@ -131,6 +143,9 @@ impl Params {
         }
         let mut p = Params::from_map(&m);
         p.angle = p.angle.round();
+        p.picture = self.picture.clone();
+        p.picture_fp = self.picture_fp.clone();
+        p.picture_weights = self.picture_weights.clone();
         p
     }
 }
@@ -139,6 +154,11 @@ impl Params {
 fn mask_weights(p: &Params, w: usize, h: usize) -> Option<Vec<u8>> {
     if p.mask == 0 {
         return None;
+    }
+    if p.mask == 3 {
+        // a picture: how bright each pixel is says how much of the sort it gets (grays fade the sort in)
+        let pic = p.picture_weights.as_ref().filter(|v| v.len() == w * h)?;
+        return Some(pic.iter().map(|v| if p.mask_invert { 255 - v } else { *v }).collect());
     }
     let (cx, cy) = (p.mask_x as f64 * w as f64, p.mask_y as f64 * h as f64);
     let (hw, hh) = ((p.mask_w as f64 * w as f64 / 2.0).max(0.5), (p.mask_h as f64 * h as f64 / 2.0).max(0.5));
@@ -728,6 +748,21 @@ mod tests {
         assert_eq!(p.at(9.0).mix, 1.0, "after the last key the value holds");
         assert_eq!(p.at(1.0).mode, Mode::Line, "everything not animated stays as set");
         assert!(p.at(1.0).anim.is_empty());
+    }
+
+    #[test]
+    fn a_picture_mask_passes_its_grays_through_inverts_and_needs_the_right_size() {
+        let mut p = Params { mask: 3, ..Params::default() };
+        assert!(mask_weights(&p, 2, 2).is_none(), "no picture loaded: no mask");
+        p.picture_weights = Some(std::sync::Arc::new(vec![0, 64, 128, 255]));
+        assert_eq!(mask_weights(&p, 2, 2).unwrap(), vec![0, 64, 128, 255], "grays are soft edges");
+        assert!(mask_weights(&p, 3, 2).is_none(), "a picture of another size is not used");
+        p.mask_invert = true;
+        assert_eq!(mask_weights(&p, 2, 2).unwrap(), vec![255, 191, 127, 0]);
+        // from_map accepts 3 and the picture fields are never written for other masks
+        let m: BTreeMap<String, f64> = [("mask", 3.0)].iter().map(|(k, v)| (k.to_string(), *v)).collect();
+        assert_eq!(Params::from_map(&m).mask, 3);
+        assert!(!serde_json::to_string(&Params::default()).unwrap().contains("picture"));
     }
 
     #[test]

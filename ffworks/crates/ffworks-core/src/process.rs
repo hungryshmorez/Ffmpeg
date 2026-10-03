@@ -73,6 +73,9 @@ pub fn run_cancellable(cmd: &mut Command, cancel: &crate::jobs::CancelToken) -> 
     let err = drain(child.stderr.take().expect("piped"));
     let status = loop {
         if cancel.is_canceled() {
+            // the whole tree: a launcher (the Windows package manager's ffmpeg shim) keeps the real program, and the pipes, alive
+            // after it is gone, which would leave the drain threads below waiting until the real program finishes by itself
+            crate::jobs::kill_pid(child.id());
             let _ = child.kill();
             let _ = child.wait();
             let _ = (out.join(), err.join());

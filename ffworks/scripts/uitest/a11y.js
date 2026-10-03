@@ -184,6 +184,24 @@
     for (let i = 0; i < 4; i++) P().setView(await inv("undo"));
     await sleep(300);
     step("four undos put the clip back exactly", rat(lastClip().start) === s0 && rat(lastClip().duration) === d0, `${rat(lastClip().start)} ${rat(lastClip().duration)}`);
+    // moving a focused clip between tracks from the keyboard
+    await P().dispatch({ type: "add_track", kind: "video", name: "V2" }); await sleep(400);
+    const vids = () => view().project.sequences[0].tracks.filter((t) => t.kind === "video");
+    const find = (id) => { for (const t of view().project.sequences[0].tracks) for (const c of t.clips) if (c.id === id) return { t, c }; return null; };
+    const moving = lastClip(), movingName = moving.name;
+    const el2 = () => $$(".track .clip").find((e) => (e.getAttribute("aria-label") || "").includes(`clip ${movingName},`));
+    const press2 = async (key, mods) => { el2().focus(); el2().dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...mods })); await sleep(450); };
+    const lowId = vids()[0].id, highId = vids()[vids().length - 1].id, hx = view().history.length;
+    await press2("ArrowUp", { altKey: true });
+    step("Alt+↑ moves the focused clip to the track above, one undo step", find(moving.id).t.id === highId && view().history.length === hx + 1, `${find(moving.id).t.id} vs ${highId}`);
+    step("it keeps its time", find(moving.id).c.start === moving.start, `${find(moving.id).c.start} vs ${moving.start}`);
+    await press2("ArrowUp", { altKey: true });
+    step("Alt+↑ on the top track does nothing", find(moving.id).t.id === highId && view().history.length === hx + 1);
+    await press2("ArrowDown", { altKey: true });
+    step("Alt+↓ moves it back down", find(moving.id).t.id === lowId && view().history.length === hx + 2, `${find(moving.id).t.id} vs ${lowId}`);
+    await press2("ArrowDown", { altKey: true });
+    step("Alt+↓ on the bottom video track does nothing (it never jumps to an audio track)", find(moving.id).t.id === lowId && view().history.length === hx + 2);
+    step("the clip lists the new shortcut", /Alt\+ArrowUp/.test(el2().getAttribute("aria-keyshortcuts") || ""));
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

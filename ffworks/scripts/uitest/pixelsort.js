@@ -45,10 +45,36 @@
     step("the export finishes", done && jobs()[job].state === "completed", JSON.stringify(jobs()[job]));
     R.out = out;
 
+
     P().setView(await inv("undo")); await sleep(300);
     step("undo reverts the last edit (the setting) first", vclip().effects.length === 1 && vclip().effects[0].params.mode === 0);
     P().setView(await inv("undo")); await sleep(300);
     step("a second undo removes the effect", vclip().effects.length === 0);
+
+    // a picture as the mask: import it, switch the mask to "a picture", choose it
+    await window.__ffworks.importPaths(["__MASK__"]); await waitFor(() => $$(".media-item").length === 2);
+    const pic = view().project.media.find((x) => /mask\.png$/.test(x.path));
+    await select($$(".track.video .clip")[0]); await sleep(300);
+    await P().dispatch({ type: "add_effect", clip: vclip().id, effect: "pixel_sort", params: {}, index: null }); await sleep(400);
+    await P().dispatch({ type: "set_effect_param", clip: vclip().id, effect_id: vclip().effects[0].id, param: "mask", value: 3 }); await sleep(500);
+    const picSel = await waitFor(() => $("select[aria-label='Mask picture']"));
+    step("choosing mask 3 offers a picture to pick", !!picSel);
+    step("only pictures and videos are offered, not the clip's own audio or generated media", !!picSel && [...picSel.querySelectorAll("option")].length === 3, picSel && picSel.innerText);
+    setSel(picSel, pic.id); await sleep(400);
+    step("picking one reaches the engine and the project", vclip().effects[0].picture === pic.id, JSON.stringify(vclip().effects[0]));
+    setSel($("select[aria-label='Mask picture']"), ""); await sleep(300);
+    step("choosing 'none' clears it", !vclip().effects[0].picture);
+    setSel($("select[aria-label='Mask picture']"), pic.id); await sleep(300);
+    const out2 = "__OUT2__";
+    const job2 = await inv("start_export", { preset: "ffv1_mkv", output: out2, engine: null, keepExisting: false });
+    const jobs2 = () => window.__ffworks.useJobs.getState().jobs;
+    const done2 = await waitFor(() => ["completed", "failed", "canceled"].includes(jobs2()[job2]?.state), 120000);
+    step("an export with the picture mask finishes", done2 && jobs2()[job2].state === "completed", JSON.stringify(jobs2()[job2]));
+    R.out2 = out2;
+    P().setView(await inv("undo")); await sleep(300);
+    step("undo of the last choice leaves 'none'", !vclip().effects[0].picture);
+    P().setView(await inv("undo")); await sleep(300);
+    step("a second undo brings the earlier choice back", vclip().effects[0].picture === pic.id);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

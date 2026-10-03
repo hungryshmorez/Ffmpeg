@@ -95,13 +95,13 @@ fn builtin_registry() -> Vec<EffectDef> {
             p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, ""),
             p("flicker", "New blocks every frame (0 off, 1 on)", 0.0, 1.0, 0.0, 1.0, ""),
             pa("angle", "Angle (turns the direction, degrees)", -90.0, 90.0, 0.0, 1.0, "°"),
-            p("mask", "Only inside a shape (0 everywhere, 1 rectangle, 2 ellipse)", 0.0, 2.0, 0.0, 1.0, ""),
+            p("mask", "Only inside a shape (0 everywhere, 1 rectangle, 2 ellipse, 3 a picture: white sorts, black stays)", 0.0, 3.0, 0.0, 1.0, ""),
             pa("mask_x", "Shape centre across", 0.0, 1.0, 0.5, 0.01, ""),
             pa("mask_y", "Shape centre down", 0.0, 1.0, 0.5, 0.01, ""),
             pa("mask_w", "Shape width", 0.0, 1.0, 0.5, 0.01, ""),
             pa("mask_h", "Shape height", 0.0, 1.0, 0.5, 0.01, ""),
             pa("mask_feather", "Soft edge", 0.0, 400.0, 0.0, 1.0, "px"),
-            p("mask_invert", "Sort outside the shape instead (0 no, 1 yes)", 0.0, 1.0, 0.0, 1.0, ""),
+            p("mask_invert", "Sort outside the shape or picture instead (0 no, 1 yes)", 0.0, 1.0, 0.0, 1.0, ""),
         ]),
         e("chroma_shift", "Chroma shift (colour bleed)", "Glitch", &["chromashift"], vec![p("amount", "Shift", -40.0, 40.0, 8.0, 1.0, "px")]),
         e("scroll", "Scroll (wrap around)", "Glitch", &["scroll"], vec![p("speed", "Horizontal speed", -0.1, 0.1, 0.02, 0.005, "/frame")]),
@@ -154,6 +154,9 @@ pub struct EffectInstance {
     /// Only for the `graph` effect: the user-built node graph.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<crate::filtergraph::FilterGraph>,
+    /// Only for `pixel_sort`: the project media (a picture or a video) whose brightness is the mask when `mask` is 3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<String>,
 }
 
 /// Effect id of the node-graph effect.
@@ -175,7 +178,7 @@ impl EffectInstance {
             params.insert(k.clone(), *v);
         }
         let graph = (effect == GRAPH_EFFECT).then(crate::filtergraph::FilterGraph::passthrough);
-        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph })
+        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph, picture: None })
     }
 }
 

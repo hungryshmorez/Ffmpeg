@@ -458,3 +458,114 @@ fn an_animated_mask_and_angle_render_and_cache_separately() {
     assert!(r1 > l1 * 2, "late it is on the right: {r1} vs {l1}");
     let _ = std::fs::remove_file(&moving.stages[0].output);
 }
+
+/// A 320x240 black-and-white picture: white where `white` (a geq expression of X and Y) is true.
+fn mask_picture(dir: &Path, name: &str, white: &str) -> PathBuf {
+    let p = dir.join(name);
+    let out = Proc::new(tools().ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i"])
+        .arg(format!("nullsrc=s={W}x{H}:r=25,format=yuv420p,geq=lum='if({white},255,0)':cb=128:cr=128"))
+        .args(["-frames:v", "1"])
+        .arg(&p)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "fixture: {}", String::from_utf8_lossy(&out.stderr));
+    p
+}
+
+fn set_picture(eng: &mut Engine, clip: &str, fx: &str, media: Option<&str>) -> ffworks_core::Result<()> {
+    eng.dispatch(Command::SetEffectPicture { clip: clip.into(), effect_id: fx.into(), media: media.map(String::from) }).map(|_| ())
+}
+
+#[test]
+fn a_picture_mask_sorts_where_the_picture_is_white_and_nowhere_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = pattern(dir.path(), "n.mkv", NOISE, 2);
+    // 80-pixel squares like a chess board: not a shape the rectangle/ellipse masks can make
+    let board = "lt(mod(floor(X/80)+floor(Y/80),2),1)";
+    let pic = mask_picture(dir.path(), "board.png", board);
+    let (mut eng, c) = one_clip(&src);
+    add(&mut eng, &c, "pixel_sort", &[("mode", 1.0), ("mask", 3.0)]);
+    let fx = first_effect_id(&eng, &c);
+    let media = eng.import_media(&pic).unwrap();
+    let out = dir.path().join("o.mkv");
+
+    // choosing mask 3 without a picture is refused with the reason, not rendered as "no mask"
+    let t = tools();
+    let caps = Capabilities::discover(&t).unwrap();
+    let e = compile_project(&eng.project, &RenderOptions { output: out.clone(), settings: ExportSettings::find("ffv1_mkv").unwrap(), range: None, scale_div: 1 }, Some(&caps)).unwrap_err().to_string();
+    assert!(e.contains("choose one"), "{e}");
+
+    set_picture(&mut eng, &c, &fx, Some(&media)).unwrap();
+    let job = export(&eng, &out);
+    let (orig, sorted) = (luma_frame(&src, 0.5), luma_frame(&out, 0.5));
+    let (mut white_n, mut white_moved, mut black_n, mut black_moved) = (0u32, 0u32, 0u32, 0u32);
+    for y in 0..H {
+        for x in 0..W {
+            let is_white = (x / 80 + y / 80) % 2 == 0;
+            let moved = (orig[y * W + x] as i32 - sorted[y * W + x] as i32).abs() > 12;
+            if is_white {
+                white_n += 1;
+                white_moved += u32::from(moved);
+            } else {
+                black_n += 1;
+                black_moved += u32::from(moved);
+            }
+        }
+    }
+    assert!(white_moved as f64 / white_n as f64 > 0.5, "inside the white squares pixels moved: {white_moved}/{white_n}");
+    assert!((black_moved as f64 / black_n as f64) < 0.02, "inside the black squares the picture is untouched: {black_moved}/{black_n}");
+
+    // inverting the mask sorts the other squares
+    let inv = dir.path().join("inv.mkv");
+    eng.dispatch(Command::SetEffectParam { clip: c.clone(), effect_id: fx.clone(), param: "mask_invert".into(), value: 1.0 }).unwrap();
+    let job2 = export(&eng, &inv);
+    let swapped = luma_frame(&inv, 0.5);
+    let mut inverted_black_moved = 0u32;
+    for y in 0..H {
+        for x in 0..W {
+            if (x / 80 + y / 80) % 2 == 1 && (orig[y * W + x] as i32 - swapped[y * W + x] as i32).abs() > 12 {
+                inverted_black_moved += 1;
+            }
+        }
+    }
+    assert!(inverted_black_moved as f64 / black_n as f64 > 0.5, "inverted, the black squares are sorted: {inverted_black_moved}/{black_n}");
+    assert_ne!(job.stages[0].key, job2.stages[0].key, "another setting is another bake");
+
+    // a picture with different content is a different bake even under the same file name
+    let other = mask_picture(dir.path(), "board.png", "lt(X,160)");
+    eng.dispatch(Command::SetEffectParam { clip: c.clone(), effect_id: fx.clone(), param: "mask_invert".into(), value: 0.0 }).unwrap();
+    let before = job.stages[0].key.clone();
+    let again = export(&eng, &dir.path().join("again.mkv"));
+    assert_ne!(again.stages[0].key, before, "the picture's content is part of the cache key");
+    drop(other);
+    for j in [&job, &job2, &again] {
+        let _ = std::fs::remove_file(&j.stages[0].output);
+    }
+}
+
+#[test]
+fn the_mask_picture_command_validates_undoes_and_saves() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = pattern(dir.path(), "n.mkv", NOISE, 2);
+    let pic = mask_picture(dir.path(), "m.png", "lt(X,160)");
+    let (mut eng, c) = one_clip(&src);
+    add(&mut eng, &c, "pixel_sort", &[("mask", 3.0)]);
+    add(&mut eng, &c, "brightness", &[]);
+    let fx = first_effect_id(&eng, &c);
+    let other_fx = eng.project.active().unwrap().tracks[0].clips[0].effects[1].id.clone();
+    let media = eng.import_media(&pic).unwrap();
+
+    assert!(set_picture(&mut eng, &c, &other_fx, Some(&media)).unwrap_err().to_string().contains("only a pixel sort"));
+    assert!(set_picture(&mut eng, &c, &fx, Some("med_nope")).is_err());
+    let before = serde_json::to_string(&eng.project).unwrap();
+    set_picture(&mut eng, &c, &fx, Some(&media)).unwrap();
+    assert_eq!(eng.project.active().unwrap().tracks[0].clips[0].effects[0].picture.as_deref(), Some(media.as_str()));
+    let saved = serde_json::to_string(&eng.project).unwrap();
+    let back: ffworks_core::project::Project = serde_json::from_str(&saved).unwrap();
+    assert_eq!(back.active().unwrap().tracks[0].clips[0].effects[0].picture.as_deref(), Some(media.as_str()), "the picture survives save and load");
+    eng.undo().unwrap();
+    assert_eq!(serde_json::to_string(&eng.project).unwrap(), before, "undo takes it back exactly");
+    // projects saved before pictures existed still load
+    assert!(!before.contains("\"picture\""), "no picture is written when there is none");
+}

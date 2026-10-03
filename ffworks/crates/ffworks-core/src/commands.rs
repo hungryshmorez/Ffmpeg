@@ -62,6 +62,8 @@ pub enum Command {
     SetEffectEnabled { clip: Id, effect_id: Id, enabled: bool },
     /// Replace the node graph of a `graph` effect.
     SetEffectGraph { clip: Id, effect_id: Id, graph: crate::filtergraph::FilterGraph },
+    /// The picture (project media) a pixel sort's mask 3 reads, or none.
+    SetEffectPicture { clip: Id, effect_id: Id, media: Option<Id> },
     MoveEffect { clip: Id, effect_id: Id, index: usize },
     SetClipOpacity { clip: Id, opacity: f64 },
     /// Set a static clip parameter (`x`, `y`, `scale`, `rotation`, `opacity`) or `fx:<effect id>:<param>`. Refused while the parameter is animated.
@@ -169,6 +171,7 @@ impl Command {
             Command::SetEffectParam { .. } => "Effect parameter".into(),
             Command::SetEffectEnabled { .. } => "Toggle effect".into(),
             Command::SetEffectGraph { .. } => "Edit filter graph".into(),
+            Command::SetEffectPicture { .. } => "Set mask picture".into(),
             Command::MoveEffect { .. } => "Reorder effect".into(),
             Command::SetClipOpacity { .. } => "Clip opacity".into(),
             Command::SetClipParam { param, .. } => format!("Set {param}"),
@@ -517,9 +520,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(out)
         }
-        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::SetKeyframes { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
+        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::SetEffectPicture { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::SetKeyframes { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
             let clip_id = match cmd {
-                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::SetEffectGraph { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::SetKeyframes { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
+                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::SetEffectGraph { clip, .. } | Command::SetEffectPicture { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::SetKeyframes { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
                 _ => unreachable!(),
             };
             let (t, c) = seq.find_clip(clip_id).ok_or_else(|| Error::NotFound(format!("clip {clip_id}")))?;
@@ -573,6 +576,19 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                     }
                     graph.validate()?;
                     c2.effects[i].graph = Some(graph.clone());
+                }
+                Command::SetEffectPicture { effect_id, media, .. } => {
+                    let i = find_fx(&c2, effect_id)?;
+                    if c2.effects[i].effect != "pixel_sort" {
+                        return Err(Error::validation("only a pixel sort has a mask picture"));
+                    }
+                    if let Some(id) = media {
+                        let m = p.media(id)?;
+                        if m.is_generated() || !m.info.has_video() {
+                            return Err(Error::validation("a mask picture must be an imported picture or video, not a title, solid colour, compound or audio file"));
+                        }
+                    }
+                    c2.effects[i].picture = media.clone();
                 }
                 Command::MoveEffect { effect_id, index, .. } => {
                     let i = find_fx(&c2, effect_id)?;
