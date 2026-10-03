@@ -53,6 +53,10 @@ impl Conversion {
     }
 }
 
+/// Filter that marks the frames at the end of the video graph as Rec.709 (limited range). FFmpeg 7.1+ gives the encoder the
+/// frames' colour properties and ignores `-color_trc` when they are unset, so the frames themselves have to say it.
+pub const FRAME_TAGS: &str = "setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv";
+
 /// Output options that tag the encoded video as Rec.709.
 pub const OUTPUT_TAGS: [&str; 6] = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"];
 

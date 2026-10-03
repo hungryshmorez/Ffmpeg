@@ -23,7 +23,7 @@ fn footage(dir: &Path, name: &str, rgb: &str, matrix: &str, tags: (&str, &str, &
     let mut cmd = Proc::new(tools().ffmpeg);
     cmd.args(["-v", "error", "-y", "-f", "lavfi", "-i"])
         .arg(format!("color=c={rgb}:s=160x120:r=25:d=2"))
-        .args(["-vf", &format!("format=rgb24,scale=out_color_matrix={matrix}:out_range=tv,format=yuv420p"), "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p"]);
+        .args(["-vf", &format!("format=rgb24,scale=out_color_matrix={matrix}:out_range=tv,format=yuv420p{}", params(tags)), "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p"]);
     for (opt, v) in [("-colorspace", tags.0), ("-color_trc", tags.1), ("-color_primaries", tags.2)] {
         if v != "-" {
             cmd.args([opt, v]);
@@ -32,6 +32,12 @@ fn footage(dir: &Path, name: &str, rgb: &str, matrix: &str, tags: (&str, &str, &
     let out = cmd.arg(&p).output().unwrap();
     assert!(out.status.success(), "fixture: {}", String::from_utf8_lossy(&out.stderr));
     p
+}
+
+/// `setparams` that puts the tags on the frames themselves (newer FFmpeg encodes those, not the -color_* options).
+fn params(tags: (&str, &str, &str)) -> String {
+    let parts: Vec<String> = [("colorspace", tags.0), ("color_trc", tags.1), ("color_primaries", tags.2)].iter().filter(|(_, v)| *v != "-").map(|(k, v)| format!("{k}={v}")).collect();
+    if parts.is_empty() { String::new() } else { format!(",setparams={}", parts.join(":")) }
 }
 
 fn one_clip(src: &Path) -> Engine {
@@ -94,7 +100,7 @@ fn bt601_footage_keeps_its_colours_and_the_same_footage_labelled_wrongly_does_no
     let eng = one_clip(&lie);
     let bad = dir.path().join("bad.mp4");
     let j = export(&eng, &bad);
-    assert!(!j.filter_graph.contains("colorspace="), "a Rec.709 file is left alone");
+    assert!(!j.filter_graph.contains("colorspace=all="), "a Rec.709 file is left alone");
     assert!(error(rgb709(&bad), want) > 25, "the control must show the error: {:?}", rgb709(&bad));
 }
 
@@ -111,7 +117,7 @@ fn bt2020_sdr_footage_is_converted_too() {
     let lie = footage(dir.path(), "lie.mp4", "0x2060ff", "bt2020", ("bt709", "bt709", "bt709"));
     let bad = dir.path().join("bad.mp4");
     let j2 = export(&one_clip(&lie), &bad);
-    assert!(!j2.filter_graph.contains("colorspace="));
+    assert!(!j2.filter_graph.contains("colorspace=all="));
     let (a, b) = (rgb709(&out), rgb709(&bad));
     assert!(error(a, b) >= 4, "the conversion must change the picture: converted {a:?}, unconverted {b:?}");
     // and it stays a sane colour: still clearly blue
@@ -125,7 +131,7 @@ fn every_export_is_tagged_rec709() {
     let eng = one_clip(&plain);
     let out = dir.path().join("o.mp4");
     let j = export(&eng, &out);
-    assert!(!j.filter_graph.contains("colorspace=") && !j.filter_graph.contains("zscale"), "untagged footage is untouched");
+    assert!(!j.filter_graph.contains("colorspace=all=") && !j.filter_graph.contains("zscale"), "untagged footage is untouched");
     for (field, want) in [("color_space", "bt709"), ("color_transfer", "bt709"), ("color_primaries", "bt709")] {
         assert_eq!(probe_tag(&out, field), want, "{field}");
     }
@@ -143,7 +149,7 @@ fn hdr_footage_is_tone_mapped_to_sdr_instead_of_looking_washed_out() {
     // PQ code of a bright, saturated-free grey: encode a grey that PQ-decodes to about HDR reference white
     let p = dir.path().join("hdr.mp4");
     let out = Proc::new(&t.ffmpeg)
-        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=0x949494:s=160x120:r=25:d=2", "-vf", "format=yuv420p10le", "-c:v", "libx265", "-crf", "10", "-pix_fmt", "yuv420p10le", "-colorspace", "bt2020nc", "-color_primaries", "bt2020", "-color_trc", "smpte2084"])
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=0x949494:s=160x120:r=25:d=2", "-vf", "format=yuv420p10le,setparams=colorspace=bt2020nc:color_primaries=bt2020:color_trc=smpte2084", "-c:v", "libx265", "-crf", "10", "-pix_fmt", "yuv420p10le", "-colorspace", "bt2020nc", "-color_primaries", "bt2020", "-color_trc", "smpte2084"])
         .arg(&p)
         .output()
         .unwrap();
@@ -169,5 +175,5 @@ fn a_project_with_no_tagged_footage_compiles_exactly_as_before() {
     let plain = footage(dir.path(), "p.mp4", "blue", "bt709", ("-", "-", "-"));
     let eng = one_clip(&plain);
     let j = job(&eng, &dir.path().join("o.mp4"));
-    assert!(!j.filter_graph.contains("colorspace") && !j.filter_graph.contains("zscale") && !j.filter_graph.contains("tonemap"));
+    assert!(!j.filter_graph.contains("colorspace=all=") && !j.filter_graph.contains("zscale") && !j.filter_graph.contains("tonemap"));
 }

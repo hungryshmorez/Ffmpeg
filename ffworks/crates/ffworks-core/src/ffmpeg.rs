@@ -461,7 +461,9 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                 }
             }
         }
-        f.push(format!("[base{}]null[vout]", items.len()));
+        // newer FFmpeg takes the encoder's colour tags from the frames, not from the -color_* options: tag the frames
+        let tag_frames = !matches!(st.video_codec.as_deref(), Some("png" | "gif" | "rawvideo")) && !st.pix_fmt.as_deref().is_some_and(|p| p.starts_with("rgb") || p.starts_with("gbr"));
+        f.push(format!("[base{}]{}[vout]", items.len(), if tag_frames { crate::colormgmt::FRAME_TAGS } else { "null" }));
     }
     if want_audio {
         let sr = g.sample_rate;
