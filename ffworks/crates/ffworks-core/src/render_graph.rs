@@ -30,6 +30,8 @@ pub struct InputRef {
     /// A compound clip: the id of the sequence whose rendered picture and sound this input reads. `path` stays empty until
     /// `nest::prepare` has planned (and run) that render.
     pub nested: Option<String>,
+    /// What this footage needs before it joins the Rec.709 picture (see `colormgmt`).
+    pub color: crate::colormgmt::Conversion,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -223,6 +225,7 @@ pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
             still: m.info.still && !m.is_generated(),
             alpha: m.info.video.first().and_then(|v| v.color.pix_fmt.as_deref()).is_some_and(has_alpha),
             need: Rational::ZERO,
+            color: if m.is_generated() || m.info.still { Default::default() } else { m.info.video.first().map(|v| crate::colormgmt::plan(&v.color)).unwrap_or_default() },
             nested: match &m.generator {
                 Some(crate::generators::Generator::Nested { sequence }) => Some(sequence.clone()),
                 _ => None,

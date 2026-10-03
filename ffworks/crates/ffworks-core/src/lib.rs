@@ -6,6 +6,7 @@ pub mod bake;
 pub mod beats;
 pub mod brand;
 pub mod clipprops;
+pub mod colormgmt;
 pub mod commands;
 pub mod contact;
 pub mod demo;

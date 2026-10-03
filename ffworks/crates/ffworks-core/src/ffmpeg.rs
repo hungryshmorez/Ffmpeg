@@ -273,6 +273,11 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         Ok(())
     };
 
+    for i in &g.inputs {
+        if let Some((_, need)) = i.color.filter() {
+            require(&need.iter().map(|n| n.to_string()).collect::<Vec<_>>())?;
+        }
+    }
     let mut f: Vec<String> = vec![];
     if want_video {
         f.push(format!("color=c=black:s={w}x{h}:r={fps}:d={},format=yuv420p[base0]", secs(g.duration)));
@@ -292,6 +297,10 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                 secs(t0),
                 secs(t1),
             );
+            if let Some((conv, _)) = g.inputs[input].color.filter() {
+                chain.push(',');
+                chain.push_str(&conv);
+            }
             for fx in filters {
                 chain.push(',');
                 chain.push_str(fx);
@@ -341,6 +350,10 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                             chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,format=yuva420p,pad={w}:{h}:trunc((ow-iw)/4)*2:trunc((oh-ih)/4)*2:color=black@0,setsar=1"));
                         } else {
                             chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"));
+                            if let Some((conv, _)) = input.color.filter() {
+                                chain.push(',');
+                                chain.push_str(&conv);
+                            }
                         }
                         if let Some((title, font)) = &seg.title {
                             require(&["drawtext".to_string()])?;
@@ -568,6 +581,10 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         }
         if let Some(p) = &st.pix_fmt {
             post.extend(["-pix_fmt".into(), p.clone()]);
+        }
+        // the picture is Rec.709 whatever came in (see `colormgmt`): say so, or players guess by resolution
+        if !matches!(vc.as_str(), "png" | "gif" | "rawvideo") && !st.pix_fmt.as_deref().is_some_and(|p| p.starts_with("rgb") || p.starts_with("gbr")) {
+            post.extend(crate::colormgmt::OUTPUT_TAGS.map(String::from));
         }
         post.extend(["-r".into(), fps.clone()]);
     }

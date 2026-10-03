@@ -246,6 +246,7 @@ fn bake_use(g: &mut RenderGraph, mut u: Use, window: Option<(i64, i64)>, cache: 
             alpha: false,
             need: Rational::ZERO,
             nested: None,
+            color: Default::default(),
         });
         u.input = g.inputs.len() - 1;
         // the baked file already holds the retimed, trimmed, titled picture
@@ -561,7 +562,7 @@ mod tests {
 
     #[test]
     fn unused_inputs_are_pruned_and_the_rest_renumbered() {
-        let inp = |k: &str| InputRef { key: k.into(), media_id: "m".into(), path: k.into(), has_video: true, has_audio: false, src_fps: None, generated: None, still: false, alpha: false, need: Rational::ZERO, nested: None };
+        let inp = |k: &str| InputRef { key: k.into(), media_id: "m".into(), path: k.into(), has_video: true, has_audio: false, src_fps: None, generated: None, still: false, alpha: false, need: Rational::ZERO, nested: None, color: Default::default() };
         let seg = |input| VideoSegment {
             input,
             layer: 0,

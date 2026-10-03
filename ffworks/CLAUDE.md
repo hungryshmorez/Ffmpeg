@@ -25,6 +25,7 @@ GUI tests build the UI with `VITE_UITEST=1`, build the Tauri app with `--feature
 * FFglitch (mosh lab) passes `-sp` JSON to scripts as `args.params`, and its arrays are not iterable. Its tests need `FFWORKS_FFGLITCH` (and fail rather than skip with `FFWORKS_REQUIRE_FFGLITCH`).
 * Compound clips are media (`Generator::Nested`) rendered by `nest::prepare` into a cache file before the main render; `compile` refuses a graph with an unplanned compound. Anything that reads `project.active()` acts on the *shown* sequence, which may be a compound's contents (UI: use `activeSequence()`, never `sequences[0]`).
 * The local API (`api.rs`) must stay loopback-only, token-protected and Origin/Host-checked; every new endpoint goes through `Engine::dispatch` and never reads files. `AppState.engine` is an `Arc<Mutex<Engine>>` shared with it.
+* Colour: footage is converted to Rec.709 per its tags (`colormgmt.rs`, `InputRef.color`) and exports are tagged Rec.709; any new place that builds a scale/pad chain for an input must also append that input's conversion (see the two sites in `ffmpeg::compile`).
 * Scripts (`script.rs`, Rhai) go through `Engine::begin_group/end_group/abort_group`: one undo step, all or nothing. They get no file/network/process access; any new script function must issue a `Command`, never touch the disk.
 * Time is exact rational (`time.rs`). Never use float seconds as truth.
 * FFmpeg's `ladspa` filter ignores the LADSPA "multiple of sample rate" hint (checks raw bounds): plugins with such controls are excluded, not worked around.
