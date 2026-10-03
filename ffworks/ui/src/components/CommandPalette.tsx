@@ -5,6 +5,7 @@ import { addMarkerAtPlayhead } from "./MarkerPanel";
 import { importSubtitlesViaDialog, importViaDialog } from "./MediaBrowser";
 import { filterActions, type PaletteAction } from "./palette";
 import { deleteSelected, newProject, openProject, saveProject, splitAtPlayhead } from "./Toolbar";
+import { fitCompound, leaveCompound, makeCompound, openCompound, takeCompoundApart } from "./compound";
 import { hintFor } from "../state/keymap";
 import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
 
@@ -43,6 +44,11 @@ function buildActions(): PaletteAction[] {
         proj.toast("info", `Script ran: ${r.commands} commands, one undo step${r.log.length ? ` — ${r.log[r.log.length - 1]}` : ""}`);
       } catch (e) { proj.toast("error", String(e)); }
     })() },
+    { id: "compound-make", label: "Make a compound clip from the selected clips", keywords: "nest group fold sequence", run: () => void makeCompound() },
+    { id: "compound-open", label: "Open the selected compound clip to edit what is inside", keywords: "nest enter sequence", run: () => void openCompound() },
+    { id: "compound-leave", label: "Back to the main timeline (leave the compound clip)", keywords: "nest exit close sequence", run: () => void leaveCompound() },
+    { id: "compound-apart", label: "Take the selected compound clip apart", keywords: "nest ungroup unnest", run: () => void takeCompoundApart() },
+    { id: "compound-fit", label: "Fit the selected compound clip's length to its contents", keywords: "nest shorten", run: () => void fitCompound() },
     { id: "snapshots", label: "Snapshots (save and restore the timeline)…", keywords: "version backup history", run: () => ui.setSnapshotsOpen(true) },
     { id: "saveas", label: "Save project as…", run: () => void saveProject(true) },
     { id: "import", label: "Import media…", run: () => void importViaDialog() },

@@ -79,10 +79,13 @@ pub fn render(
     if out.exists() {
         return Ok(PreviewResult { path: out, key, start, end, cached: true });
     }
+    // compound clips first (rendered whole and cached; their files can feed the sorts below)
+    let nests = crate::nest::prepare(project, &mut g, &cache_dir.join("bake"), caps)?;
     // pixel sorts for just this range, kept in the cache so a later preview that changes something else reuses them
     let stages = crate::bake::prepare(&mut g, Some((start, end)), &cache_dir.join("bake"), true)?;
     let mut job = compile(&g, &RenderOptions { output: out.clone(), settings: preview_settings(), range: Some((start, end)), scale_div }, caps)?;
     job.stages = stages;
+    job.nests = nests;
     job.program = tools.ffmpeg.clone();
     run_job(tools, &job, &format!("preview_{key}"), "preview", cancel, &cache_dir.join("tmp"), on_state)?;
     Ok(PreviewResult { path: out, key, start, end, cached: false })

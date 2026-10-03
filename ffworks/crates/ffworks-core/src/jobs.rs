@@ -137,18 +137,33 @@ fn run_inner(
 
     on_state(JobState::Queued);
 
-    // Pixel sorts run first (see `bake`); they take the first share of the progress bar, the render itself the last.
-    let stages = job.stages.len() as f64;
+    // Compound clips, then pixel sorts, run first (see `nest` and `bake`); they share the first part of the progress bar, the
+    // render itself the last.
+    let steps = (job.nests.len() + job.stages.len()) as f64;
     let started = Instant::now();
+    let fail = |e: Error, on_state: &mut dyn FnMut(JobState)| {
+        crate::bake::discard(&job.stages);
+        on_state(if matches!(e, Error::Canceled) { JobState::Canceled } else { JobState::Failed { message: e.to_string() } });
+        (Err(e), None)
+    };
+    for (i, nest) in job.nests.iter().enumerate() {
+        let r = crate::nest::run_stage(tools, nest, cancel, temp_dir, &mut |f| {
+            let elapsed = started.elapsed().as_secs_f64();
+            on_state(JobState::Rendering { fraction: Some((i as f64 + f) / (steps + 1.0)), fps: None, elapsed_secs: elapsed, eta_secs: None });
+        });
+        if let Err(e) = r {
+            return fail(e, on_state);
+        }
+    }
+    let offset = job.nests.len();
     for (i, stage) in job.stages.iter().enumerate() {
+        let i = i + offset;
         let stage_result = crate::bake::run_stage(tools, stage, cancel, temp_dir, &mut |f| {
             let elapsed = started.elapsed().as_secs_f64();
-            on_state(JobState::Rendering { fraction: Some((i as f64 + f) / (stages + 1.0)), fps: None, elapsed_secs: elapsed, eta_secs: None });
+            on_state(JobState::Rendering { fraction: Some((i as f64 + f) / (steps + 1.0)), fps: None, elapsed_secs: elapsed, eta_secs: None });
         });
         if let Err(e) = stage_result {
-            crate::bake::discard(&job.stages);
-            on_state(if matches!(e, Error::Canceled) { JobState::Canceled } else { JobState::Failed { message: e.to_string() } });
-            return (Err(e), None);
+            return fail(e, on_state);
         }
     }
     // an export's bake files are of no use afterwards, whichever way the render ends
@@ -215,7 +230,7 @@ fn run_inner(
                     if let Ok(us) = v.trim().parse::<i64>() {
                         if us >= 0 && total > 0.0 {
                             let done_secs = us as f64 / 1_000_000.0;
-                            let frac = (stages + (done_secs / total).clamp(0.0, 1.0)) / (stages + 1.0);
+                            let frac = (steps + (done_secs / total).clamp(0.0, 1.0)) / (steps + 1.0);
                             let elapsed = started.elapsed().as_secs_f64();
                             let eta = if frac > 0.01 { Some(elapsed * (1.0 - frac) / frac) } else { None };
                             on_state(JobState::Rendering { fraction: Some(frac), fps: last_fps, elapsed_secs: elapsed, eta_secs: eta });

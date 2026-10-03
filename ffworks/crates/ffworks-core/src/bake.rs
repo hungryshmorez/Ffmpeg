@@ -37,7 +37,7 @@ const ALGORITHM_VERSION: u32 = 1;
 /// Cached bakes older than this are never pruned (they may belong to a render that is still running).
 const PRUNE_GRACE_SECS: u64 = 600;
 /// Size the preview bake cache is trimmed to.
-const CACHE_LIMIT_BYTES: u64 = 4 << 30;
+pub(crate) const CACHE_LIMIT_BYTES: u64 = 4 << 30;
 
 /// The filter-list entry for a pixel sort: a marker plus its parameters.
 pub fn mark(p: &Params) -> String {
@@ -245,6 +245,7 @@ fn bake_use(g: &mut RenderGraph, mut u: Use, window: Option<(i64, i64)>, cache: 
             still: false,
             alpha: false,
             need: Rational::ZERO,
+            nested: None,
         });
         u.input = g.inputs.len() - 1;
         // the baked file already holds the retimed, trimmed, titled picture
@@ -495,7 +496,7 @@ pub fn discard(stages: &[BakeStage]) {
     }
 }
 
-fn touch(p: &Path) {
+pub(crate) fn touch(p: &Path) {
     if let Ok(f) = std::fs::OpenOptions::new().write(true).open(p) {
         let _ = f.set_modified(std::time::SystemTime::now());
     }
@@ -559,7 +560,7 @@ mod tests {
 
     #[test]
     fn unused_inputs_are_pruned_and_the_rest_renumbered() {
-        let inp = |k: &str| InputRef { key: k.into(), media_id: "m".into(), path: k.into(), has_video: true, has_audio: false, src_fps: None, generated: None, still: false, alpha: false, need: Rational::ZERO };
+        let inp = |k: &str| InputRef { key: k.into(), media_id: "m".into(), path: k.into(), has_video: true, has_audio: false, src_fps: None, generated: None, still: false, alpha: false, need: Rational::ZERO, nested: None };
         let seg = |input| VideoSegment {
             input,
             layer: 0,

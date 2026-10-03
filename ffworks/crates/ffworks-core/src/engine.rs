@@ -87,6 +87,12 @@ impl Engine {
             self.rollback(&inv);
             return Err(e);
         }
+        // a compound's media follows its contents (grows with them), as part of the same step
+        for patch in crate::nest::grown(&self.project) {
+            let undo_patch = apply(&mut self.project, &patch)?;
+            fwd.push(patch);
+            inv.push(undo_patch);
+        }
         if let Err(e) = self.project.validate() {
             self.rollback(&inv);
             return Err(e);
@@ -338,22 +344,59 @@ impl Engine {
 
     pub fn undo(&mut self) -> Result<()> {
         let e = self.undo.pop().ok_or(Error::NothingTo("undo"))?;
+        self.leave_removed_sequence(&e.inverse);
         for p in &e.inverse {
             apply(&mut self.project, p)?;
         }
         self.redo.push(e);
+        self.fix_active();
         self.revision += 1;
         Ok(())
     }
 
     pub fn redo(&mut self) -> Result<()> {
         let e = self.redo.pop().ok_or(Error::NothingTo("redo"))?;
+        self.leave_removed_sequence(&e.forward);
         for p in &e.forward {
             apply(&mut self.project, p)?;
         }
         self.undo.push(e);
+        self.fix_active();
         self.revision += 1;
         Ok(())
+    }
+
+    /// Show another sequence (a compound clip's contents, or the main timeline). Not an undo step: it only changes which
+    /// timeline commands act on.
+    pub fn set_active_sequence(&mut self, id: &str) -> Result<()> {
+        let s = self.project.sequence(id)?;
+        if s.name.starts_with(crate::commands::SNAPSHOT_PREFIX) {
+            return Err(Error::validation("a snapshot cannot be opened for editing; restore it instead"));
+        }
+        if self.project.active_sequence != id {
+            self.project.active_sequence = id.to_string();
+            self.revision += 1;
+        }
+        Ok(())
+    }
+
+    /// A sequence being shown cannot be removed: step back to the main timeline before patches that remove it are applied.
+    fn leave_removed_sequence(&mut self, patches: &[Patch]) {
+        let shown = self.project.active_sequence.clone();
+        if patches.iter().any(|p| matches!(p, Patch::RemoveSequence { id } if *id == shown)) {
+            if let Some(s) = self.project.sequences.iter().find(|s| s.id != shown && !s.compound && !s.name.starts_with(crate::commands::SNAPSHOT_PREFIX)) {
+                self.project.active_sequence = s.id.clone();
+            }
+        }
+    }
+
+    /// After undo/redo the sequence being shown may be gone (undoing the step that made a compound): go back to the main one.
+    fn fix_active(&mut self) {
+        if self.project.sequence(&self.project.active_sequence).is_err() {
+            if let Some(s) = self.project.sequences.iter().find(|s| !s.compound && !s.name.starts_with(crate::commands::SNAPSHOT_PREFIX)) {
+                self.project.active_sequence = s.id.clone();
+            }
+        }
     }
 
     // ---- automation recorder (spec §56) ------------------------------------------------------

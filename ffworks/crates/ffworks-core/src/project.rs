@@ -202,6 +202,9 @@ pub struct Sequence {
     pub tracks: Vec<Track>,
     #[serde(default)]
     pub markers: Vec<Marker>,
+    /// A compound clip's contents: not a timeline to export, shown inside the clip that nests it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub compound: bool,
 }
 
 impl Sequence {
@@ -210,6 +213,7 @@ impl Sequence {
             id: new_id("seq"),
             name: name.into(),
             markers: vec![],
+            compound: false,
             tracks: vec![
                 Track { id: new_id("trk"), name: "V1".into(), kind: TrackKind::Video, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
                 Track { id: new_id("trk"), name: "A1".into(), kind: TrackKind::Audio, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
@@ -281,6 +285,9 @@ impl Project {
     pub fn validate(&self) -> Result<()> {
         self.sequence(&self.active_sequence)?;
         for seq in &self.sequences {
+            if seq.compound && crate::nest::is_cyclic(self, &seq.id) {
+                return Err(Error::validation(format!("compound clip '{}' would contain itself", seq.name)));
+            }
             for m in &seq.markers {
                 if m.time < Rational::ZERO || m.name.chars().count() > 100 || m.note.chars().count() > 2000 {
                     return Err(Error::validation(format!("marker '{}' is invalid (negative time, name over 100 or note over 2000 characters)", m.name)));
@@ -314,7 +321,7 @@ impl Project {
                     crate::clipprops::check_blend(&c.blend)?;
                     if let Some(t) = &c.title {
                         t.validate()?;
-                        if !m.is_generated() || c.kind != TrackKind::Video {
+                        if !matches!(m.generator, Some(Generator::Solid { .. })) || c.kind != TrackKind::Video {
                             return Err(Error::validation(format!("clip '{}' has title text but is not a generated video clip", c.name)));
                         }
                     }

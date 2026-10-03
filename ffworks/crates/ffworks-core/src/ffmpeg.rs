@@ -81,6 +81,9 @@ pub struct FfmpegJob {
     /// Pixel sorts (see `bake`) that must have run before this job starts; `jobs::run_job` runs them first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stages: Vec<crate::bake::BakeStage>,
+    /// Compound clips (see `nest`) that must have been rendered before this job starts, inner ones first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nests: Vec<crate::nest::NestStage>,
 }
 
 impl FfmpegJob {
@@ -208,6 +211,9 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
     let st = &opts.settings;
     if g.video.iter().flat_map(|v| &v.filters).chain(g.video_transitions.iter().flat_map(|t| t.a.filters.iter().chain(&t.b.filters))).any(|f| crate::bake::is_mark(f)) {
         return Err(Error::validation("this graph holds a pixel sort that has not been baked yet; run it through `bake::prepare` (compile_project and preview do) before compiling"));
+    }
+    if g.inputs.iter().any(|i| i.nested.is_some() && i.path.is_empty()) {
+        return Err(Error::validation("this graph reads a compound clip that has not been planned yet; run it through `nest::prepare` (compile_project and preview do) before compiling"));
     }
     if opts.scale_div == 0 {
         return Err(Error::validation("scale_div must be >= 1"));
@@ -586,7 +592,7 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
     post.push(out_arg);
 
     // Unreferenced inputs would trigger "does not contain any stream" noise; graph building only adds used inputs.
-    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: first_out, force_file: false, stages: vec![] })
+    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: first_out, force_file: false, stages: vec![], nests: vec![] })
 }
 
 /// Case-insensitive on Windows, exact elsewhere; compares canonical paths when both exist.
@@ -606,9 +612,12 @@ pub fn compile_project(project: &crate::project::Project, opts: &RenderOptions, 
         return crate::quick::compile(project, opts);
     }
     let mut g = crate::render_graph::build(project)?;
+    // compound clips are rendered first; their files may feed pixel sorts, so they are planned before those
+    let nests = crate::nest::prepare(project, &mut g, &crate::bake::cache_dir(), caps)?;
     // pixel sorts are planned here and run by the job before FFmpeg starts; an export's bakes are deleted when it ends
     let stages = crate::bake::prepare(&mut g, opts.range, &crate::bake::cache_dir(), false)?;
     let mut job = compile(&g, opts, caps)?;
     job.stages = stages;
+    job.nests = nests;
     Ok(job)
 }

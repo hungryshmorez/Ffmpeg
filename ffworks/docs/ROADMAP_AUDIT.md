@@ -23,7 +23,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Housekeeping: STATUS header counts outdated; the old FFmpeg Studio compositor test was timing-flaky (fixed: each check now waits up to ~2 s for its colour, 6/6 runs green locally); older GUI scripts not all re-run after every change.
 
 ## D. Spec phases still open
-* Phase 2/3: mask/lens-correction effects, nested/compound clips and truly editable multiple sequences (adjustment layers: DONE), audio graphs, keyframed graph options, graph templates, docking/workspaces. (Shortcut editor: DONE for the 19 keyboard actions.)
+* Phase 2/3: mask/lens-correction effects, truly editable multiple sequences as separate exports (compound clips and adjustment layers: DONE), audio graphs, keyframed graph options, graph templates, docking/workspaces. (Shortcut editor: DONE for the 19 keyboard actions.)
 * Phase 4: Rhai scripting with variables/loops/conditions and a permissions model: DONE (see STATUS.md). Open: a script editor panel, variables inside recorded macros, blueprints.
 * Phase 5: transient detection, drift correction for auto-sync.
 * Phase 6: expressions, live modulators (compiled to FFmpeg expressions), parameter linking, MIDI. LFO modulators baked to keyframes: DONE. Audio-reactive: DONE for loudness (whole or per band) and beat pulses ("Follow audio" → keyframes).

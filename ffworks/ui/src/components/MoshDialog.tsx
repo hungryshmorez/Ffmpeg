@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { activeSequence } from "../state/sequences";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
 import type { GlitchStatus } from "../types";
@@ -36,7 +37,7 @@ export function MoshDialog() {
   }, [busy]);
   if (!clipId || !view) return null;
 
-  const clips = view.project.sequences[0]?.tracks.filter((t) => t.kind === "video").flatMap((t) => t.clips) ?? [];
+  const clips = activeSequence(view.project)?.tracks.filter((t) => t.kind === "video").flatMap((t) => t.clips) ?? [];
   const others = clips.filter((c) => c.id !== clipId);
   const saveDir = async () => {
     try { setStatus(await api.setFfglitchDir(dir)); } catch (e) { toast("error", String(e)); }

@@ -166,3 +166,6 @@ input[type=color] { width: 56px; height: 24px; padding: 0; border: 1px solid var
 .shortcut-table kbd { margin-right: 4px; }
 .kf-follow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0 6px; font-size: 12px; }
 .kf-follow .num { width: 64px; }
+
+.compound-bar { display: flex; align-items: center; gap: 12px; padding: 4px 10px; background: var(--accent-soft, #2a3a52); border-bottom: 1px solid var(--border, #444); font-size: var(--text-sm, 14px); }
+.gen-fill.compound { display: flex; align-items: center; gap: 6px; padding: 0 8px; background: repeating-linear-gradient(135deg, #3b4a66, #3b4a66 8px, #33415b 8px, #33415b 16px); color: #dfe8ff; overflow: hidden; white-space: nowrap; }

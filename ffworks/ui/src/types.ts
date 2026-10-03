@@ -5,7 +5,7 @@ export type TrackKind = "video" | "audio";
 export interface VideoStream { index: number; codec: string; width: number; height: number; fps: Rational | null; bit_rate: number | null; color: { pix_fmt: string | null; color_space: string | null; color_transfer: string | null; color_primaries: string | null; color_range: string | null; bits_per_raw_sample: number | null } }
 export interface AudioStream { index: number; codec: string; sample_rate: number; channels: number; channel_layout: string | null; bit_rate: number | null }
 export interface MediaInfo { container: string; duration: Rational; bit_rate: number | null; size_bytes: number | null; video: VideoStream[]; audio: AudioStream[]; tags: [string, string][]; /** A single picture or generated media: lasts as long as it is placed for. */ still: boolean }
-export type Generator = { kind: "solid"; color: string };
+export type Generator = { kind: "solid"; color: string } | { kind: "nested"; sequence: string };
 export interface MediaAsset { id: string; name: string; path: string; info: MediaInfo; fingerprint: string | null; /** Generated media (solid colour, title canvas) has no file. */ generator: Generator | null }
 export type Align = "left" | "center" | "right";
 export interface Title { text: string; font: string; size: number; color: string; align: Align; outline_width: number; outline_color: string; shadow: number; box_color: string | null; box_pad: number }
@@ -38,7 +38,7 @@ export interface Clip {
 export interface Transition { id: string; clip_a: string; clip_b: string; kind: string; duration: Rational }
 export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; pan: number; solo: boolean; clips: Clip[]; transitions: Transition[] }
 export interface Marker { id: string; time: Rational; name: string; color: string; note: string }
-export interface Sequence { id: string; name: string; tracks: Track[]; markers: Marker[] }
+export interface Sequence { id: string; name: string; tracks: Track[]; markers: Marker[]; /** The contents of a compound clip (absent when false). */ compound?: boolean }
 export interface ProjectSettings { width: number; height: number; fps: Rational; sample_rate: number }
 export interface Project { schema_version: number; name: string; settings: ProjectSettings; media: MediaAsset[]; sequences: Sequence[]; active_sequence: string }
 
@@ -104,6 +104,9 @@ export type Command =
   | { type: "remove_transition"; transition: string }
   | { type: "set_transition"; transition: string; kind?: string | null; duration?: Rational | null }
   | { type: "remove_ranges"; clip: string; ranges: [Rational, Rational][] }
+  | { type: "nest_clips"; clips: string[]; name?: string | null }
+  | { type: "unnest_clip"; clip: string }
+  | { type: "fit_compound"; media: string }
   | { type: "batch"; label: string; commands: Command[] }
   | { type: "rename_project"; name: string };
 

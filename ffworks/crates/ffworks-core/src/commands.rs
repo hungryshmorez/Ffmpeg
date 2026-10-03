@@ -124,6 +124,14 @@ pub enum Command {
     /// Cut the given timeline time ranges out of `clip` and everything linked to it, closing each gap (ripple on those
     /// tracks only). Used for "remove silences". Ranges are clamped to the clip, merged when they overlap, and one undo step.
     RemoveRanges { clip: Id, ranges: Vec<(Rational, Rational)> },
+    /// Fold the clips (and everything linked to them) into one compound clip that stays editable: its contents become a
+    /// sequence of their own (open it to edit). The compound replaces them where the topmost selected video clip was. One undo step.
+    NestClips { clips: Vec<Id>, #[serde(default)] name: Option<String> },
+    /// Replace a compound clip by the clips it holds, on new tracks. Refused while the clip has settings of its own (speed,
+    /// effects, transform, blend, opacity, volume, fades, keyframes) or a transition.
+    UnnestClip { clip: Id },
+    /// Make a compound's length equal to what its sequence holds now (it grows by itself but never shrinks).
+    FitCompound { media: Id },
     /// Several commands applied as one undo step (spec §112).
     Batch { label: String, commands: Vec<Command> },
 }
@@ -187,6 +195,9 @@ impl Command {
             Command::ImportCues { cues, .. } => format!("Import {} subtitles", cues.len()),
             Command::RemoveRanges { ranges, .. } => format!("Cut out {} ranges", ranges.len()),
             Command::AddAdjustment { .. } => "Add adjustment layer".into(),
+            Command::NestClips { .. } => "Make compound clip".into(),
+            Command::UnnestClip { .. } => "Take compound clip apart".into(),
+            Command::FitCompound { .. } => "Fit compound length".into(),
             Command::Batch { label, .. } => label.clone(),
         }
     }
@@ -199,6 +210,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
     let fps = p.settings.fps;
     match cmd {
         Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } | Command::AnimateFromLfo { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::NestClips { clips, name } => crate::nest::plan_nest(p, clips, name.as_deref()),
+        Command::UnnestClip { clip } => crate::nest::plan_unnest(p, clip),
+        Command::FitCompound { media } => crate::nest::plan_fit(p, media),
         Command::RenameProject { name } => {
             if name.trim().is_empty() {
                 return Err(Error::validation("project name cannot be empty"));
@@ -651,6 +665,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             let mut copy = seq.clone();
             copy.id = new_id("snap");
+            copy.compound = false;
             copy.name = format!("{SNAPSHOT_PREFIX}{n}");
             Ok(vec![Patch::InsertSequence { index: p.sequences.len(), sequence: copy }])
         }

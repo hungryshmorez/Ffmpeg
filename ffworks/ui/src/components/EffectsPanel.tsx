@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { activeSequence } from "../state/sequences";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
 import type { Clip, EffectDef, EffectPreset } from "../types";
@@ -35,8 +36,8 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
     void dispatch({ type: "batch", label: `Paste ${clip$.effects.length - skipped} effects onto ${targets.length} clip(s)`, commands: all });
   };
   const extraIds = useUi((s) => s.extra);
-  const allClips = view?.project.sequences[0]?.tracks.flatMap((t) => t.clips) ?? [];
-  const trackClips = view?.project.sequences[0]?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
+  const allClips = (view ? activeSequence(view.project) : undefined)?.tracks.flatMap((t) => t.clips) ?? [];
+  const trackClips = (view ? activeSequence(view.project) : undefined)?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
   const kind = clip.kind === "audio" ? "audio" : "video";
   const [presets, setPresets] = useState<Record<string, EffectPreset>>({});
   const [presetName, setPresetName] = useState("");

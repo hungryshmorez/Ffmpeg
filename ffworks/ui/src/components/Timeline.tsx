@@ -4,7 +4,8 @@ import { beatPoints, dbToGain, linkedIds, snap, snapPoints, tickStep, times } fr
 import { useAnalysis } from "../state/analysis";
 import { addAdjustmentAtPlayhead, addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
 import { usePlayhead, useProject, useUi } from "../state/stores";
-import type { Clip, Marker, Sequence, Track, Transition } from "../types";
+import type { Clip, Generator, Marker, Sequence, Track, Transition } from "../types";
+import { leaveCompound, openCompound } from "./compound";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
 
 const HEADER_W = 132;
@@ -49,6 +50,12 @@ export function Timeline() {
   const tracks = displayTracks(seq);
   return (
     <div className="timeline" aria-label="Timeline">
+      {seq.compound && (
+        <div className="compound-bar" role="status">
+          Editing the inside of the compound clip “{seq.name}”
+          <button onClick={() => void leaveCompound()}>← Back to the main timeline</button>
+        </div>
+      )}
       <div className="timeline-bar">
         <span className="muted">Zoom</span>
         <input aria-label="Timeline zoom" type="range" min={4} max={600} value={px} onChange={(e) => setZoom(Number(e.target.value))} />
@@ -236,6 +243,7 @@ const ClipView = memo(
         aria-label={`${clip.kind} clip ${clip.name}`}
         aria-pressed={isSel}
         onFocus={() => select(clip.id)}
+        onDoubleClick={() => void openCompound(clip.id)}
         title={`${clip.name}\nstart ${timecode(g.start, fps)}  dur ${timecode(g.duration, fps)}`}
       >
         {media?.generator ? <GeneratedFill clip={clip} media={media} /> : clip.kind === "video" ? <Filmstrip mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} freeze={media?.info.still ? 0 : clip.freeze ? toSec(clip.freeze) : null} /> : <WaveCanvas mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} gainDb={clip.gain_db + track.gain_db} height={height} />}
@@ -255,8 +263,9 @@ function linkKey(seq: Sequence, c: Clip): string {
 }
 
 /** Fill for a generated clip: its colour for a solid, the text for a title (the real picture appears in a rendered preview). */
-function GeneratedFill({ clip, media }: { clip: Clip; media: { generator: { kind: "solid"; color: string } | null } }) {
-  const color = media.generator?.color ?? "#000000";
+function GeneratedFill({ clip, media }: { clip: Clip; media: { generator: Generator | null } }) {
+  if (media.generator?.kind === "nested") return <div className="gen-fill compound" aria-hidden><span>▣</span> compound</div>;
+  const color = media.generator?.kind === "solid" ? media.generator.color : "#000000";
   if (clip.title) return <div className="gen-fill title" aria-hidden><span>T</span> {clip.title.text.replace(/\n/g, " ⏎ ")}</div>;
   return <div className="gen-fill" aria-hidden style={{ background: color.length === 9 ? `${color.slice(0, 7)}${color.slice(7)}` : color }} />;
 }

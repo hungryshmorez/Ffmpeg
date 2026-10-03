@@ -32,6 +32,7 @@ pub mod migrate;
 pub mod moshlab;
 pub mod package;
 pub mod patch;
+pub mod nest;
 pub mod pixelsort;
 pub mod preview;
 pub mod process;

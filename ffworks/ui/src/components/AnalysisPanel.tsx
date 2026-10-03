@@ -1,4 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { activeSequence } from "../state/sequences";
 import { useState } from "react";
 import { api } from "../api";
 import { fromSec, toSec } from "../time";
@@ -66,7 +67,7 @@ export function AnalysisPanel({ video, audio }: { video?: Clip; audio?: Clip }) 
   };
   const [syncRef, setSyncRef] = useState("");
   const [sync, setSync] = useState<{ lag: number; confidence: number; start: number } | null>(null);
-  const others = audio ? (view?.project.sequences[0]?.tracks.filter((t) => t.kind === "audio").flatMap((t) => t.clips).filter((c) => c.id !== audio.id) ?? []) : [];
+  const others = audio ? ((view ? activeSequence(view.project) : undefined)?.tracks.filter((t) => t.kind === "audio").flatMap((t) => t.clips).filter((c) => c.id !== audio.id) ?? []) : [];
   const target = kind === "silence" ? audio ?? video : video ?? audio;
   const markRanges = () => {
     if (!target || !found) return;

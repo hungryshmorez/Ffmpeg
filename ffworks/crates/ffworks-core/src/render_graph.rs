@@ -27,6 +27,9 @@ pub struct InputRef {
     pub alpha: bool,
     /// Source length the renderer must supply for this use (stills and generated media are cut to it).
     pub need: Rational,
+    /// A compound clip: the id of the sequence whose rendered picture and sound this input reads. `path` stays empty until
+    /// `nest::prepare` has planned (and run) that render.
+    pub nested: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -184,7 +187,12 @@ fn main_key(c: &Clip) -> String {
 type Trims = HashMap<String, (Rational, Rational)>;
 
 pub fn build(project: &Project) -> Result<RenderGraph> {
-    let seq = project.active()?;
+    build_for(project, &project.active_sequence)
+}
+
+/// The render graph of any sequence of the project (compound clips are rendered from theirs).
+pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
+    let seq = project.sequence(sequence)?;
     let mut g = RenderGraph {
         width: project.settings.width,
         height: project.settings.height,
@@ -206,14 +214,19 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
         g.inputs.push(InputRef {
             key: key.to_string(),
             media_id: m.id.clone(),
-            path: m.path.clone(),
+            // a compound has no file until `nest::prepare` renders it
+            path: if matches!(m.generator, Some(crate::generators::Generator::Nested { .. })) { String::new() } else { m.path.clone() },
             has_video: m.info.has_video(),
             has_audio: m.info.has_audio(),
             src_fps: m.info.video.first().and_then(|v| v.fps),
-            generated: m.generator.as_ref().map(|g| g.ffmpeg_color()),
+            generated: m.generator.as_ref().and_then(|g| g.ffmpeg_color()),
             still: m.info.still && !m.is_generated(),
             alpha: m.info.video.first().and_then(|v| v.color.pix_fmt.as_deref()).is_some_and(has_alpha),
             need: Rational::ZERO,
+            nested: match &m.generator {
+                Some(crate::generators::Generator::Nested { sequence }) => Some(sequence.clone()),
+                _ => None,
+            },
         });
         Ok(g.inputs.len() - 1)
     };
