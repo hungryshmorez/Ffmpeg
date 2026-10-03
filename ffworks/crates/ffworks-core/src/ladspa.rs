@@ -126,11 +126,22 @@ struct State {
 }
 static STATE: RwLock<Option<State>> = RwLock::new(None);
 
+/// `LADSPA_PATH` as FFWORKS found it at start-up. `configure` rewrites the variable, so later calls must not read their own
+/// earlier output back (a folder the user removed would never go away).
+fn original_path() -> Option<std::ffi::OsString> {
+    static ORIGINAL: std::sync::OnceLock<Option<std::ffi::OsString>> = std::sync::OnceLock::new();
+    ORIGINAL.get_or_init(|| std::env::var_os("LADSPA_PATH")).clone()
+}
+
 /// Folders FFmpeg's ladspa filter looks in, the user's own first.
 pub fn plugin_dirs(extra: &[String]) -> Vec<PathBuf> {
+    dirs_for(extra, original_path().as_deref())
+}
+
+fn dirs_for(extra: &[String], env_path: Option<&std::ffi::OsStr>) -> Vec<PathBuf> {
     let mut v: Vec<PathBuf> = extra.iter().filter(|s| !s.trim().is_empty()).map(PathBuf::from).collect();
-    if let Some(p) = std::env::var_os("LADSPA_PATH") {
-        v.extend(std::env::split_paths(&p));
+    if let Some(p) = env_path {
+        v.extend(std::env::split_paths(p));
     }
     if let Some(h) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
         v.push(PathBuf::from(h).join(".ladspa"));
@@ -146,21 +157,26 @@ pub fn scan(dirs: &[PathBuf]) -> BTreeSet<String> {
     crate::frei0r::scan(dirs)
 }
 
-/// Point FFWORKS (and every FFmpeg it starts) at extra LADSPA folders and rescan.
-pub fn configure(extra: &[String]) {
-    let installed = scan(&plugin_dirs(extra));
+/// The `LADSPA_PATH` value that names `extra` first, then what the environment had, then the usual folders that exist.
+fn path_value(extra: &[String], env_path: Option<&std::ffi::OsStr>) -> Option<std::ffi::OsString> {
     let mut parts: Vec<PathBuf> = extra.iter().filter(|s| !s.trim().is_empty()).map(PathBuf::from).collect();
-    if let Some(p) = std::env::var_os("LADSPA_PATH") {
-        let existing: Vec<PathBuf> = std::env::split_paths(&p).filter(|x| !parts.contains(x)).collect();
+    if let Some(p) = env_path {
+        let existing: Vec<PathBuf> = std::env::split_paths(p).filter(|x| !parts.contains(x)).collect();
         parts.extend(existing);
     }
     // FFmpeg only consults LADSPA_PATH when it is set, so name the usual folders too
-    for d in plugin_dirs(&[]) {
+    for d in dirs_for(&[], None) {
         if d.is_dir() && !parts.contains(&d) {
             parts.push(d);
         }
     }
-    if let Ok(joined) = std::env::join_paths(&parts) {
+    std::env::join_paths(&parts).ok()
+}
+
+/// Point FFWORKS (and every FFmpeg it starts) at extra LADSPA folders and rescan. Replaces any folders given earlier.
+pub fn configure(extra: &[String]) {
+    let installed = scan(&plugin_dirs(extra));
+    if let Some(joined) = path_value(extra, original_path().as_deref()) {
         std::env::set_var("LADSPA_PATH", joined);
     }
     *STATE.write().unwrap() = Some(State { installed });
@@ -198,6 +214,18 @@ pub fn filter_text(effect_id: &str, params: &BTreeMap<String, f64>) -> Option<St
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_path_names_extra_folders_first_and_forgets_removed_ones() {
+        let env = std::env::join_paths(["/from/env"]).unwrap();
+        let with = path_value(&["/my/plugins".into(), "  ".into()], Some(env.as_os_str())).unwrap();
+        let parts: Vec<PathBuf> = std::env::split_paths(&with).collect();
+        assert_eq!(&parts[..2], &[PathBuf::from("/my/plugins"), PathBuf::from("/from/env")]);
+        // the same call built from the *original* environment again no longer mentions the removed folder
+        let without = path_value(&[], Some(env.as_os_str())).unwrap();
+        assert!(!std::env::split_paths(&without).any(|p| p.as_path() == std::path::Path::new("/my/plugins")));
+        assert_eq!(dirs_for(&["/x".into()], None)[0], PathBuf::from("/x"));
+    }
+
     use super::*;
 
     #[test]

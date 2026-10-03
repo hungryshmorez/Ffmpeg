@@ -554,6 +554,7 @@ fn frei0r_status(state: State<AppState>) -> serde_json::Value {
     serde_json::json!({
         "ffmpegHasFilter": caps(&state).is_some_and(|c| c.has_filter("frei0r")),
         "dirs": ffworks_core::settings::Settings::load(&state.settings_file).frei0r_dirs,
+        "ladspaDirs": ffworks_core::settings::Settings::load(&state.settings_file).ladspa_dirs,
         "installed": ffworks_core::frei0r::installed().len(),
         "offered": offered,
         "ladspa": {
@@ -578,6 +579,16 @@ fn set_frei0r_dirs(state: State<AppState>, dirs: Vec<String>) -> Result<(), Stri
     st.frei0r_dirs = dirs.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
     st.save(&state.settings_file).map_err(s)?;
     ffworks_core::frei0r::configure(&with_bundled(&st.frei0r_dirs, state.bundled_frei0r.as_deref()));
+    Ok(())
+}
+
+/// Save extra LADSPA plugin folders and rescan (the audio effects offered change accordingly).
+#[tauri::command]
+fn set_ladspa_dirs(state: State<AppState>, dirs: Vec<String>) -> Result<(), String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    st.ladspa_dirs = dirs.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
+    st.save(&state.settings_file).map_err(s)?;
+    ffworks_core::ladspa::configure(&st.ladspa_dirs);
     Ok(())
 }
 
@@ -1120,7 +1131,7 @@ pub fn run() {
             let loaded = ffworks_core::settings::Settings::load(&settings_file);
             let bundled_frei0r = app.path().resource_dir().ok().map(|d| d.join("frei0r")).filter(|d| d.is_dir());
             ffworks_core::frei0r::configure(&with_bundled(&loaded.frei0r_dirs, bundled_frei0r.as_deref()));
-            ffworks_core::ladspa::configure(&[]);
+            ffworks_core::ladspa::configure(&loaded.ladspa_dirs);
             // pixel-sort intermediates of exports go here (and are deleted when the export ends)
             ffworks_core::bake::set_cache_dir(base.join("bake"));
             let tools = loaded.tools_with_bundled(bundled_dir.as_deref());
@@ -1180,12 +1191,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

@@ -22,6 +22,9 @@ pub struct Settings {
     /// Folder holding FFglitch's `ffedit` and `ffgac` (the mosh lab); when unset the installer's copy, `FFWORKS_FFGLITCH` and `PATH` are tried.
     #[serde(default)]
     pub ffglitch_dir: Option<String>,
+    /// Extra folders holding LADSPA (Audacity-style) audio plugins, searched before the standard ones.
+    #[serde(default)]
+    pub ladspa_dirs: Vec<String>,
     /// Extra folders holding frei0r plugins (glitch0r, pixeliz0r...), searched before the standard ones.
     #[serde(default)]
     pub frei0r_dirs: Vec<String>,
