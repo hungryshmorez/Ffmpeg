@@ -1,0 +1,51 @@
+// In-webview test for the built-in pixel sort: add it from the Effects panel, set it to sort whole rows, render a processed
+// preview (which bakes the sort) and queue an export. pixelsort.sh then measures the pictures. __SRC__ / __OUT__ come from the .sh.
+(async () => {
+  const R = { ok: true, steps: [], preview: "", out: "" };
+  const step = (n, c, d = "") => { R.steps.push({ name: n, pass: !!c, detail: String(d) }); if (!c) R.ok = false; };
+  const sleep = (m) => new Promise((r) => setTimeout(r, m));
+  const waitFor = async (f, ms = 15000) => { const t = Date.now(); while (Date.now() - t < ms) { const v = f(); if (v) return v; await sleep(50); } return null; };
+  const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+  const inv = window.__TAURI_INTERNALS__.invoke;
+  const view = () => window.__ffworks.useProject.getState().view;
+  const P = () => window.__ffworks.useProject.getState();
+  const setNum = (input, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, String(v)); input.dispatchEvent(new Event("input", { bubbles: true })); };
+  const setSel = (sel, v) => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(sel, v); sel.dispatchEvent(new Event("change", { bubbles: true })); };
+  const select = async (el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, button: 0, clientX: r.left + 20, clientY: r.top + 10 })); el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })); await sleep(250); };
+  const btn = (name) => $$("button").find((b) => b.textContent.trim().startsWith(name));
+  const vclip = () => view().project.sequences[0].tracks.find((t) => t.kind === "video").clips[0];
+  try {
+    await waitFor(() => $(".app") && view());
+    await window.__ffworks.importPaths(["__SRC__"]); await waitFor(() => $$(".media-item").length === 1);
+    const m = view().project.media[0].id, v1 = view().project.sequences[0].tracks.find((t) => t.kind === "video").id;
+    await P().dispatch({ type: "place_clip", media: m, track: v1, start: "0", source_in: "0", duration: "3", with_audio: false }); await sleep(400);
+    await select($$(".track.video .clip")[0]);
+    const pick = await waitFor(() => $("select[aria-label='Effect to add']"));
+    step("Pixel sort is offered under Glitch", !!pick && !![...pick.querySelectorAll("optgroup[label='Glitch'] option")].find((o) => o.value === "pixel_sort" && o.textContent.includes("Pixel sort")));
+    setSel(pick, "pixel_sort"); await sleep(100);
+    btn("Add").click();
+    await waitFor(() => vclip().effects.length === 1);
+    step("the effect lands on the clip with its defaults", vclip().effects[0].effect === "pixel_sort" && vclip().effects[0].params.mode === 0 && vclip().effects[0].params.mix === 1, JSON.stringify(vclip().effects));
+    const mode = await waitFor(() => $("input.num[aria-label^='Which pixels']"));
+    step("its settings show as controls", !!mode && !!$("input.num[aria-label^='Sort by']") && !!$("input.num[aria-label='Amount']"));
+    setNum(mode, 1); await sleep(300);
+    step("choosing whole lines reaches the engine", vclip().effects[0].params.mode === 1, JSON.stringify(vclip().effects[0].params));
+
+    btn("Render preview").click();
+    const ok = await waitFor(() => $(".bypass-badge.ok"), 120000);
+    step("a processed preview renders (the sort is baked for it)", !!ok, ok && ok.textContent);
+    const prev = window.__ffworks.useUi.getState().preview;
+    R.preview = prev ? prev.path : "";
+    step("the preview file exists in the cache", /previews/.test(R.preview), R.preview);
+
+    const out = "__OUT__";
+    await inv("start_export", { preset: "ffv1_mkv", output: out, engine: null, keepExisting: false });
+    const done = await waitFor(() => window.__ffworks.useJobs.getState().jobs.find((j) => j.output === out && (j.state.state === "completed" || j.state.state === "failed")), 120000);
+    step("the export finishes", done && done.state.state === "completed", done && JSON.stringify(done.state));
+    R.out = out;
+
+    P().setView(await inv("undo")); await sleep(300);
+    step("removing the effect is one undo step", vclip().effects.length === 0);
+  } catch (e) { step("exception", false, (e && e.stack) || e); }
+  await inv("uitest_report", { report: JSON.stringify(R) });
+})();

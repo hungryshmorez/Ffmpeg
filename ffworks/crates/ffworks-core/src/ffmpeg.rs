@@ -78,6 +78,9 @@ pub struct FfmpegJob {
     pub output: PathBuf,
     /// Always pass the graph through a file (used by tests to exercise that path on small graphs).
     pub force_file: bool,
+    /// Pixel sorts (see `bake`) that must have run before this job starts; `jobs::run_job` runs them first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stages: Vec<crate::bake::BakeStage>,
 }
 
 impl FfmpegJob {
@@ -123,7 +126,7 @@ impl FfmpegJob {
 }
 
 /// Decimal seconds with nanosecond resolution for FFmpeg time parameters.
-fn secs(t: Rational) -> String {
+pub(crate) fn secs(t: Rational) -> String {
     let s = format!("{:.9}", t.as_f64());
     let s = s.trim_end_matches('0').trim_end_matches('.');
     if s.is_empty() || s == "-" { "0".into() } else { s.to_string() }
@@ -203,6 +206,9 @@ const MAX_REVERSE_BYTES: f64 = 2.0e9;
 
 pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities>) -> Result<FfmpegJob> {
     let st = &opts.settings;
+    if g.video.iter().flat_map(|v| &v.filters).chain(g.video_transitions.iter().flat_map(|t| t.a.filters.iter().chain(&t.b.filters))).any(|f| crate::bake::is_mark(f)) {
+        return Err(Error::validation("this graph holds a pixel sort that has not been baked yet; run it through `bake::prepare` (compile_project and preview do) before compiling"));
+    }
     if opts.scale_div == 0 {
         return Err(Error::validation("scale_div must be >= 1"));
     }
@@ -571,7 +577,7 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
     post.push(out_arg);
 
     // Unreferenced inputs would trigger "does not contain any stream" noise; graph building only adds used inputs.
-    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: first_out, force_file: false })
+    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: first_out, force_file: false, stages: vec![] })
 }
 
 /// Case-insensitive on Windows, exact elsewhere; compares canonical paths when both exist.
@@ -590,5 +596,10 @@ pub fn compile_project(project: &crate::project::Project, opts: &RenderOptions, 
     if opts.settings.id == crate::quick::PRESET {
         return crate::quick::compile(project, opts);
     }
-    compile(&crate::render_graph::build(project)?, opts, caps)
+    let mut g = crate::render_graph::build(project)?;
+    // pixel sorts are planned here and run by the job before FFmpeg starts; an export's bakes are deleted when it ends
+    let stages = crate::bake::prepare(&mut g, opts.range, &crate::bake::cache_dir(), false)?;
+    let mut job = compile(&g, opts, caps)?;
+    job.stages = stages;
+    Ok(job)
 }

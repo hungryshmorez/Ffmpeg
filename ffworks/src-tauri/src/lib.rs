@@ -258,8 +258,16 @@ async fn render_preview(app: AppHandle, state: State<'_, AppState>, start: Strin
     let cache = state.cache_dir.clone();
     let (start, end) = (start.parse::<Rational>()?, end.parse::<Rational>()?);
     let render_hash = ffworks_core::preview::project_hash(&project).map_err(s)?;
-    let r = tauri::async_runtime::spawn_blocking(move || ffworks_core::preview::render(&tools, caps.as_ref(), &project, start, end, scale_div, &cache, &CancelToken::new(), &mut |_| {}))
-        .await
+    // the pixel-sort bake can take a while: report how far along the preview is
+    let emitter = app.clone();
+    let r = tauri::async_runtime::spawn_blocking(move || {
+        ffworks_core::preview::render(&tools, caps.as_ref(), &project, start, end, scale_div, &cache, &CancelToken::new(), &mut |st| {
+            if let ffworks_core::jobs::JobState::Rendering { fraction: Some(f), .. } = st {
+                let _ = emitter.emit("preview-progress", f);
+            }
+        })
+    })
+    .await
         .map_err(s)?
         .map_err(s)?;
     let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
@@ -1012,6 +1020,8 @@ pub fn run() {
             let bundled_frei0r = app.path().resource_dir().ok().map(|d| d.join("frei0r")).filter(|d| d.is_dir());
             ffworks_core::frei0r::configure(&with_bundled(&loaded.frei0r_dirs, bundled_frei0r.as_deref()));
             ffworks_core::ladspa::configure(&[]);
+            // pixel-sort intermediates of exports go here (and are deleted when the export ends)
+            ffworks_core::bake::set_cache_dir(base.join("bake"));
             let tools = loaded.tools_with_bundled(bundled_dir.as_deref());
             let queue = JobQueue::new(tools.clone(), base.join("tmp"), 1);
             // last session's journal is kept aside until the user decides; this session journals afresh

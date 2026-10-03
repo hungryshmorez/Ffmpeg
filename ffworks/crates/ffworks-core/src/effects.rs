@@ -82,6 +82,19 @@ fn builtin_registry() -> Vec<EffectDef> {
         e("rgb_split", "RGB split (glitch)", "Glitch", &["rgbashift"], vec![p("amount", "Shift", 0.0, 60.0, 8.0, 1.0, "px")]),
         e("trails", "Motion trails", "Glitch", &["tmix"], vec![p("frames", "Frames mixed", 2.0, 30.0, 6.0, 1.0, "")]),
         e("shuffle_pixels", "Pixel shuffle (scramble blocks)", "Glitch", &["shufflepixels"], vec![p("size", "Block size", 2.0, 200.0, 24.0, 1.0, "px"), p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, "")]),
+        e("pixel_sort", "Pixel sort", "Glitch", &[], vec![
+            p("direction", "Direction (0 across, 1 down)", 0.0, 1.0, 0.0, 1.0, ""),
+            p("key", "Sort by (0 brightness, 1 hue, 2 saturation, 3 value, 4 red, 5 green, 6 blue)", 0.0, 6.0, 0.0, 1.0, ""),
+            p("mode", "Which pixels (0 brightness range, 1 whole lines, 2 random blocks)", 0.0, 2.0, 0.0, 1.0, ""),
+            p("low", "Range from brightness", 0.0, 1.0, 0.25, 0.01, ""),
+            p("high", "Range up to brightness", 0.0, 1.0, 0.8, 0.01, ""),
+            p("length", "Block length", 2.0, 2000.0, 120.0, 1.0, "px"),
+            p("variation", "Block length variation", 0.0, 1.0, 0.5, 0.05, ""),
+            p("reverse", "Order (0 dark to light, 1 light to dark)", 0.0, 1.0, 0.0, 1.0, ""),
+            p("mix", "Amount", 0.0, 1.0, 1.0, 0.01, ""),
+            p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, ""),
+            p("flicker", "New blocks every frame (0 off, 1 on)", 0.0, 1.0, 0.0, 1.0, ""),
+        ]),
         e("chroma_shift", "Chroma shift (colour bleed)", "Glitch", &["chromashift"], vec![p("amount", "Shift", -40.0, 40.0, 8.0, 1.0, "px")]),
         e("scroll", "Scroll (wrap around)", "Glitch", &["scroll"], vec![p("speed", "Horizontal speed", -0.1, 0.1, 0.02, 0.005, "/frame")]),
         e("ghost", "Ghosting (slow update)", "Glitch", &["lagfun"], vec![p("decay", "Decay", 0.5, 0.99, 0.95, 0.01, "")]),
@@ -284,6 +297,16 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
         "shuffle_pixels" => {
             let n = g("size")?.round() as i64;
             format!("shufflepixels=direction=forward:mode=horizontal:width={n}:height={n}:seed={}", g("seed")?.round() as i64)
+        }
+        // not an FFmpeg filter: a marker that `bake` turns into a pre-render stage
+        "pixel_sort" => {
+            for d in &def.params {
+                g(d.id)?;
+            }
+            if g("mix")? == 0.0 {
+                return Ok(None);
+            }
+            crate::bake::mark(&crate::pixelsort::Params::from_map(&inst.params))
         }
         "chroma_shift" => {
             let a = g("amount")?.round() as i64;

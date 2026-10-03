@@ -67,7 +67,7 @@ pub fn render(
     cancel: &CancelToken,
     on_state: &mut dyn FnMut(JobState),
 ) -> Result<PreviewResult> {
-    let g = render_graph::build(project)?;
+    let mut g = render_graph::build(project)?;
     let end = end.min(g.duration);
     if end <= start {
         return Err(Error::validation("nothing to preview in that range"));
@@ -79,7 +79,10 @@ pub fn render(
     if out.exists() {
         return Ok(PreviewResult { path: out, key, start, end, cached: true });
     }
+    // pixel sorts for just this range, kept in the cache so a later preview that changes something else reuses them
+    let stages = crate::bake::prepare(&mut g, Some((start, end)), &cache_dir.join("bake"), true)?;
     let mut job = compile(&g, &RenderOptions { output: out.clone(), settings: preview_settings(), range: Some((start, end)), scale_div }, caps)?;
+    job.stages = stages;
     job.program = tools.ffmpeg.clone();
     run_job(tools, &job, &format!("preview_{key}"), "preview", cancel, &cache_dir.join("tmp"), on_state)?;
     Ok(PreviewResult { path: out, key, start, end, cached: false })

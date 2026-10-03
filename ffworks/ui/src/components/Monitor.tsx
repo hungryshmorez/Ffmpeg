@@ -82,6 +82,12 @@ export function Monitor() {
   // A processed preview is only used while it matches the project's current content hash and covers the playhead.
   const preview = useUi((s) => s.preview);
   const busy = useUi((s) => s.previewBusy);
+  const [progress, setProgress] = useState<number | null>(null);
+  useEffect(() => {
+    if (!busy) { setProgress(null); return; }
+    const un = api.onPreviewProgress(setProgress);
+    return () => { void un.then((f) => f()); };
+  }, [busy]);
   const [div, setDiv] = useState(2);
   const previewCurrent = preview !== null && preview.renderHash === view.renderHash;
   const usePreview = previewCurrent && t >= toSec(preview.start) && t < toSec(preview.end);
@@ -184,7 +190,7 @@ export function Monitor() {
         <select aria-label="Preview quality" value={div} onChange={(e) => setDiv(Number(e.target.value))}>
           <option value={1}>Full</option><option value={2}>1/2</option><option value={4}>1/4</option><option value={8}>1/8</option>
         </select>
-        <button disabled={busy} onClick={() => void renderPreview()} title="Render a processed preview of the next 10 seconds from the playhead">{busy ? "Rendering preview…" : "Render preview"}</button>
+        <button disabled={busy} onClick={() => void renderPreview()} title="Render a processed preview of the next 10 seconds from the playhead">{busy ? `Rendering preview…${progress !== null ? ` ${Math.round(progress * 100)}%` : ""}` : "Render preview"}</button>
       </div>
     </div>
   );

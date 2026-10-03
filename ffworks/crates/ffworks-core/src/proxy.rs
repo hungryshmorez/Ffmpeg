@@ -68,7 +68,7 @@ pub fn build_job(m: &MediaAsset, out: &Path, caps: Option<&Capabilities>) -> Res
     }
     post.push(out.to_string_lossy().into_owned());
     let pre = ["-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats", "-i"].iter().map(|s| s.to_string()).chain([m.path.clone()]).collect();
-    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: graph, post, total_duration: m.info.duration.max(Rational::new(1, 100)), output: out.to_path_buf(), force_file: false })
+    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: graph, post, total_duration: m.info.duration.max(Rational::new(1, 100)), output: out.to_path_buf(), force_file: false, stages: vec![] })
 }
 
 #[cfg(test)]

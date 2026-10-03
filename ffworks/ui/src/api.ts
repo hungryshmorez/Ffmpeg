@@ -73,4 +73,6 @@ export const api = {
   verifyOutput: (path: string) => invoke<string>("verify_output", { path }),
   diagnostics: () => invoke<Record<string, unknown>>("get_diagnostics"),
   onJob: (cb: (e: JobEvent) => void): Promise<UnlistenFn> => listen<JobEvent>("job-state", (ev) => cb(ev.payload)),
+  /** Fraction (0..1) of the preview being rendered, reported while a pixel sort is baked and the preview rendered. */
+  onPreviewProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("preview-progress", (ev) => cb(ev.payload)),
 };
