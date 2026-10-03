@@ -376,3 +376,85 @@ fn a_second_export_after_an_edit_elsewhere_reuses_the_sorted_frames() {
     assert_ne!(other.stages[0].output, baked, "different sort settings, different file");
     let _ = std::fs::remove_file(&baked);
 }
+
+fn first_effect_id(eng: &Engine, clip: &str) -> String {
+    eng.project.active().unwrap().find_clip(clip).unwrap().1.effects[0].id.clone()
+}
+
+#[test]
+fn a_keyframed_amount_fades_the_sort_in_over_the_clip() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = pattern(dir.path(), "n.mkv", "mod(X*97+Y*13+N*7,256)", 4);
+    let (mut eng, c) = one_clip(&src);
+    add(&mut eng, &c, "pixel_sort", &[("mode", 1.0)]);
+    let fx = first_effect_id(&eng, &c);
+    let key = |eng: &mut Engine, t: Rational, v: f64| eng.dispatch(Command::SetKeyframe { clip: c.clone(), param: format!("fx:{fx}:mix"), time: t, value: v, interp: None }).unwrap();
+    key(&mut eng, secs(0), 0.0);
+    key(&mut eng, secs(3), 1.0);
+    let out = dir.path().join("o.mkv");
+    let job = export(&eng, &out);
+    assert_eq!(job.stages.len(), 1);
+    // how far each output frame is from the same source frame (mean absolute luma difference)
+    let change = |t: f64| {
+        let (a, b) = (luma_frame(&src, t), luma_frame(&out, t));
+        a.iter().zip(&b).map(|(x, y)| (*x as f64 - *y as f64).abs()).sum::<f64>() / a.len() as f64
+    };
+    let (early, mid, late) = (change(0.0), change(1.5), change(3.6));
+    assert!(early < 8.0, "at the start the amount is 0: the picture is as it was ({early})");
+    assert!(late > 30.0, "after the last key the amount is 1: fully sorted ({late})");
+    assert!(mid > early + 8.0 && mid < late - 8.0, "half way it is half changed: {early} < {mid} < {late}");
+    assert!(falling(&luma_frame(&out, 3.6), false, 3) < 0.03, "and the end really is in order");
+    let _ = std::fs::remove_file(&job.stages[0].output);
+}
+
+#[test]
+fn a_mask_sorts_only_inside_its_shape_in_a_real_export() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = pattern(dir.path(), "n.mkv", NOISE, 2);
+    let (mut eng, c) = one_clip(&src);
+    // the left half of the picture: a rectangle centred at a quarter of the width, half as wide as the picture
+    add(&mut eng, &c, "pixel_sort", &[("mode", 1.0), ("mask", 1.0), ("mask_x", 0.25), ("mask_y", 0.5), ("mask_w", 0.5), ("mask_h", 1.0)]);
+    let out = dir.path().join("o.mkv");
+    let job = export(&eng, &out);
+    let (orig, sorted) = (luma_frame(&src, 0.5), luma_frame(&out, 0.5));
+    let half = W / 2;
+    let left = |f: &[u8]| -> Vec<u8> { (0..H).flat_map(|y| f[y * W..y * W + half].to_vec()).collect() };
+    let right = |f: &[u8]| -> Vec<u8> { (0..H).flat_map(|y| f[y * W + half..(y + 1) * W].to_vec()).collect() };
+    let diff = |a: &[u8], b: &[u8]| a.iter().zip(b).filter(|(x, y)| (**x as i32 - **y as i32).abs() > 12).count() as f64 / a.len() as f64;
+    assert!(diff(&right(&orig), &right(&sorted)) < 0.02, "outside the mask the picture is untouched: {}", diff(&right(&orig), &right(&sorted)));
+    assert!(diff(&left(&orig), &left(&sorted)) > 0.5, "inside it the pixels moved: {}", diff(&left(&orig), &left(&sorted)));
+    let l = left(&sorted);
+    let mut rows_sorted = 0;
+    for y in 0..H {
+        if l[y * half..(y + 1) * half].windows(2).filter(|p| (p[1] as i32) + 3 < p[0] as i32).count() * 50 < half {
+            rows_sorted += 1;
+        }
+    }
+    assert!(rows_sorted > H * 9 / 10, "inside the mask each row is in order: {rows_sorted}/{H}");
+    let _ = std::fs::remove_file(&job.stages[0].output);
+}
+
+#[test]
+fn an_animated_mask_and_angle_render_and_cache_separately() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = pattern(dir.path(), "n.mkv", "mod(X*97+Y*13+N*7,256)", 3);
+    let (mut eng, c) = one_clip(&src);
+    add(&mut eng, &c, "pixel_sort", &[("mode", 1.0), ("mask", 2.0), ("mask_w", 0.4), ("mask_h", 0.4)]);
+    let static_job = compile_project(&eng.project, &RenderOptions { output: dir.path().join("a.mkv"), settings: ExportSettings::find("ffv1_mkv").unwrap(), range: None, scale_div: 1 }, None).unwrap();
+    let fx = first_effect_id(&eng, &c);
+    for (t, v) in [(0, 0.2), (2, 0.8)] {
+        eng.dispatch(Command::SetKeyframe { clip: c.clone(), param: format!("fx:{fx}:mask_x"), time: secs(t), value: v, interp: None }).unwrap();
+    }
+    let moving = export(&eng, &dir.path().join("b.mkv"));
+    assert_ne!(static_job.stages[0].output, moving.stages[0].output, "animating the shape is a different bake");
+    // the ellipse really travels: sorted pixels sit on the left early and on the right late
+    let out = dir.path().join("b.mkv");
+    let (f0, f1) = (luma_frame(&out, 0.0), luma_frame(&out, 2.4));
+    let (o0, o1) = (luma_frame(&src, 0.0), luma_frame(&src, 2.4));
+    let moved = |a: &[u8], b: &[u8], x0: usize, x1: usize| (0..H).flat_map(|y| (x0..x1).map(move |x| (y, x))).filter(|(y, x)| (a[y * W + x] as i32 - b[y * W + x] as i32).abs() > 12).count();
+    let (l0, r0) = (moved(&f0, &o0, 0, W / 2), moved(&f0, &o0, W / 2, W));
+    let (l1, r1) = (moved(&f1, &o1, 0, W / 2), moved(&f1, &o1, W / 2, W));
+    assert!(l0 > r0 * 2, "early the shape is on the left: {l0} vs {r0}");
+    assert!(r1 > l1 * 2, "late it is on the right: {r1} vs {l1}");
+    let _ = std::fs::remove_file(&moving.stages[0].output);
+}

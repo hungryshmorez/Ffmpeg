@@ -4,6 +4,7 @@
 //!
 //! One pass over a frame is O(pixels): each span is sorted with a stable counting sort on an 8-bit key.
 
+use crate::keyframes::Keyframe;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -38,6 +39,7 @@ pub enum Direction {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct Params {
     pub direction: Direction,
     pub key: Key,
@@ -58,13 +60,29 @@ pub struct Params {
     pub flicker: bool,
     /// Turns the sorting direction by this many degrees (positive = clockwise) from `direction`. Spans then follow diagonal
     /// lines of pixels, one pixel apart.
-    #[serde(default)]
     pub angle: f32,
+    /// Where the sort happens: 0 everywhere, 1 inside a rectangle, 2 inside an ellipse. Pixels outside never move, and the
+    /// sorted runs stop at the edge (they are not cut off afterwards).
+    pub mask: u8,
+    /// Centre of the mask as a fraction of the picture (0..1).
+    pub mask_x: f32,
+    pub mask_y: f32,
+    /// Size of the mask as a fraction of the picture (0..1).
+    pub mask_w: f32,
+    pub mask_h: f32,
+    /// Width in pixels of the soft edge inside the mask, over which the sort fades in.
+    pub mask_feather: f32,
+    /// Sort everything *except* the mask.
+    pub mask_invert: bool,
+    /// Keyframes of animated parameters, by parameter id, in clip-relative seconds; see [`Params::at`].
+    pub anim: BTreeMap<String, Vec<Keyframe>>,
+    /// The raw parameter map the animated values are laid over (only kept when `anim` is not empty).
+    pub base: BTreeMap<String, f64>,
 }
 
 impl Default for Params {
     fn default() -> Self {
-        Params { direction: Direction::Horizontal, key: Key::Luma, mode: Mode::Threshold, low: 64, high: 204, length: 120, variation: 0.5, reverse: false, mix: 1.0, seed: 1, flicker: false, angle: 0.0 }
+        Params { direction: Direction::Horizontal, key: Key::Luma, mode: Mode::Threshold, low: 64, high: 204, length: 120, variation: 0.5, reverse: false, mix: 1.0, seed: 1, flicker: false, angle: 0.0, mask: 0, mask_x: 0.5, mask_y: 0.5, mask_w: 0.5, mask_h: 0.5, mask_feather: 0.0, mask_invert: false, anim: BTreeMap::new(), base: BTreeMap::new() }
     }
 }
 
@@ -87,8 +105,56 @@ impl Params {
             seed: get("seed").map(|v| v.max(0.0).round() as u64).unwrap_or(d.seed),
             flicker: get("flicker").is_some_and(|v| v >= 0.5),
             angle: get("angle").map(|v| v.clamp(-90.0, 90.0) as f32).unwrap_or(d.angle),
+            mask: pick("mask", 3).map_or(d.mask, |v| v as u8),
+            mask_x: get("mask_x").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mask_x),
+            mask_y: get("mask_y").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mask_y),
+            mask_w: get("mask_w").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mask_w),
+            mask_h: get("mask_h").map(|v| v.clamp(0.0, 1.0) as f32).unwrap_or(d.mask_h),
+            mask_feather: get("mask_feather").map(|v| v.clamp(0.0, 400.0) as f32).unwrap_or(d.mask_feather),
+            mask_invert: get("mask_invert").is_some_and(|v| v >= 0.5),
+            anim: BTreeMap::new(),
+            base: BTreeMap::new(),
         }
     }
+
+    /// The settings in force `t` seconds into the clip: the animated parameters read from their keyframes, everything else as
+    /// set. The angle snaps to whole degrees so a plan can be reused while it hardly changes.
+    pub fn at(&self, t: f64) -> Params {
+        if self.anim.is_empty() {
+            return self.clone();
+        }
+        let mut m = self.base.clone();
+        for (k, kfs) in &self.anim {
+            if let Some(v) = crate::keyframes::eval(kfs, t) {
+                m.insert(k.clone(), v);
+            }
+        }
+        let mut p = Params::from_map(&m);
+        p.angle = p.angle.round();
+        p
+    }
+}
+
+/// How much of each pixel the sort applies to (0 = not at all, 255 = fully), or None when there is no mask.
+fn mask_weights(p: &Params, w: usize, h: usize) -> Option<Vec<u8>> {
+    if p.mask == 0 {
+        return None;
+    }
+    let (cx, cy) = (p.mask_x as f64 * w as f64, p.mask_y as f64 * h as f64);
+    let (hw, hh) = ((p.mask_w as f64 * w as f64 / 2.0).max(0.5), (p.mask_h as f64 * h as f64 / 2.0).max(0.5));
+    let feather = p.mask_feather as f64;
+    let mut out = vec![0u8; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let (dx, dy) = (x as f64 + 0.5 - cx, y as f64 + 0.5 - cy);
+            // distance inside the edge in pixels (negative outside)
+            let depth = if p.mask == 1 { (hw - dx.abs()).min(hh - dy.abs()) } else { (1.0 - ((dx / hw).powi(2) + (dy / hh).powi(2)).sqrt()) * hw.min(hh) };
+            let inside = if depth < 0.0 { 0.0 } else if feather <= 0.0 { 1.0 } else { (depth / feather).clamp(0.0, 1.0) };
+            let weight = if p.mask_invert { 1.0 - inside } else { inside };
+            out[y * w + x] = (weight * 255.0).round() as u8;
+        }
+    }
+    Some(out)
 }
 
 /// splitmix64: tiny, fast, and the same sequence on every platform (so a bake is reproducible).
@@ -145,7 +211,7 @@ fn sort_key(key: Key, p: &[u8]) -> u8 {
 }
 
 /// Sort `line` (RGB triples) in place according to `p`. `rng` is seeded per line by the caller.
-fn sort_line(line: &mut [u8], p: &Params, rng: &mut Rng, scratch: &mut Vec<u8>, spans: &mut Vec<(usize, usize)>) {
+fn sort_line(line: &mut [u8], inside: Option<&[u8]>, p: &Params, rng: &mut Rng, scratch: &mut Vec<u8>, spans: &mut Vec<(usize, usize)>) {
     let n = line.len() / 3;
     spans.clear();
     match p.mode {
@@ -177,6 +243,27 @@ fn sort_line(line: &mut [u8], p: &Params, rng: &mut Rng, scratch: &mut Vec<u8>, 
                 at += len;
             }
         }
+    }
+    // a mask cuts spans where it ends: pixels outside it neither move nor take part
+    if let Some(f) = inside {
+        let mut cut = Vec::with_capacity(spans.len());
+        for &(a, b) in spans.iter() {
+            let mut start = None;
+            for i in a..b {
+                match (f[i] != 0, start) {
+                    (true, None) => start = Some(i),
+                    (false, Some(s)) => {
+                        cut.push((s, i));
+                        start = None;
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(s) = start {
+                cut.push((s, b));
+            }
+        }
+        *spans = cut;
     }
     let mix = (p.mix.clamp(0.0, 1.0) * 256.0).round() as u32;
     for &(a, b) in spans.iter() {
@@ -222,7 +309,7 @@ fn sort_line(line: &mut [u8], p: &Params, rng: &mut Rng, scratch: &mut Vec<u8>, 
 }
 
 /// Sort the rows of `buf` (`w` pixels wide, RGB24), spread over worker threads. `salt` varies the random blocks.
-fn sort_rows(buf: &mut [u8], w: usize, p: &Params, salt: u64) {
+fn sort_rows(buf: &mut [u8], flags: Option<&[u8]>, w: usize, p: &Params, salt: u64) {
     let row_bytes = w * 3;
     let rows = buf.len() / row_bytes;
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(rows.max(1)).min(16);
@@ -234,7 +321,8 @@ fn sort_rows(buf: &mut [u8], w: usize, p: &Params, salt: u64) {
                 for (r, line) in chunk.chunks_mut(row_bytes).enumerate() {
                     let y = (c * per + r) as u64;
                     let mut rng = Rng(p.seed.wrapping_mul(0x2545_F491_4F6C_DD1D) ^ salt.wrapping_mul(0x9E37_79B9) ^ y.wrapping_mul(0x85EB_CA6B));
-                    sort_line(line, p, &mut rng, &mut scratch, &mut spans);
+                    let row = c * per + r;
+                    sort_line(line, flags.map(|f| &f[row * w..(row + 1) * w]), p, &mut rng, &mut scratch, &mut spans);
                 }
             });
         }
@@ -276,18 +364,26 @@ impl Plan {
         let (w, h) = (self.w, self.h);
         assert_eq!(buf.len(), w * h * 3, "frame buffer does not match {w}x{h} RGB24");
         let salt = if p.flicker { frame + 1 } else { 0 };
+        let weights = mask_weights(p, w, h);
+        // pixels the sort may touch (row by row), and the picture to fade back to where the mask has a soft edge
+        let flags: Option<Vec<u8>> = weights.as_ref().map(|wt| wt.iter().map(|v| u8::from(*v > 0)).collect());
+        let original = weights.as_ref().filter(|wt| wt.iter().any(|v| *v > 0 && *v < 255)).map(|_| buf.to_vec());
         match &self.kind {
-            Kind::Rows => sort_rows(buf, w, p, salt),
+            Kind::Rows => sort_rows(buf, flags.as_deref(), w, p, salt),
             Kind::Columns => {
                 // sort columns by turning them into rows, and back
                 let mut t = vec![0u8; buf.len()];
+                let mut tf = flags.as_ref().map(|_| vec![0u8; w * h]);
                 for y in 0..h {
                     for x in 0..w {
                         let (s, d) = ((y * w + x) * 3, (x * h + y) * 3);
                         t[d..d + 3].copy_from_slice(&buf[s..s + 3]);
+                        if let (Some(tf), Some(f)) = (tf.as_mut(), flags.as_ref()) {
+                            tf[x * h + y] = f[y * w + x];
+                        }
                     }
                 }
-                sort_rows(&mut t, h, p, salt);
+                sort_rows(&mut t, tf.as_deref(), h, p, salt);
                 for y in 0..h {
                     for x in 0..w {
                         let (s, d) = ((x * h + y) * 3, (y * w + x) * 3);
@@ -298,14 +394,27 @@ impl Plan {
             Kind::Lines { order, starts } => {
                 // gather the lines one after another, sort them in parallel, scatter back
                 let mut g = vec![0u8; buf.len()];
+                let mut gf = flags.as_ref().map(|_| vec![0u8; w * h]);
                 for (i, &px) in order.iter().enumerate() {
-                    let px = px as usize * 3;
-                    g[i * 3..i * 3 + 3].copy_from_slice(&buf[px..px + 3]);
+                    let px = px as usize;
+                    g[i * 3..i * 3 + 3].copy_from_slice(&buf[px * 3..px * 3 + 3]);
+                    if let (Some(gf), Some(f)) = (gf.as_mut(), flags.as_ref()) {
+                        gf[i] = f[px];
+                    }
                 }
-                sort_ragged(&mut g, starts, p, salt);
+                sort_ragged(&mut g, gf.as_deref(), starts, p, salt);
                 for (i, &px) in order.iter().enumerate() {
                     let px = px as usize * 3;
                     buf[px..px + 3].copy_from_slice(&g[i * 3..i * 3 + 3]);
+                }
+            }
+        }
+        if let (Some(orig), Some(wt)) = (&original, &weights) {
+            for (i, &a) in wt.iter().enumerate() {
+                if a > 0 && a < 255 {
+                    for c in 0..3 {
+                        buf[i * 3 + c] = ((orig[i * 3 + c] as u32 * (255 - a as u32) + buf[i * 3 + c] as u32 * a as u32) / 255) as u8;
+                    }
                 }
             }
         }
@@ -338,7 +447,7 @@ fn angled_lines(w: usize, h: usize, theta: f64) -> (Vec<u32>, Vec<usize>) {
 }
 
 /// Sort lines of different lengths (`starts` are pixel offsets; `buf` holds them back to back), spread over worker threads.
-fn sort_ragged(buf: &mut [u8], starts: &[usize], p: &Params, salt: u64) {
+fn sort_ragged(buf: &mut [u8], flags: Option<&[u8]>, starts: &[usize], p: &Params, salt: u64) {
     let lines = starts.len() - 1;
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(lines.max(1)).min(16);
     let per = lines.div_ceil(threads.max(1)).max(1);
@@ -354,7 +463,8 @@ fn sort_ragged(buf: &mut [u8], starts: &[usize], p: &Params, salt: u64) {
                 for l in first..last {
                     let len = (starts[l + 1] - starts[l]) * 3;
                     let mut rng = Rng(p.seed.wrapping_mul(0x2545_F491_4F6C_DD1D) ^ salt.wrapping_mul(0x9E37_79B9) ^ (l as u64).wrapping_mul(0x85EB_CA6B));
-                    sort_line(&mut chunk[at..at + len], p, &mut rng, &mut scratch, &mut spans);
+                    let px = starts[l];
+                    sort_line(&mut chunk[at..at + len], flags.map(|f| &f[px..px + len / 3]), p, &mut rng, &mut scratch, &mut spans);
                     at += len;
                 }
             });
@@ -522,5 +632,108 @@ mod tests {
         assert_eq!((p.direction, p.key, p.mode, p.low, p.high), (Direction::Vertical, Key::Blue, Mode::Blocks, 0, 128));
         assert!(p.reverse && p.mix == 1.0 && p.length == 2);
         assert_eq!(Params::from_map(&BTreeMap::new()), Params::default());
+    }
+
+    /// A 16x8 picture whose every row falls from bright to dark (so sorting by brightness visibly reverses it).
+    fn falling_picture() -> Vec<u8> {
+        (0..8).flat_map(|_| (0..16u8).flat_map(|x| { let v = 255 - x * 15; [v, v, v] })).collect()
+    }
+    fn masked(shape: u8, invert: bool, feather: f32) -> Params {
+        Params { mode: Mode::Line, mask: shape, mask_x: 0.5, mask_y: 0.5, mask_w: 0.5, mask_h: 0.5, mask_feather: feather, mask_invert: invert, ..Params::default() }
+    }
+
+    #[test]
+    fn a_mask_keeps_everything_outside_it_and_the_runs_stop_at_its_edge() {
+        let (w, h) = (16, 8);
+        let orig = falling_picture();
+        let mut out = orig.clone();
+        sort_frame(&mut out, w, h, &masked(1, false, 0.0), 0);
+        // the rectangle covers x 4..12, y 2..6
+        for y in 0..h {
+            for x in 0..w {
+                let i = (y * w + x) * 3;
+                let inside = (4..12).contains(&x) && (2..6).contains(&y);
+                if !inside {
+                    assert_eq!(out[i..i + 3], orig[i..i + 3], "({x},{y}) is outside the mask and must not move");
+                }
+            }
+        }
+        // inside, each row's eight pixels are now in rising order and are still the same eight pixels
+        for y in 2..6 {
+            let row: Vec<u8> = (4..12).map(|x| out[(y * w + x) * 3]).collect();
+            let mut want: Vec<u8> = (4..12).map(|x| orig[(y * w + x) * 3]).collect();
+            want.sort_unstable();
+            assert_eq!(row, want, "row {y}");
+        }
+    }
+
+    #[test]
+    fn an_inverted_mask_sorts_the_outside_and_leaves_the_inside() {
+        let (w, h) = (16, 8);
+        let orig = falling_picture();
+        let mut out = orig.clone();
+        sort_frame(&mut out, w, h, &masked(1, true, 0.0), 0);
+        for y in 2..6 {
+            for x in 4..12 {
+                let i = (y * w + x) * 3;
+                assert_eq!(out[i..i + 3], orig[i..i + 3], "({x},{y}) is inside the shape");
+            }
+        }
+        // a row above the shape is a whole row: fully sorted
+        let row0: Vec<u8> = (0..w).map(|x| out[x * 3]).collect();
+        assert!(row0.windows(2).all(|p| p[0] <= p[1]));
+        // a row through the shape has two outside runs, each sorted on its own
+        let row3: Vec<u8> = (0..w).map(|x| out[(3 * w + x) * 3]).collect();
+        assert!(row3[..4].windows(2).all(|p| p[0] <= p[1]) && row3[12..].windows(2).all(|p| p[0] <= p[1]));
+    }
+
+    #[test]
+    fn an_ellipse_leaves_the_corners_of_its_box_alone_and_a_soft_edge_blends() {
+        let (w, h) = (16, 8);
+        let orig = falling_picture();
+        let mut hard = orig.clone();
+        sort_frame(&mut hard, w, h, &Params { mask_w: 1.0, mask_h: 1.0, ..masked(2, false, 0.0) }, 0);
+        let px = |b: &[u8], x: usize, y: usize| b[(y * w + x) * 3];
+        assert_eq!(px(&hard, 0, 0), px(&orig, 0, 0), "the corner is outside the ellipse");
+        assert_ne!(px(&hard, 8, 4), px(&orig, 8, 4), "the middle is sorted");
+
+        let mut soft = orig.clone();
+        sort_frame(&mut soft, w, h, &Params { mask_w: 1.0, mask_h: 1.0, ..masked(2, false, 6.0) }, 0);
+        // a pixel in the soft ring ends up between its original and its fully sorted value
+        let mut found = false;
+        for y in 0..h {
+            for x in 0..w {
+                let (o, f, s) = (px(&orig, x, y) as i32, px(&hard, x, y) as i32, px(&soft, x, y) as i32);
+                if s != o && s != f && s >= o.min(f) && s <= o.max(f) {
+                    found = true;
+                }
+            }
+        }
+        assert!(found, "somewhere on the soft edge the sort is only partly applied");
+    }
+
+    #[test]
+    fn animated_settings_are_read_from_their_keyframes_at_each_moment() {
+        use crate::keyframes::{Interp, Keyframe};
+        use crate::time::Rational;
+        let key = |t: i64, v: f64| Keyframe { t: Rational::from_int(t), v, interp: Interp::Linear };
+        let mut p = Params::from_map(&[("mode".to_string(), 1.0)].into_iter().collect());
+        assert_eq!(p.at(1.0), p, "nothing animated: unchanged");
+        p.base = [("mode".to_string(), 1.0), ("angle".to_string(), 10.0)].into_iter().collect();
+        p.anim = [("mix".to_string(), vec![key(0, 0.0), key(2, 1.0)]), ("angle".to_string(), vec![key(0, 0.0), key(2, 40.0)])].into_iter().collect();
+        assert!((p.at(1.0).mix - 0.5).abs() < 1e-6);
+        assert_eq!(p.at(1.0).angle, 20.0);
+        assert_eq!(p.at(1.3).angle, 26.0, "whole degrees (26 not 26.0000x), so plans are reused");
+        assert_eq!(p.at(0.0).mix, 0.0);
+        assert_eq!(p.at(9.0).mix, 1.0, "after the last key the value holds");
+        assert_eq!(p.at(1.0).mode, Mode::Line, "everything not animated stays as set");
+        assert!(p.at(1.0).anim.is_empty());
+    }
+
+    #[test]
+    fn mask_settings_come_from_the_effect_map_and_are_clamped() {
+        let m: BTreeMap<String, f64> = [("mask", 2.0), ("mask_x", 9.0), ("mask_w", -1.0), ("mask_feather", 5000.0), ("mask_invert", 1.0)].iter().map(|(k, v)| (k.to_string(), *v)).collect();
+        let p = Params::from_map(&m);
+        assert_eq!((p.mask, p.mask_x, p.mask_w, p.mask_feather, p.mask_invert), (2, 1.0, 0.0, 400.0, true));
     }
 }

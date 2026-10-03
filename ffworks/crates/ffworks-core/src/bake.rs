@@ -69,6 +69,9 @@ pub struct BakeStage {
     pub fps: String,
     /// Frames the render is expected to produce (progress only).
     pub frames: u64,
+    /// Index, within the clip, of the first frame this stage renders: animated settings are read at its time.
+    #[serde(default)]
+    pub first_frame: u64,
     /// Kept in the content-keyed cache for reuse (previews and exports alike; the cache is trimmed to a size limit). A stage
     /// that is not kept is deleted once its job has finished.
     pub keep: bool,
@@ -232,6 +235,7 @@ fn bake_use(g: &mut RenderGraph, mut u: Use, window: Option<(i64, i64)>, cache: 
             height: g.height,
             fps: format!("{}/{}", g.fps.num(), g.fps.den()),
             frames: (hi_f - lo_f).max(1) as u64,
+            first_frame: lo_f.max(0) as u64,
             keep,
         });
 
@@ -433,7 +437,11 @@ fn pipe_frames(tools: &Tools, stage: &BakeStage, decode_args: &[String], partial
     };
 
     let (w, h) = (stage.width as usize, stage.height as usize);
-    let plan = pixelsort::Plan::new(w, h, &stage.sort);
+    // animated settings are read per frame; the plan (how lines are cut) only changes when the angle or direction does
+    let fps_f = stage.fps.split_once('/').and_then(|(n, d)| Some(n.parse::<f64>().ok()? / d.parse::<f64>().ok()?)).filter(|f| *f > 0.0).unwrap_or(25.0);
+    let animated = !stage.sort.anim.is_empty();
+    let mut params = stage.sort.at(stage.first_frame as f64 / fps_f);
+    let mut plan = pixelsort::Plan::new(w, h, &params);
     let mut frame = vec![0u8; w * h * 3];
     let mut out = dec.stdout.take().expect("piped");
     let mut sink = enc.stdin.take().expect("piped");
@@ -456,7 +464,14 @@ fn pipe_frames(tools: &Tools, stage: &BakeStage, decode_args: &[String], partial
             failure = Some(Error::validation("the picture feeding the pixel sort ended in the middle of a frame"));
             break;
         }
-        plan.sort(&mut frame, &stage.sort, n);
+        if animated {
+            let next = stage.sort.at((stage.first_frame + n) as f64 / fps_f);
+            if next.angle != params.angle || next.direction != params.direction {
+                plan = pixelsort::Plan::new(w, h, &next);
+            }
+            params = next;
+        }
+        plan.sort(&mut frame, &params, n);
         if sink.write_all(&frame).is_err() {
             break; // the encoder died; its exit status says why
         }

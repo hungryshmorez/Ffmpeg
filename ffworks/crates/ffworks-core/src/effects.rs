@@ -86,15 +86,22 @@ fn builtin_registry() -> Vec<EffectDef> {
             p("direction", "Direction (0 across, 1 down)", 0.0, 1.0, 0.0, 1.0, ""),
             p("key", "Sort by (0 brightness, 1 hue, 2 saturation, 3 value, 4 red, 5 green, 6 blue)", 0.0, 6.0, 0.0, 1.0, ""),
             p("mode", "Which pixels (0 brightness range, 1 whole lines, 2 random blocks)", 0.0, 2.0, 0.0, 1.0, ""),
-            p("low", "Range from brightness", 0.0, 1.0, 0.25, 0.01, ""),
-            p("high", "Range up to brightness", 0.0, 1.0, 0.8, 0.01, ""),
-            p("length", "Block length", 2.0, 2000.0, 120.0, 1.0, "px"),
-            p("variation", "Block length variation", 0.0, 1.0, 0.5, 0.05, ""),
+            pa("low", "Range from brightness", 0.0, 1.0, 0.25, 0.01, ""),
+            pa("high", "Range up to brightness", 0.0, 1.0, 0.8, 0.01, ""),
+            pa("length", "Block length", 2.0, 2000.0, 120.0, 1.0, "px"),
+            pa("variation", "Block length variation", 0.0, 1.0, 0.5, 0.05, ""),
             p("reverse", "Order (0 dark to light, 1 light to dark)", 0.0, 1.0, 0.0, 1.0, ""),
-            p("mix", "Amount", 0.0, 1.0, 1.0, 0.01, ""),
+            pa("mix", "Amount", 0.0, 1.0, 1.0, 0.01, ""),
             p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, ""),
             p("flicker", "New blocks every frame (0 off, 1 on)", 0.0, 1.0, 0.0, 1.0, ""),
-            p("angle", "Angle (turns the direction, degrees)", -90.0, 90.0, 0.0, 1.0, "°"),
+            pa("angle", "Angle (turns the direction, degrees)", -90.0, 90.0, 0.0, 1.0, "°"),
+            p("mask", "Only inside a shape (0 everywhere, 1 rectangle, 2 ellipse)", 0.0, 2.0, 0.0, 1.0, ""),
+            pa("mask_x", "Shape centre across", 0.0, 1.0, 0.5, 0.01, ""),
+            pa("mask_y", "Shape centre down", 0.0, 1.0, 0.5, 0.01, ""),
+            pa("mask_w", "Shape width", 0.0, 1.0, 0.5, 0.01, ""),
+            pa("mask_h", "Shape height", 0.0, 1.0, 0.5, 0.01, ""),
+            pa("mask_feather", "Soft edge", 0.0, 400.0, 0.0, 1.0, "px"),
+            p("mask_invert", "Sort outside the shape instead (0 no, 1 yes)", 0.0, 1.0, 0.0, 1.0, ""),
         ]),
         e("chroma_shift", "Chroma shift (colour bleed)", "Glitch", &["chromashift"], vec![p("amount", "Shift", -40.0, 40.0, 8.0, 1.0, "px")]),
         e("scroll", "Scroll (wrap around)", "Glitch", &["scroll"], vec![p("speed", "Horizontal speed", -0.1, 0.1, 0.02, 0.005, "/frame")]),
@@ -304,10 +311,17 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
             for d in &def.params {
                 g(d.id)?;
             }
-            if g("mix")? == 0.0 {
+            // animated parameters travel with the marker as their keyframes; the bake reads them frame by frame
+            let anim: std::collections::BTreeMap<String, Vec<keyframes::Keyframe>> = def.params.iter().filter(|d| animated(d.id)).map(|d| (d.id.to_string(), kfs[&key(d.id)].clone())).collect();
+            if anim.is_empty() && g("mix")? == 0.0 {
                 return Ok(None);
             }
-            crate::bake::mark(&crate::pixelsort::Params::from_map(&inst.params))
+            let mut sort = crate::pixelsort::Params::from_map(&inst.params);
+            if !anim.is_empty() {
+                sort.base = inst.params.clone();
+                sort.anim = anim;
+            }
+            crate::bake::mark(&sort)
         }
         "chroma_shift" => {
             let a = g("amount")?.round() as i64;
