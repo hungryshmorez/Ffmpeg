@@ -23,6 +23,7 @@ import { VariationsDialog } from "./components/VariationsDialog";
 import { MoshDialog } from "./components/MoshDialog";
 import { CorruptDialog } from "./components/CorruptDialog";
 import { FramesDialog } from "./components/FramesDialog";
+import { JobAnnouncer, ModalFocus } from "./components/Accessibility";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -182,6 +183,8 @@ export default function App() {
       <MoshDialog />
       <CorruptDialog />
       <FramesDialog />
+      <ModalFocus />
+      <JobAnnouncer />
       <QueuePanel />
       <RecoveryDialog />
       <UnfinishedExportsDialog />
