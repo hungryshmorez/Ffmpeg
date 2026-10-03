@@ -161,3 +161,20 @@ export interface GlitchStatus {
 
 /** The local HTTP API (off by default): where to reach it and the secret callers must send. */
 export interface LocalApi { enabled: boolean; url: string | null; token: string | null; port: number }
+
+/** What the frame-lab dialog sends: a mode id plus the fields that mode uses. */
+export interface FrameArgs {
+  kind: string;
+  count?: number;
+  at?: number;
+  every?: number;
+  spread?: number;
+  seed?: number;
+  descending?: boolean;
+  donor?: string;
+  spliceAt?: number;
+  keyframeEvery: number;
+  dropKeyframes: boolean;
+  keepFirst: boolean;
+  kill?: number;
+}

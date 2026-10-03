@@ -22,6 +22,7 @@ import { PluginsDialog } from "./components/PluginsDialog";
 import { VariationsDialog } from "./components/VariationsDialog";
 import { MoshDialog } from "./components/MoshDialog";
 import { CorruptDialog } from "./components/CorruptDialog";
+import { FramesDialog } from "./components/FramesDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -180,6 +181,7 @@ export default function App() {
       <VariationsDialog />
       <MoshDialog />
       <CorruptDialog />
+      <FramesDialog />
       <QueuePanel />
       <RecoveryDialog />
       <UnfinishedExportsDialog />

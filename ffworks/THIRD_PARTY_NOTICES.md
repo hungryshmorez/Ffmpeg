@@ -23,6 +23,7 @@ Titles use **DejaVu Sans** and **DejaVu Sans Bold** (embedded in the binary; use
 | Library | Used for | License |
 |---|---|---|
 | [`scenesdetect`](https://crates.io/crates/scenesdetect) (a Rust port of [PySceneDetect](https://github.com/Breakthrough/PySceneDetect), © Brandon Castellano, BSD-3-Clause) | scene/shot cut detection | MIT OR Apache-2.0 |
+| [tomato](https://github.com/itsKaspar/tomato) (© Kaspar Ravel, MIT) and [Datamosher Pro](https://github.com/Akascape/Datamosher-Pro) (© Akascape, MIT) | frame lab: the idea of reordering, repeating and removing frames inside an AVI, and the mode list; reimplemented, no code copied | MIT |
 | [`ebur128`](https://github.com/sdroege/ebur128) (port of libebur128, © Jan Kokemüller / Sebastian Dröge) | loudness (LUFS, LRA, true peak) | MIT |
 | [`@xyflow/react`](https://github.com/xyflow/xyflow) (© webkid GmbH) | node-graph editor | MIT |
 | [xfade-easing](https://github.com/scriptituk/xfade-easing) (© 2025 Raymond Luckhurst) and the [gl-transitions](https://github.com/gl-transitions/gl-transitions) shaders it ports (© gl-transitions contributors) | 48 GL transitions as `xfade` custom expressions (`crates/ffworks-core/assets/glx/`, licences alongside) | MIT |

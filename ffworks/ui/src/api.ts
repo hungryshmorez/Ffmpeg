@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -62,6 +62,9 @@ export const api = {
   cancelMosh: () => invoke<boolean>("cancel_mosh"),
   makeCorruption: (clip: string, o: { codec: string; bits: number | null; dropEvery: number | null; keyframeEvery: number }) => invoke<StateView>("make_corruption", { clip, ...o }),
   cancelCorruption: () => invoke<boolean>("cancel_corruption"),
+  makeFrames: (clip: string, args: FrameArgs) => invoke<StateView>("make_frames", { clip, args }),
+  cancelFramelab: () => invoke<boolean>("cancel_framelab"),
+  onFramelabProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("framelab-progress", (ev) => cb(ev.payload)),
   onCorruptionProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("corruption-progress", (ev) => cb(ev.payload)),
   /** Fraction (0..1) of the mosh run, by stage. */
   onMoshProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("mosh-progress", (ev) => cb(ev.payload)),

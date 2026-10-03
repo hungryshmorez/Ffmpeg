@@ -10,6 +10,7 @@ pub mod colormgmt;
 pub mod commands;
 pub mod contact;
 pub mod corruptlab;
+pub mod framelab;
 pub mod demo;
 pub mod detect;
 pub mod effects;

@@ -104,6 +104,7 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           <button onClick={() => useUi.getState().setVariationsClip(clip.id)} title="See a sheet of random looks for this clip and pick one">Look variations…</button>
           <button onClick={() => useUi.getState().setMoshClip(clip.id)} title="Rewrite the motion inside this clip's compressed video (needs FFglitch) and put the result on a new track">Datamosh lab…</button>
           <button onClick={() => useUi.getState().setCorruptClip(clip.id)} title="Damage this clip's compressed video on purpose (flipped bits, dropped packets) and put the wreck on a new track">Corruption lab…</button>
+          <button onClick={() => useUi.getState().setFramesClip(clip.id)} title="Datamosh by rearranging the clip's compressed frames (remove keyframes, bloom, shuffle, splice another clip) and put the result on a new track">Frame lab…</button>
         </div>
       )}
       <RandomBar kind="effects" roll={(pool, count, seed) => api.randomEffects(clip.id, count, pool, seed)} />
