@@ -161,6 +161,19 @@ impl Engine {
                 let keys = crate::reactive::lfo_keys(shape, *rate, *low, *high, *phase, *seed, self.project.settings.fps, dur)?;
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
             }
+            Command::AnimateFromExpression { clip, param, expr, source, clamp } => {
+                let keys = {
+                    let (_, c) = self.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+                    let (_, lo, hi) = crate::clipprops::param_range(c, param, true)?;
+                    let src = source.as_deref().unwrap_or(param);
+                    crate::clipprops::param_range(c, src, false)?;
+                    // a source that cannot be read (a typo'd effect id) fails here, not halfway through the formula
+                    crate::expr::clip_value(c, src, 0.0)?;
+                    let read = |t: f64| crate::expr::clip_value(c, src, t).unwrap_or(0.0);
+                    crate::expr::keys(expr, &crate::expr::Inputs { fps: self.project.settings.fps, dur: c.duration.as_f64(), source: &read, range: (lo, hi), clamp: *clamp })?
+                };
+                self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
+            }
             Command::AnimateFromAudio { clip, param, source, low, high, smooth, band } => {
                 let keys = self.audio_keys(clip, param, source.as_deref(), *low, *high, *smooth, band.as_deref().unwrap_or("all"))?;
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)

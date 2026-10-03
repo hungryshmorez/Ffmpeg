@@ -26,7 +26,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 2/3: mask/lens-correction effects, truly editable multiple sequences as separate exports (compound clips and adjustment layers: DONE), audio graphs, keyframed graph options, graph templates, docking/workspaces. (Shortcut editor: DONE for the 19 keyboard actions.)
 * Phase 4: Rhai scripting with variables/loops/conditions and a permissions model: DONE (see STATUS.md). Open: a script editor panel, variables inside recorded macros, blueprints.
 * Phase 5: transient detection, drift correction for auto-sync.
-* Phase 6: expressions, live modulators (compiled to FFmpeg expressions), parameter linking, MIDI. LFO modulators baked to keyframes: DONE. Audio-reactive: DONE for loudness (whole or per band) and beat pulses ("Follow audio" → keyframes).
+* Phase 6: live modulators (compiled to FFmpeg expressions) and live links, MIDI. Expressions and baked parameter links: DONE (ƒ button). LFO modulators baked to keyframes: DONE. Audio-reactive: DONE for loudness (whole or per band) and beat pulses ("Follow audio" → keyframes).
 * Phases 7-9: pixel sort DONE (built-in sorter on every platform, see STATUS.md; angled sorts/keyframed settings/masks open), real motion-vector datamosh / FFglitch motion transfer DONE as the mosh lab (new file, not a live effect; amplify, drift, borrow another clip's motion), corruption lab open.
 * Phase 10: plugin system (Extism), local API.
 * DONE: unfinished exports are journalled and offered again after a crash or close.

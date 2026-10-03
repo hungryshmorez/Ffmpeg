@@ -243,6 +243,14 @@ fn register(rhai: &mut rhai::Engine, ctx: &Rc<Ctx>) {
         c.create_clip(Command::AddAdjustment { track: track.into(), start: secs(&start)?, duration: secs(&duration)? })
     });
     let c = Rc::clone(ctx);
+    rhai.register_fn("animate_expr", move |clip: &str, param: &str, expr: &str| -> Res<()> {
+        c.send(Command::AnimateFromExpression { clip: clip.into(), param: param.into(), expr: expr.into(), source: None, clamp: false })
+    });
+    let c = Rc::clone(ctx);
+    rhai.register_fn("link_param", move |clip: &str, param: &str, source: &str, expr: &str| -> Res<()> {
+        c.send(Command::AnimateFromExpression { clip: clip.into(), param: param.into(), expr: expr.into(), source: Some(source.into()), clamp: true })
+    });
+    let c = Rc::clone(ctx);
     rhai.register_fn("animate_lfo", move |clip: &str, param: &str, shape: &str, rate: Dynamic, low: Dynamic, high: Dynamic| -> Res<()> {
         c.send(Command::AnimateFromLfo { clip: clip.into(), param: param.into(), shape: shape.into(), rate: num(&rate)?, low: num(&low)?, high: num(&high)?, phase: 0.0, seed: 1 })
     });

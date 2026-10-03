@@ -13,6 +13,7 @@ pub mod effects;
 pub mod engine;
 pub mod engines;
 pub mod error;
+pub mod expr;
 pub mod diskspace;
 pub mod ffmpeg;
 pub mod ffprobe;

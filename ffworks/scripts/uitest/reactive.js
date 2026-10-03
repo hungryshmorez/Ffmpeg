@@ -77,6 +77,22 @@
     const lk = await waitFor(() => c2().keyframes.opacity, 15000);
     step("Apply writes a square wave: low in the first half second, high in the second", !!lk && evalK(lk, 0.25) < 0.05 && evalK(lk, 0.75) > 0.95, lk && `${evalK(lk, 0.25)} ${evalK(lk, 0.75)}`);
     step("it is one undo step named after the shape", /square LFO on opacity/.test(view().undoLabel || ""), view().undoLabel);
+    // formula: a third panel, with an optional link to another parameter
+    await P().dispatch({ type: "clear_keyframes", clip: c2().id, param: "opacity" }); await sleep(300);
+    const fb = await waitFor(() => $("[data-param='opacity'] button[aria-label^='Formula for']"));
+    step("an animatable field offers a formula button", !!fb);
+    fb.click(); await sleep(300);
+    const fp = $("[data-param='opacity'] .kf-follow[aria-label^='Formula for']");
+    step("the formula panel has the formula, the source and the clamp switch", !!fp && ["Formula", "Value of v", "Clamp to the allowed range"].every((l) => fp.querySelector(`[aria-label='${l}']`)));
+    setNum(fp.querySelector("[aria-label='Formula']"), "p"); await sleep(200);
+    [...fp.querySelectorAll("button")].find((b) => /Apply/.test(b.textContent)).click();
+    const fk = await waitFor(() => c2().keyframes.opacity, 15000);
+    const half = rat(c2().duration) / 2;
+    step("Apply writes the ramp: about half way up half way through the clip", !!fk && Math.abs(evalK(fk, half) - 0.5) < 0.03, fk && evalK(fk, half));
+    step("it is one undo step named after the parameter", /Formula on opacity/.test(view().undoLabel || ""), view().undoLabel);
+    setNum(fp.querySelector("[aria-label='Formula']"), "sin("); await sleep(200);
+    [...fp.querySelectorAll("button")].find((b) => /Replace|Apply/.test(b.textContent)).click(); await sleep(600);
+    step("a broken formula is refused with a toast and keeps the curve", (view().undoLabel || "") === "Formula on opacity" && !!$$(".toast").find((t) => /expression/i.test(t.textContent)), $$(".toast").map((t) => t.textContent).join("|"));
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await window.__TAURI_INTERNALS__.invoke("uitest_report", { report: JSON.stringify(R) });
 })();

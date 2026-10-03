@@ -84,6 +84,10 @@ pub enum Command {
     /// Make `param` oscillate: `shape` (sine, triangle, saw, square, random) at `rate` Hz between `low` and `high`, starting
     /// `phase` of a cycle in; `seed` only matters for random. Stored as keyframes (at most 200). One undo step.
     AnimateFromLfo { clip: Id, param: String, shape: String, rate: f64, low: f64, high: f64, #[serde(default)] phase: f64, #[serde(default)] seed: u64 },
+    /// Make `param` follow a formula evaluated once per frame (see `expr`): variables `t`, `n`, `d`, `p`, `fps`, and `v` = the value of
+    /// `source` (another parameter of the same clip; default: `param` itself). Stored as keyframes (a link, not a live binding).
+    /// Results outside the parameter's range are refused unless `clamp`. One undo step.
+    AnimateFromExpression { clip: Id, param: String, expr: String, #[serde(default)] source: Option<String>, #[serde(default)] clamp: bool },
     RemoveKeyframe { clip: Id, param: String, time: Rational },
     /// Remove all keyframes of `param`; the static value becomes the first key's value.
     ClearKeyframes { clip: Id, param: String },
@@ -180,6 +184,7 @@ impl Command {
             Command::AnimateFromAudio { param, .. } => format!("Animate {param} from audio"),
             Command::AnimateFromBeats { param, .. } => format!("Pulse {param} on beats"),
             Command::AnimateFromLfo { param, shape, .. } => format!("{shape} LFO on {param}"),
+            Command::AnimateFromExpression { param, .. } => format!("Formula on {param}"),
             Command::RemoveKeyframe { param, .. } => format!("Remove keyframe {param}"),
             Command::ClearKeyframes { param, .. } => format!("Clear keyframes {param}"),
             Command::SetClipSpeed { .. } => "Clip speed".into(),
@@ -209,7 +214,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
     let sid = seq.id.clone();
     let fps = p.settings.fps;
     match cmd {
-        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } | Command::AnimateFromLfo { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } | Command::AnimateFromLfo { .. } | Command::AnimateFromExpression { .. } => Err(Error::validation("batch is handled by the engine")),
         Command::NestClips { clips, name } => crate::nest::plan_nest(p, clips, name.as_deref()),
         Command::UnnestClip { clip } => crate::nest::plan_unnest(p, clip),
         Command::FitCompound { media } => crate::nest::plan_fit(p, media),

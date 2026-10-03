@@ -1,6 +1,6 @@
 # Status (update this at the end of every working session)
 
-_Last updated after compound clips: 341 Rust tests, 63 UI unit tests, 32 GUI scripts, clippy clean (core + CLI; the Tauri crate needs the webkit dev packages to lint)._
+_Last updated after expressions: 355 Rust tests, 63 UI unit tests, 32 GUI scripts, clippy clean (core + CLI; the Tauri crate needs the webkit dev packages to lint)._
 
 ## Done (tested)
 Phase 0 architecture doc · Phase 1 editor (import/probe/metadata, thumbnails, waveforms, multitrack timeline: place/trim/split/move/ripple-delete/linked A/V/lock/mute/snap, volume, undo/redo, save/load, export H.264/VP9/WAV/MP3 with progress/cancel/verify, Command Inspector, headless CLI) ·
@@ -11,7 +11,7 @@ Effects (11, with parameter metadata registry) + opacity · processed preview (c
 * **Phase 3:** full filter browser · visual filter-graph editor + raw nodes (use `@xyflow/react`) · GPU detection/hw encoders · scopes · effect-chain presets · more exports (H.265, ProRes, DNxHR, GIF, image sequence) · docking/workspaces · command palette · shortcut editor.
 * **Phase 4:** script editor panel · blueprints · dry-run diff view. (Rhai scripting with variables/loops/conditions/permissions, JSON command lists, recorder, macros, batch and watch folders are done.)
 * **Phase 5:** silence/black-frame/duplicate-frame/transient detection · audio auto-sync (cross-correlation). (beats, scenes, loudness done)
-* **Phase 6:** expressions (`fasteval`) · modulators · parameter linking · audio-reactive · custom effect builder · MIDI (`midir`).
+* **Phase 6:** live (unbaked) modulators and links · custom effect builder · MIDI (`midir`). (Expressions, baked links, LFO and audio-reactive are done.)
 * **Phase 7:** glitch presets · temporal/feedback effects · variation generator + contact sheet (pixel sort: see REUSE.md).
 * **Phases 8–9:** real datamoshing/codec work · motion vectors · optical flow · motion transfer · corruption lab. FFglitch trial done (below).
 * **Phase 10:** plugins (Extism) · user tools · headless polish · local API.
@@ -94,6 +94,13 @@ Effects panel → "Datamosh lab…" (video clips). FFglitch (a separate GPL tool
 * **Found by measuring:** FFglitch hands `-sp` parameters to `setup()` as `args.params`; the first version read `args.factor`, silently used its defaults, and the tests still passed until they compared amplify ×1 against ×4 and drift +6 against −6. The old trial script had the same latent flaw (hidden because its default matched).
 * **Tests:** 6 real-FFglitch tests in `tests/moshlab.rs` (they skip with a printed note without FFglitch, and *fail* when `FFWORKS_REQUIRE_FFGLITCH` is set, which CI does), 4 unit tests, GUI `mosh.sh`. CI downloads the pinned Linux 0.10.2 build; the Windows job bundles the pinned Win64 zip (ffedit/ffgac, ~60 MB uncompressed) and runs the same tests with the bundled tools after uploading the installer.
 * **Unverified:** everything on Windows (argument quoting of the `-sp` JSON through `ffedit.exe`, pipes into `ffgac.exe`) until CI reports; the look on real footage was judged by pixel differences, not by eye; H.264 sources are fine (they are re-encoded), H.264 *output* is not possible (FFglitch cannot edit it).
+
+## Expressions and parameter links (done, Linux-verified)
+Any animatable parameter has a **ƒ** button next to the LFO (∿) and audio (♪) ones: type a formula, optionally say what `v` is (another parameter of the same clip), optionally clamp, Apply. Like the LFO it is **baked to ordinary keyframes** (a one-off calculation, not a live binding: change the source or the clip's length and apply again), so it previews, renders, saves, undoes and edits like hand-set keys. Command `AnimateFromExpression`, one undo step ("Formula on <param>"); scripts get `animate_expr(clip, param, formula)` and `link_param(clip, param, source, formula)` (clamped).
+* **Formula language:** [fasteval](https://crates.io/crates/fasteval) (MIT): `+ - * / % ^`, comparisons, `if`, `sin cos tan abs min max floor ceil round sqrt log exp int sign pi() e()`, plus the variables `t` (seconds into the clip), `p` (progress 0–1), `n` (frame), `d` (clip length), `fps`, `v` (the source parameter's value at that moment; default: the parameter's own current value) and `noise(x)` (smooth deterministic noise 0–1). Evaluated once per frame (every few frames on clips over 200 frames), then thinned to the fewest keys that stay within 0.2% of the range (at most 200); a straight ramp becomes two keys.
+* **Refusals (nothing changes):** syntax errors and unknown names (with fasteval's message), a result that is not a number at some time (division by zero) and says when, a result outside the parameter's range (says the value, the time and the range) unless clamp is on, a parameter FFmpeg cannot animate, an unknown or unreadable source. Sources can be clip parameters or `fx:<effect id>:<param>`; the UI offers the clip-level ones.
+* **Tests:** 8 unit tests (`expr.rs`), 5 real-FFmpeg tests in `tests/expr.rs` (a ramp measured in the export, a link measured in the export, undo/save/load, an effect parameter, refusals), a script test, and GUI steps added to `reactive.sh`.
+* **Not done (still open from Phase 6):** live modulators compiled into the FFmpeg expression (so no baking), links that stay live when the source changes, MIDI (`midir`) and a custom effect builder.
 
 ## Compound clips (done, Linux-verified)
 Palette → "Make a compound clip from the selected clips" (Shift+click selects several; linked audio comes along). The clips fold into ONE clip on the timeline whose contents are a sequence of their own: double-click it (or palette → "Open the selected compound clip…") to edit what is inside with the ordinary tools, "← Back to the main timeline" to return. "Take the selected compound clip apart" puts the contents back on new tracks (trimmed to what the clip showed); "Fit … length" shortens its source to match its contents.

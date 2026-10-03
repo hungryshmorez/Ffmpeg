@@ -151,7 +151,7 @@ fn max_lfo_rate(fps: Fps) -> f64 {
 }
 
 /// splitmix64 hash to 0..1, so a random LFO is the same on every machine.
-fn unit_hash(seed: u64, k: i64) -> f64 {
+pub(crate) fn unit_hash(seed: u64, k: i64) -> f64 {
     let mut z = seed.wrapping_add((k as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)).wrapping_add(0x9E37_79B9_7F4A_7C15);
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
@@ -236,7 +236,7 @@ pub fn lfo_keys(shape: &str, rate: f64, low: f64, high: f64, phase: f64, seed: u
 }
 
 /// Ramer–Douglas–Peucker: the fewest points whose straight lines stay within `tol` of every point.
-fn thin(pts: &[(f64, f64)], tol: f64) -> Vec<(f64, f64)> {
+pub(crate) fn thin(pts: &[(f64, f64)], tol: f64) -> Vec<(f64, f64)> {
     if pts.len() <= 2 {
         return pts.to_vec();
     }

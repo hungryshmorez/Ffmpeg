@@ -181,3 +181,14 @@ fn selected_is_what_the_caller_chose() {
     let r = run(&mut eng, r#"print(`[${selected()}]`);"#, None, Permissions::READ_ONLY, "x").unwrap();
     assert_eq!(r.log, vec!["[]".to_string()]);
 }
+
+#[test]
+fn scripts_can_set_formulas_and_links() {
+    let (mut eng, ids) = project();
+    run(&mut eng, &format!(r#"animate_expr("{}", "opacity", "0.25 + 0.5 * p");"#, ids[0]), None, Permissions::EDIT, "x").unwrap();
+    let c = eng.project.active().unwrap().find_clip(&ids[0]).unwrap().1.clone();
+    assert!(c.keyframes["opacity"].len() >= 2);
+    run(&mut eng, &format!(r#"link_param("{0}", "x", "opacity", "v * 100");"#, ids[0]), None, Permissions::EDIT, "x").unwrap();
+    let c = eng.project.active().unwrap().find_clip(&ids[0]).unwrap().1.clone();
+    assert!(c.keyframes["x"].iter().any(|k| k.v > 25.0), "x follows opacity (clamped into its range): {:?}", c.keyframes["x"]);
+}

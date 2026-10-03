@@ -37,6 +37,17 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
   const [shape, setShape] = useState("sine");
   const [rate, setRate] = useState(1);
   const [phase, setPhase] = useState(0);
+  const [formula, setFormula] = useState(false);
+  const [expr, setExpr] = useState("p");
+  const [source, setSource] = useState("");
+  const [clamp, setClamp] = useState(true);
+  const sources = clip.kind === "audio" ? [["gain_db", "volume"], ["pan", "balance"]] : [["opacity", "opacity"], ["x", "position X"], ["y", "position Y"], ["scale", "scale"], ["rotation", "rotation"]];
+  const applyFormula = async () => {
+    setBusy(true);
+    try {
+      if (await dispatch({ type: "animate_from_expression", clip: clip.id, param: spec.param, expr, source: source || null, clamp })) { setFormula(false); setOpen(true); }
+    } finally { setBusy(false); }
+  };
   const applyLfo = async () => {
     setBusy(true);
     try {
@@ -78,10 +89,25 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
           <button className={`small ${follow ? "on" : ""}`} aria-label={`Follow audio for ${spec.label}`} aria-pressed={follow} title="Make this parameter follow the loudness of the clip's audio (creates keyframes)" onClick={() => { setFollow(!follow); setLfo(false); }}>♪</button>
         )}
         {spec.animatable && (
-          <button className={`small ${lfo ? "on" : ""}`} aria-label={`LFO for ${spec.label}`} aria-pressed={lfo} title="Make this parameter oscillate (sine, triangle, saw, square, random); creates keyframes" onClick={() => { setLfo(!lfo); setFollow(false); }}>∿</button>
+          <button className={`small ${lfo ? "on" : ""}`} aria-label={`LFO for ${spec.label}`} aria-pressed={lfo} title="Make this parameter oscillate (sine, triangle, saw, square, random); creates keyframes" onClick={() => { setLfo(!lfo); setFollow(false); setFormula(false); }}>∿</button>
+        )}
+        {spec.animatable && (
+          <button className={`small ${formula ? "on" : ""}`} aria-label={`Formula for ${spec.label}`} aria-pressed={formula} title="Drive this parameter with a formula in time (t, p, n, d, fps, v, sin, noise…), optionally following another parameter; creates keyframes" onClick={() => { setFormula(!formula); setLfo(false); setFollow(false); }}>ƒ</button>
         )}
         {animated && <button className="small" aria-label={`${open ? "Hide" : "Show"} keyframes for ${spec.label}`} title="Keyframe list" onClick={() => setOpen(!open)}>{kfs.length}</button>}
       </div>
+      {formula && (
+        <div className="kf-follow" aria-label={`Formula for ${spec.label}`}>
+          <label>{spec.label} = <input aria-label="Formula" className="wide" type="text" spellCheck={false} maxLength={500} value={expr} onChange={(e) => setExpr(e.currentTarget.value)} /></label>
+          <label>v is <select aria-label="Value of v" value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="">this parameter now</option>
+            {sources.filter(([id]) => id !== spec.param).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select></label>
+          <label><input aria-label="Clamp to the allowed range" type="checkbox" checked={clamp} onChange={(e) => setClamp(e.currentTarget.checked)} /> clamp to {spec.min}…{spec.max}</label>
+          <span className="muted">t seconds · p progress 0–1 · n frame · d length · v value · sin cos abs min max noise(x) pi()</span>
+          <button className="small primary" disabled={busy || !expr.trim()} onClick={() => void applyFormula()}>{animated ? "Replace keyframes" : "Apply"}</button>
+        </div>
+      )}
       {lfo && (
         <div className="kf-follow" aria-label={`LFO for ${spec.label}`}>
           <select aria-label="LFO shape" value={shape} onChange={(e) => setShape(e.target.value)}>

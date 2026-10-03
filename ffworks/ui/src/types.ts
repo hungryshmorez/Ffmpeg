@@ -104,6 +104,7 @@ export type Command =
   | { type: "remove_transition"; transition: string }
   | { type: "set_transition"; transition: string; kind?: string | null; duration?: Rational | null }
   | { type: "remove_ranges"; clip: string; ranges: [Rational, Rational][] }
+  | { type: "animate_from_expression"; clip: string; param: string; expr: string; source: string | null; clamp: boolean }
   | { type: "nest_clips"; clips: string[]; name?: string | null }
   | { type: "unnest_clip"; clip: string }
   | { type: "fit_compound"; media: string }
