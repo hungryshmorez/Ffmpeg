@@ -66,6 +66,7 @@ function buildActions(plugins: PluginInfo[]): PaletteAction[] {
     { id: "compound-leave", label: "Back to the main timeline (leave the compound clip)", keywords: "nest exit close sequence", run: () => void leaveCompound() },
     { id: "compound-apart", label: "Take the selected compound clip apart", keywords: "nest ungroup unnest", run: () => void takeCompoundApart() },
     { id: "compound-fit", label: "Fit the selected compound clip's length to its contents", keywords: "nest shorten", run: () => void fitCompound() },
+    { id: "library", label: "Media library: find files imported before…", keywords: "search index sqlite recent import history", run: () => ui.setLibraryOpen(true) },
     { id: "snapshots", label: "Snapshots (save and restore the timeline)…", keywords: "version backup history", run: () => ui.setSnapshotsOpen(true) },
     { id: "saveas", label: "Save project as…", run: () => void saveProject(true) },
     { id: "import", label: "Import media…", run: () => void importViaDialog() },

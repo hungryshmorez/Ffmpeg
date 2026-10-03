@@ -38,6 +38,8 @@ struct AppState {
     mosh_dir: PathBuf,
     /// Installed plugins (one folder each, see `ffworks_core::plugin`).
     plugins_dir: PathBuf,
+    /// Every source file ever imported on this machine (SQLite, see `ffworks_core::library`); None when it could not be opened.
+    library: Mutex<Option<ffworks_core::library::Library>>,
     /// Cancel switch of the mosh run in progress.
     mosh_cancel: Mutex<Option<CancelToken>>,
     /// Queue job of the preview render in progress (a new preview cancels the old one).
@@ -83,6 +85,12 @@ fn allow_media(app: &AppHandle, e: &Engine) {
     let scope = app.asset_protocol_scope();
     for m in e.project.media.iter().filter(|m| !m.is_generated()) {
         let _ = scope.allow_file(&m.path);
+    }
+    // wherever media becomes part of the open project (import, open, recover, relink) the media library remembers it
+    if let Some(lib) = app.state::<AppState>().library.lock().unwrap().as_ref() {
+        if let Err(err) = lib.record_project(&e.project) {
+            eprintln!("media library: {err}");
+        }
     }
 }
 
@@ -339,6 +347,24 @@ async fn run_plugin(state: State<'_, AppState>, folder: String, action: String, 
     Ok(ScriptOutcome { log: report.log, commands: report.commands, view: view(&e) })
 }
 
+/// Search the media library: files imported on this machine whose name or folder contains every word of `query`.
+#[tauri::command]
+fn search_library(state: State<AppState>, query: String, limit: Option<usize>) -> Result<Vec<ffworks_core::library::Entry>, String> {
+    match state.library.lock().unwrap().as_ref() {
+        Some(lib) => lib.search(&query, limit.unwrap_or(100)).map_err(s),
+        None => Err("the media library could not be opened on this machine".into()),
+    }
+}
+
+/// Drop library entries whose file no longer exists; returns how many.
+#[tauri::command]
+fn forget_missing_library(state: State<AppState>) -> Result<usize, String> {
+    match state.library.lock().unwrap().as_ref() {
+        Some(lib) => lib.forget_missing().map_err(s),
+        None => Err("the media library could not be opened on this machine".into()),
+    }
+}
+
 /// Read a SubRip/WebVTT file and put its cues on a new "Subtitles" track as title clips (one undo step).
 #[tauri::command]
 fn import_subtitles(state: State<AppState>, path: String, offset: f64) -> Result<StateView, String> {
@@ -490,7 +516,18 @@ async fn relink_search(app: AppHandle, dir: String) -> Result<serde_json::Value,
     tauri::async_runtime::spawn_blocking(move || {
         let st = app2.state::<AppState>();
         let mut e = st.engine.lock().unwrap();
-        let (done, rest) = e.relink_search(&[PathBuf::from(dir)]).map_err(s)?;
+        let mut dirs = vec![PathBuf::from(dir)];
+        // look first where the library saw the same content (it may have moved to a place nobody chose to search)
+        if let Some(lib) = st.library.lock().unwrap().as_ref() {
+            let offline = e.offline_media();
+            let missing: Vec<&ffworks_core::project::MediaAsset> = e.project.media.iter().filter(|m| offline.contains(&m.id)).collect();
+            for d in lib.likely_dirs(&missing).unwrap_or_default() {
+                if !dirs.contains(&d) {
+                    dirs.push(d);
+                }
+            }
+        }
+        let (done, rest) = e.relink_search(&dirs).map_err(s)?;
         allow_media(&app2, &e);
         Ok(serde_json::json!({ "state": view(&e), "relinked": done, "unresolved": rest.into_iter().map(|(id, c)| serde_json::json!({ "mediaId": id, "candidates": c })).collect::<Vec<_>>() }))
     })
@@ -1351,6 +1388,11 @@ pub fn run() {
                 bundled_ffglitch: app.path().resource_dir().ok().map(|d| d.join("ffglitch")).filter(|d| d.is_dir()),
                 mosh_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("mosh"),
                 plugins_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("plugins"),
+                library: Mutex::new(
+                    ffworks_core::library::Library::open(&app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("library.sqlite"))
+                        .map_err(|e| eprintln!("media library unavailable: {e}"))
+                        .ok(),
+                ),
                 mosh_cancel: Mutex::new(None),
                 preview_job: Mutex::new(None),
             });
@@ -1387,12 +1429,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, search_library, forget_missing_library, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, search_library, forget_missing_library, list_plugins, install_plugin, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, cancel_mosh, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

@@ -45,6 +45,7 @@ pub mod random;
 pub mod proxy;
 pub mod queue;
 pub mod quick;
+pub mod library;
 pub mod loudness;
 pub mod recovery;
 pub mod relink;

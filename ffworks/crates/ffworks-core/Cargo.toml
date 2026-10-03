@@ -19,6 +19,7 @@ rhai = { version = "1.26.1", default-features = false, features = ["std", "no_mo
 fasteval = "0.2"
 tiny_http = "0.12"
 extism = { version = "1.30", default-features = false, features = ["wasmtime-default-features"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 
 [dev-dependencies]
 tempfile = "3"

@@ -96,6 +96,8 @@ interface UiStore {
   setMoshClip: (c: string | null) => void;
   setVariationsClip: (c: string | null) => void;
   snapshotsOpen: boolean;
+  libraryOpen: boolean;
+  setLibraryOpen: (o: boolean) => void;
   setSnapshotsOpen: (o: boolean) => void;
   shortcutsOpen: boolean;
   setShortcutsOpen: (o: boolean) => void;
@@ -140,6 +142,8 @@ export const useUi = create<UiStore>((set) => ({
   setMoshClip: (moshClip) => set({ moshClip }),
   setVariationsClip: (variationsClip) => set({ variationsClip }),
   snapshotsOpen: false,
+  libraryOpen: false,
+  setLibraryOpen: (libraryOpen) => set({ libraryOpen }),
   setSnapshotsOpen: (snapshotsOpen) => set({ snapshotsOpen }),
   shortcutsOpen: false,
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
