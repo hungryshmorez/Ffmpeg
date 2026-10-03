@@ -97,8 +97,11 @@ fn build() -> Built {
 fn export(eng: &Engine, out: &Path, preset: &str) -> Vec<JobState> {
     let t = tools();
     let caps = Capabilities::discover(&t).unwrap();
-    let g = render_graph::build(&eng.project).unwrap();
+    let mut g = render_graph::build(&eng.project).unwrap();
+    // effects FFmpeg cannot express (pixel sort) are planned as pre-render stages, as `compile_project` does
+    let stages = ffworks_core::bake::prepare(&mut g, None, &ffworks_core::bake::cache_dir(), false).unwrap();
     let mut job = compile(&g, &RenderOptions { output: out.to_path_buf(), settings: ExportSettings::find(preset).unwrap(), range: None, scale_div: 1 }, Some(&caps)).unwrap();
+    job.stages = stages;
     job.program = t.ffmpeg.clone();
     let tmp = out.parent().unwrap().join("tmp");
     let mut states = vec![];

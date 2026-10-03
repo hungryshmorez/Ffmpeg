@@ -39,13 +39,16 @@
     step("the preview file exists in the cache", /previews/.test(R.preview), R.preview);
 
     const out = "__OUT__";
-    await inv("start_export", { preset: "ffv1_mkv", output: out, engine: null, keepExisting: false });
-    const done = await waitFor(() => window.__ffworks.useJobs.getState().jobs.find((j) => j.output === out && (j.state.state === "completed" || j.state.state === "failed")), 120000);
-    step("the export finishes", done && done.state.state === "completed", done && JSON.stringify(done.state));
+    const job = await inv("start_export", { preset: "ffv1_mkv", output: out, engine: null, keepExisting: false });
+    const jobs = () => window.__ffworks.useJobs.getState().jobs;
+    const done = await waitFor(() => ["completed", "failed", "canceled"].includes(jobs()[job]?.state), 120000);
+    step("the export finishes", done && jobs()[job].state === "completed", JSON.stringify(jobs()[job]));
     R.out = out;
 
     P().setView(await inv("undo")); await sleep(300);
-    step("removing the effect is one undo step", vclip().effects.length === 0);
+    step("undo reverts the last edit (the setting) first", vclip().effects.length === 1 && vclip().effects[0].params.mode === 0);
+    P().setView(await inv("undo")); await sleep(300);
+    step("a second undo removes the effect", vclip().effects.length === 0);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();
