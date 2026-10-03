@@ -20,9 +20,15 @@ jobs:
         with: { node-version: 22 }
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
+      - name: Cache the FFglitch download (ffglitch.org is a small host; a cached copy keeps CI independent of it)
+        id: ffglitch-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ffglitch.zip
+          key: ffglitch-0.10.2-linux-x86_64-28dd39ee
       - name: Fetch FFglitch (pinned) for the mosh lab tests
         run: |
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/ffglitch.zip" https://ffglitch.org/pub/bin/linux64/ffglitch-0.10.2-linux-x86_64.zip
+          [ -s "$RUNNER_TEMP/ffglitch.zip" ] || curl -fsSL --connect-timeout 30 --retry 6 --retry-all-errors --retry-delay 20 -o "$RUNNER_TEMP/ffglitch.zip" https://ffglitch.org/pub/bin/linux64/ffglitch-0.10.2-linux-x86_64.zip
           echo "28dd39eee7d5be6d6f6b3f126e25563118eb0b47dc174941509f64f90a09bd40  $RUNNER_TEMP/ffglitch.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/ffglitch.zip" -d "$RUNNER_TEMP"
           echo "FFWORKS_FFGLITCH=$RUNNER_TEMP/ffglitch-0.10.2-linux-x86_64" >> "$GITHUB_ENV"
