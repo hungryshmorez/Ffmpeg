@@ -81,6 +81,9 @@ pub enum Command {
     /// Make `param` jump to `high` on every beat of `source` (same default as above) and fall back to `low` over `decay`
     /// seconds. Beats come from FFWORKS's onset detector. Stored as keyframes. One undo step.
     AnimateFromBeats { clip: Id, param: String, #[serde(default)] source: Option<Id>, low: f64, high: f64, decay: f64 },
+    /// Make `param` oscillate: `shape` (sine, triangle, saw, square, random) at `rate` Hz between `low` and `high`, starting
+    /// `phase` of a cycle in; `seed` only matters for random. Stored as keyframes (at most 200). One undo step.
+    AnimateFromLfo { clip: Id, param: String, shape: String, rate: f64, low: f64, high: f64, #[serde(default)] phase: f64, #[serde(default)] seed: u64 },
     RemoveKeyframe { clip: Id, param: String, time: Rational },
     /// Remove all keyframes of `param`; the static value becomes the first key's value.
     ClearKeyframes { clip: Id, param: String },
@@ -168,6 +171,7 @@ impl Command {
             Command::SetKeyframes { param, keys, .. } => format!("Set {} keyframes on {param}", keys.len()),
             Command::AnimateFromAudio { param, .. } => format!("Animate {param} from audio"),
             Command::AnimateFromBeats { param, .. } => format!("Pulse {param} on beats"),
+            Command::AnimateFromLfo { param, shape, .. } => format!("{shape} LFO on {param}"),
             Command::RemoveKeyframe { param, .. } => format!("Remove keyframe {param}"),
             Command::ClearKeyframes { param, .. } => format!("Clear keyframes {param}"),
             Command::SetClipSpeed { .. } => "Clip speed".into(),
@@ -194,7 +198,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
     let sid = seq.id.clone();
     let fps = p.settings.fps;
     match cmd {
-        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } | Command::AnimateFromLfo { .. } => Err(Error::validation("batch is handled by the engine")),
         Command::RenameProject { name } => {
             if name.trim().is_empty() {
                 return Err(Error::validation("project name cannot be empty"));

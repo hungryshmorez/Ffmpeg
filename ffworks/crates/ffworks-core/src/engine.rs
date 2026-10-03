@@ -138,6 +138,17 @@ impl Engine {
                 let keys = self.beat_keys(clip, param, source.as_deref(), *low, *high, *decay)?;
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
             }
+            Command::AnimateFromLfo { clip, param, shape, rate, low, high, phase, seed } => {
+                let dur = {
+                    let (_, c) = self.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+                    // both ends must be values the parameter allows, and it must be animatable
+                    crate::clipprops::check_value(c, param, *low, true)?;
+                    crate::clipprops::check_value(c, param, *high, true)?;
+                    c.duration.as_f64()
+                };
+                let keys = crate::reactive::lfo_keys(shape, *rate, *low, *high, *phase, *seed, self.project.settings.fps, dur)?;
+                self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
+            }
             Command::AnimateFromAudio { clip, param, source, low, high, smooth, band } => {
                 let keys = self.audio_keys(clip, param, source.as_deref(), *low, *high, *smooth, band.as_deref().unwrap_or("all"))?;
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)

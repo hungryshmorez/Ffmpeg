@@ -94,6 +94,7 @@ export type Command =
   | { type: "remove_keyframe"; clip: string; param: string; time: Rational }
   | { type: "clear_keyframes"; clip: string; param: string }
   | { type: "set_keyframes"; clip: string; param: string; keys: { t: Rational; v: number; interp?: Interp }[] }
+  | { type: "animate_from_lfo"; clip: string; param: string; shape: string; rate: number; low: number; high: number; phase?: number; seed?: number }
   | { type: "animate_from_beats"; clip: string; param: string; source?: string | null; low: number; high: number; decay: number }
   | { type: "animate_from_audio"; clip: string; param: string; source?: string | null; low: number; high: number; smooth: number; band?: string | null }
   | { type: "set_clip_speed"; clip: string; speed: Rational }

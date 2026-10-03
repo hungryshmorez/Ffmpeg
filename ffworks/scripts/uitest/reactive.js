@@ -62,6 +62,21 @@
     const peak = (b) => Math.max(...[-3, -2, -1, 0, 1, 2, 3].map((f) => evalK(pk, b + f * 0.04)));
     step("opacity pulses on the clicks and falls back between them", pk && peak(1.4) > 0.95 && peak(2.4) > 0.95 && evalK(pk, 2.0) < 0.15, pk && `${peak(1.4)} ${peak(2.4)} ${evalK(pk, 2.0)}`);
     step("it is one undo step", /Pulse opacity on beats/.test(view().undoLabel || ""), view().undoLabel);
+    // LFO: the same field has a second panel that writes a waveform
+    await P().dispatch({ type: "clear_keyframes", clip: c2().id, param: "opacity" }); await sleep(300);
+    const lb = await waitFor(() => $("[data-param='opacity'] button[aria-label^='LFO for']"));
+    step("an animatable field offers an LFO button", !!lb);
+    lb.click(); await sleep(300);
+    const lf = $("[data-param='opacity'] .kf-follow[aria-label^='LFO for']");
+    step("the LFO panel has shape, rate, range and phase", !!lf && ["LFO shape", "LFO rate in Hz", "LFO low value", "LFO high value", "LFO phase"].every((l) => lf.querySelector(`[aria-label='${l}']`)));
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(lf.querySelector("[aria-label='LFO shape']"), "square"); lf.querySelector("[aria-label='LFO shape']").dispatchEvent(new Event("change", { bubbles: true }));
+    setNum(lf.querySelector("[aria-label='LFO rate in Hz']"), 1);
+    setNum(lf.querySelector("[aria-label='LFO low value']"), 0);
+    setNum(lf.querySelector("[aria-label='LFO high value']"), 1); await sleep(200);
+    [...lf.querySelectorAll("button")].find((b) => /Apply/.test(b.textContent)).click();
+    const lk = await waitFor(() => c2().keyframes.opacity, 15000);
+    step("Apply writes a square wave: low in the first half second, high in the second", !!lk && evalK(lk, 0.25) < 0.05 && evalK(lk, 0.75) > 0.95, lk && `${evalK(lk, 0.25)} ${evalK(lk, 0.75)}`);
+    step("it is one undo step named after the shape", /square LFO on opacity/.test(view().undoLabel || ""), view().undoLabel);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await window.__TAURI_INTERNALS__.invoke("uitest_report", { report: JSON.stringify(R) });
 })();
