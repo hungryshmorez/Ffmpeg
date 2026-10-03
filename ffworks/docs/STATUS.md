@@ -1,6 +1,6 @@
 # Status (update this at the end of every working session)
 
-_Last updated after colour management: 382 Rust tests, 68 UI unit tests, 34 GUI scripts, clippy clean (core + CLI; the Tauri crate needs the webkit dev packages to lint)._
+_Last updated after colour management: 382 Rust tests, 68 UI unit tests, 35 GUI scripts, clippy clean (core + CLI; the Tauri crate needs the webkit dev packages to lint)._
 
 ## Done (tested)
 Phase 0 architecture doc · Phase 1 editor (import/probe/metadata, thumbnails, waveforms, multitrack timeline: place/trim/split/move/ripple-delete/linked A/V/lock/mute/snap, volume, undo/redo, save/load, export H.264/VP9/WAV/MP3 with progress/cancel/verify, Command Inspector, headless CLI) ·
@@ -94,6 +94,9 @@ Effects panel → "Datamosh lab…" (video clips). FFglitch (a separate GPL tool
 * **Found by measuring:** FFglitch hands `-sp` parameters to `setup()` as `args.params`; the first version read `args.factor`, silently used its defaults, and the tests still passed until they compared amplify ×1 against ×4 and drift +6 against −6. The old trial script had the same latent flaw (hidden because its default matched).
 * **Tests:** 6 real-FFglitch tests in `tests/moshlab.rs` (they skip with a printed note without FFglitch, and *fail* when `FFWORKS_REQUIRE_FFGLITCH` is set, which CI does), 4 unit tests, GUI `mosh.sh`. CI downloads the pinned Linux 0.10.2 build; the Windows job bundles the pinned Win64 zip (ffedit/ffgac, ~60 MB uncompressed) and runs the same tests with the bundled tools after uploading the installer.
 * **Unverified:** everything on Windows (argument quoting of the `-sp` JSON through `ffedit.exe`, pipes into `ffgac.exe`) until CI reports; the look on real footage was judged by pixel differences, not by eye; H.264 sources are fine (they are re-encoded), H.264 *output* is not possible (FFglitch cannot edit it).
+
+## Cancelling previews (done)
+A processed preview used a cancel token nobody could trigger, so a long pixel sort or compound render could not be stopped. While a preview renders the Monitor now shows **Cancel** next to the percentage; `cancel_preview` stops every FFmpeg process and the bake, no partial files are left, the user gets "Preview canceled" (not a failure toast), and starting a new preview cancels an older one. GUI test `scripts/uitest/previewcancel.sh` (9 steps, a pixel sort over 12 s of 1080p cancelled after 1.5 s, then a normal preview). **Still not in the job queue:** previews and analyses (beats, loudness, scenes) have their own progress and cancel rather than appearing in the Queue panel.
 
 ## Colour management (done for Rec.709 projects, Linux-verified)
 The project is Rec.709 SDR. Footage whose file says otherwise is converted on the way in (`colormgmt.rs`, decided from the probe's colour tags, shown in the Command Inspector as part of the filter graph): **BT.601** (`smpte170m` / `bt470bg`) and **BT.2020 SDR** get `colorspace=all=bt709:iall=…` (matrix and primaries); **PQ and HLG HDR** are tone-mapped to SDR through linear light (`zscale` → `tonemap=hable` → `zscale` back to Rec.709; needs `zscale` and `tonemap` in the FFmpeg build, which gyan "essentials" and "full" have, and the render says so if they are missing). Untagged or Rec.709 footage is untouched: a project without such clips compiles exactly as before. **Every video export is now tagged Rec.709** (`-colorspace/-color_primaries/-color_trc bt709`; not for PNG/GIF/raw), so players stop guessing the matrix from the resolution.

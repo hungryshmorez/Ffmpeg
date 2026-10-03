@@ -109,7 +109,8 @@ export function Monitor() {
     try {
       useUi.getState().setPreview(await api.renderPreview(fromSec(start), fromSec(Math.min(dur, start + span)), div));
     } catch (e) {
-      useProject.getState().toast("error", `Preview failed: ${e}`);
+      if (/cancel/i.test(String(e))) useProject.getState().toast("info", "Preview canceled");
+      else useProject.getState().toast("error", `Preview failed: ${e}`);
     } finally {
       useUi.getState().setPreviewBusy(false);
     }
@@ -192,6 +193,7 @@ export function Monitor() {
           <option value={1}>Full</option><option value={2}>1/2</option><option value={4}>1/4</option><option value={8}>1/8</option>
         </select>
         <button disabled={busy} onClick={() => void renderPreview()} title="Render a processed preview of the next 10 seconds from the playhead">{busy ? `Rendering preview…${progress !== null ? ` ${Math.round(progress * 100)}%` : ""}` : "Render preview"}</button>
+        {busy && <button aria-label="Cancel preview" title="Stop rendering the preview" onClick={() => void api.cancelPreview()}>Cancel</button>}
       </div>
     </div>
   );

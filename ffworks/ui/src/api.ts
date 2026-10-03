@@ -62,6 +62,7 @@ export const api = {
   checkFilterGraph: (graph: FilterGraph) => invoke<string[]>("check_filter_graph", { graph }),
   filterHelp: (name: string) => invoke<FilterHelp>("filter_help", { name }),
   listClipProps: () => invoke<ClipProps>("list_clip_props"),
+  cancelPreview: () => invoke<boolean>("cancel_preview"),
   renderPreview: (start: string, end: string, scaleDiv: number) => invoke<PreviewInfo>("render_preview", { start, end, scaleDiv }),
   listExportPresets: () => invoke<ExportPreset[]>("list_export_presets"),
   previewCommand: (preset: string, output: string, engine?: string) => invoke<string>("preview_command", { preset, output, engine: engine ?? null }),
