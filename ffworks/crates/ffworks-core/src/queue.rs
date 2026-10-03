@@ -111,6 +111,7 @@ impl JobQueue {
         let id = format!("job_{}_{seq}", now());
         let snap = JobSnapshot { job_id: id.clone(), operation: operation.into(), output: job.output.to_string_lossy().into_owned(), priority, state: JobState::Queued, enqueued_unix: now() };
         g.jobs.push(Record { snap: snap.clone(), job, cancel: CancelToken::new(), log: None, seq });
+        write_journal_locked(&self.shared, &g);
         drop(g);
         notify(&self.shared, &snap);
         self.shared.cv.notify_one();
@@ -125,6 +126,7 @@ impl JobQueue {
             JobState::Queued => {
                 r.snap.state = JobState::Canceled;
                 let snap = r.snap.clone();
+                write_journal_locked(&self.shared, &g);
                 drop(g);
                 notify(&self.shared, &snap);
                 true
@@ -173,15 +175,23 @@ fn notify(s: &Shared, snap: &JobSnapshot) {
     if let Some(l) = s.listener.lock().unwrap().as_ref() {
         l(snap);
     }
-    // progress updates do not change what is unfinished; only arrivals and state changes do
-    if !matches!(&snap.state, JobState::Rendering { fraction: Some(_), .. }) {
-        write_journal(s);
-    }
+}
+
+/// Progress updates do not change what is unfinished; only arrivals and state changes do.
+fn changes_journal(st: &JobState) -> bool {
+    !matches!(st, JobState::Rendering { fraction: Some(_), .. })
 }
 
 fn write_journal(s: &Shared) {
-    let Some((path, ops)) = s.journal.lock().unwrap().clone() else { return };
     let g = s.inner.lock().unwrap();
+    write_journal_locked(s, &g);
+}
+
+/// Write the journal from `g` while the caller still holds the state lock. A state change and its journal entry are one step:
+/// anyone who can see "completed" also finds the journal without that job (a reader polling the state used to be able to
+/// read the journal in between and see a finished job still listed).
+fn write_journal_locked(s: &Shared, g: &Inner) {
+    let Some((path, ops)) = s.journal.lock().unwrap().clone() else { return };
     // jobs canceled by shutdown were not finished: keep the journal as it was when shutdown began
     if g.shutdown {
         return;
@@ -192,7 +202,6 @@ fn write_journal(s: &Shared) {
         .filter(|r| ops.contains(&r.snap.operation) && matches!(r.snap.state, JobState::Queued | JobState::Rendering { .. }))
         .map(|r| SavedJob { operation: r.snap.operation.clone(), priority: r.snap.priority, enqueued_unix: r.snap.enqueued_unix, was_running: matches!(r.snap.state, JobState::Rendering { .. }), job: r.job.clone() })
         .collect();
-    drop(g);
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
@@ -222,7 +231,9 @@ fn worker(s: Arc<Shared>) {
                 if let Some(i) = idx {
                     let r = &mut g.jobs[i];
                     r.snap.state = JobState::Rendering { fraction: None, fps: None, elapsed_secs: 0.0, eta_secs: None };
-                    break (r.snap.clone(), r.job.clone(), r.cancel.clone());
+                    let picked = (r.snap.clone(), r.job.clone(), r.cancel.clone());
+                    write_journal_locked(&s, &g);
+                    break picked;
                 }
                 g = s.cv.wait(g).unwrap();
             }
@@ -239,13 +250,17 @@ fn worker(s: Arc<Shared>) {
             let st = if matches!(st, JobState::Queued) { JobState::Rendering { fraction: None, fps: None, elapsed_secs: 0.0, eta_secs: None } } else { st };
             let snap = {
                 let mut g = s2.inner.lock().unwrap();
-                match g.jobs.iter_mut().find(|r| r.snap.job_id == id) {
+                let snap = match g.jobs.iter_mut().find(|r| r.snap.job_id == id) {
                     Some(r) => {
                         r.snap.state = st;
                         r.snap.clone()
                     }
                     None => return,
+                };
+                if changes_journal(&snap.state) {
+                    write_journal_locked(&s2, &g);
                 }
+                snap
             };
             notify(&s2, &snap);
         };
