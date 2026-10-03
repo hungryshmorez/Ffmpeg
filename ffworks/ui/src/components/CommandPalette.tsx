@@ -35,6 +35,7 @@ function buildActions(plugins: PluginInfo[]): PaletteAction[] {
       if (typeof p !== "string") return;
       try { proj.setView(await api.runMacro(p, ui.selected)); proj.toast("info", "Macro applied (one undo step)"); } catch (e) { proj.toast("error", String(e)); }
     })() },
+    { id: "script-editor", label: "Script editor: write, dry-run and run a Rhai script…", keywords: "macro automation rhai loop condition code program", run: () => ui.setScriptOpen(true) },
     { id: "script-run", label: "Run a script (Rhai) on the project…", keywords: "macro automation rhai loop condition", run: () => void (async () => {
       const p = await open({ title: "Script to run", filters: [{ name: "Rhai script", extensions: ["rhai"] }] });
       if (typeof p !== "string") return;

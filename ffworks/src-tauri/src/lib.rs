@@ -276,6 +276,8 @@ fn set_local_api(app: AppHandle, state: State<AppState>, enabled: bool, new_toke
 struct ScriptOutcome {
     log: Vec<String>,
     commands: usize,
+    /// What the commands were called, in order (the undo list's names).
+    changes: Vec<String>,
     view: StateView,
 }
 
@@ -286,7 +288,41 @@ async fn run_script(state: State<'_, AppState>, path: String, selected: Option<S
     let mut e = state.engine.lock().unwrap();
     let name = std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).unwrap_or("script").to_string();
     let report = ffworks_core::script::run(&mut e, &source, selected.as_deref(), ffworks_core::script::Permissions { edit: true, analysis: allow_analysis }, &format!("Script {name}")).map_err(s)?;
-    Ok(ScriptOutcome { log: report.log, commands: report.commands, view: view(&e) })
+    Ok(ScriptOutcome { log: report.log, commands: report.commands, changes: report.changes, view: view(&e) })
+}
+
+/// Run script text typed in the editor panel. With `dry` the script runs for real (so errors, output and the list of commands
+/// are exact) and every change is then taken back: the project and its undo history are left as they were.
+#[tauri::command]
+async fn run_script_text(state: State<'_, AppState>, source: String, selected: Option<String>, allow_analysis: bool, dry: bool) -> Result<ScriptOutcome, String> {
+    let mut e = state.engine.lock().unwrap();
+    let report = ffworks_core::script::run_with(&mut e, &source, selected.as_deref(), ffworks_core::script::Permissions { edit: true, analysis: allow_analysis }, "Script (editor)", !dry).map_err(s)?;
+    Ok(ScriptOutcome { log: report.log, commands: report.commands, changes: report.changes, view: view(&e) })
+}
+
+/// The example scripts the editor offers: title, a line about each, and the source.
+#[tauri::command]
+fn script_examples() -> Vec<(&'static str, &'static str, &'static str)> {
+    ffworks_core::script::EXAMPLES.to_vec()
+}
+
+/// Read a script file for the editor panel (text only, size-limited like a script run).
+#[tauri::command]
+fn read_script_file(path: String) -> Result<String, String> {
+    let meta = std::fs::metadata(&path).map_err(|e| format!("{path}: {e}"))?;
+    if meta.len() as usize > ffworks_core::script::MAX_SOURCE {
+        return Err(format!("{path} is larger than a script may be ({} bytes)", ffworks_core::script::MAX_SOURCE));
+    }
+    std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Save the editor's script text to a file.
+#[tauri::command]
+fn write_script_file(path: String, source: String) -> Result<(), String> {
+    if source.len() > ffworks_core::script::MAX_SOURCE {
+        return Err(format!("the script is longer than a script may be ({} bytes)", ffworks_core::script::MAX_SOURCE));
+    }
+    std::fs::write(&path, source).map_err(|e| format!("{path}: {e}"))
 }
 
 #[derive(serde::Serialize)]
@@ -381,7 +417,7 @@ async fn run_plugin(state: State<'_, AppState>, folder: String, action: String, 
     let grants = ffworks_core::settings::Settings::load(&state.settings_file).plugin_grants.get(&folder).map(|g| g.to_grants()).unwrap_or_else(ffworks_core::plugin::Grants::edit_only);
     let mut e = state.engine.lock().unwrap();
     let report = ffworks_core::plugin::run_with(&mut e, &pkg, &action, selected.as_deref(), &grants, &format!("Plugin {}", pkg.manifest.name)).map_err(s)?;
-    Ok(ScriptOutcome { log: report.log, commands: report.commands, view: view(&e) })
+    Ok(ScriptOutcome { log: report.log, commands: report.commands, changes: vec![], view: view(&e) })
 }
 
 /// Search the media library: files imported on this machine whose name or folder contains every word of `query`.
@@ -1602,12 +1638,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, search_library, forget_missing_library, list_plugins, install_plugin, set_plugin_grant, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, list_mosh_effects, cancel_mosh, make_corruption, cancel_corruption, make_frames, cancel_framelab, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, run_script_text, script_examples, read_script_file, write_script_file, search_library, forget_missing_library, list_plugins, install_plugin, set_plugin_grant, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, list_mosh_effects, cancel_mosh, make_corruption, cancel_corruption, make_frames, cancel_framelab, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, search_library, forget_missing_library, list_plugins, install_plugin, set_plugin_grant, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, list_mosh_effects, cancel_mosh, make_corruption, cancel_corruption, make_frames, cancel_framelab, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, run_script_text, script_examples, read_script_file, write_script_file, search_library, forget_missing_library, list_plugins, install_plugin, set_plugin_grant, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, list_mosh_effects, cancel_mosh, make_corruption, cancel_corruption, make_frames, cancel_framelab, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())

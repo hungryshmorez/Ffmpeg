@@ -192,3 +192,45 @@ fn scripts_can_set_formulas_and_links() {
     let c = eng.project.active().unwrap().find_clip(&ids[0]).unwrap().1.clone();
     assert!(c.keyframes["x"].iter().any(|k| k.v > 25.0), "x follows opacity (clamped into its range): {:?}", c.keyframes["x"]);
 }
+
+#[test]
+fn a_dry_run_reports_what_would_change_and_changes_nothing() {
+    let (mut eng, ids) = project();
+    // some history, an undone step, so "left as it was" includes the redo list
+    eng.dispatch(Command::SetClipOpacity { clip: ids[0].clone(), opacity: 0.8 }).unwrap();
+    eng.dispatch(Command::SetClipOpacity { clip: ids[0].clone(), opacity: 0.7 }).unwrap();
+    eng.undo().unwrap();
+    let (before, history, redo) = (snapshot(&eng), eng.history(), eng.redo_label().map(String::from));
+    let src = r#"for c in clips() { add_effect(c.id, "negate"); } set_opacity(clips()[0].id, 0.25); print("hi");"#;
+    let report = ffworks_core::script::run_with(&mut eng, src, None, Permissions::EDIT, "Script (editor)", false).unwrap();
+    assert_eq!(report.commands, 4);
+    assert_eq!(report.changes, ["Add effect negate", "Add effect negate", "Add effect negate", "Clip opacity"]);
+    assert_eq!(report.log, ["hi"]);
+    assert_eq!((snapshot(&eng), eng.history(), eng.redo_label().map(String::from)), (before.clone(), history.clone(), redo.clone()), "project, undo list and redo list are exactly as they were");
+
+    // the same text really run keeps it, as one step, with the same report
+    let real = ffworks_core::script::run_with(&mut eng, src, None, Permissions::EDIT, "Script (editor)", true).unwrap();
+    assert_eq!(real.changes, report.changes);
+    assert_eq!(eng.history().len(), history.len() + 1);
+    assert_ne!(snapshot(&eng), before);
+
+    // a failing script still reports the error and keeps nothing, dry or not
+    let (mut eng2, _) = project();
+    let before2 = snapshot(&eng2);
+    let e = ffworks_core::script::run_with(&mut eng2, "add_marker(1, \"x\"); nonsense_function();", None, Permissions::EDIT, "s", false).unwrap_err().to_string();
+    assert!(e.contains("script"), "{e}");
+    assert_eq!(snapshot(&eng2), before2);
+}
+
+#[test]
+fn every_example_script_runs_as_a_dry_run_and_does_something() {
+    assert!(ffworks_core::script::EXAMPLES.len() >= 4);
+    for (title, about, source) in ffworks_core::script::EXAMPLES {
+        assert!(!title.is_empty() && !about.is_empty() && source.starts_with("//"), "{title}: a title, a line about it, and a comment on top");
+        let (mut eng, _) = project();
+        let before = snapshot(&eng);
+        let r = ffworks_core::script::run_with(&mut eng, source, None, Permissions::EDIT, "example", false).unwrap_or_else(|e| panic!("{title}: {e}"));
+        assert!(r.commands > 0, "{title} issues commands");
+        assert_eq!(snapshot(&eng), before, "{title}: a dry run changes nothing");
+    }
+}

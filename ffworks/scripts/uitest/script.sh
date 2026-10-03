@@ -30,7 +30,7 @@ loop { n += 1; }
 RHAI
 sed -e "s|__GOOD__|$W/good.rhai|g" -e "s|__BAD__|$W/bad.rhai|g" -e "s|__LOOP__|$W/loop.rhai|g" scripts/uitest/script.js > "$W/t.js"
 node --check "$W/t.js"
-export DISPLAY=:99 XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/cfg" WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1
+export DISPLAY=:99 XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/cfg" XDG_DATA_HOME="$W/data" WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1
 pgrep Xvfb >/dev/null || { Xvfb :99 -screen 0 1600x1000x24 >/dev/null 2>&1 & sleep 2; }
 FFWORKS_UITEST_SCRIPT="$W/t.js" FFWORKS_UITEST_OUT="$W/r.json" target/debug/ffworks-app >"$W/app.log" 2>&1 & P=$!
 for i in $(seq 1 120); do [ -f "$W/r.json" ] && break; sleep 1; done

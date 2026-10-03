@@ -50,7 +50,20 @@ pub struct Report {
     pub log: Vec<String>,
     /// Editing commands it issued.
     pub commands: usize,
+    /// What they did, in order, as the undo list would name them (at most [`MAX_CHANGES`]).
+    pub changes: Vec<String>,
 }
+
+/// Example scripts for the editor panel: (title, one line about it, source). Each one is run as a dry run in the tests.
+pub const EXAMPLES: &[(&str, &str, &str)] = &[
+    ("Tint long clips", "loops, conditions, print and a marker", include_str!("../assets/scripts/tint_long_clips.rhai")),
+    ("Markers every five seconds", "a while loop over the timeline's length", include_str!("../assets/scripts/markers_every_five_seconds.rhai")),
+    ("Pixel-sort every clip", "add_effect with parameters", include_str!("../assets/scripts/pixel_sort_every_clip.rhai")),
+    ("Pulse the opacity", "an LFO baked to keyframes", include_str!("../assets/scripts/pulse_the_opacity.rhai")),
+];
+
+/// How many command names a [`Report`] keeps.
+pub const MAX_CHANGES: usize = 500;
 
 type Fail = Box<EvalAltResult>;
 type Res<T> = std::result::Result<T, Fail>;
@@ -59,6 +72,7 @@ struct Ctx {
     eng: Rc<RefCell<Engine>>,
     perms: Permissions,
     count: Cell<usize>,
+    changes: RefCell<Vec<String>>,
     selected: String,
 }
 
@@ -93,7 +107,7 @@ pub(crate) fn vet(perms: Permissions, cmd: &Command) -> std::result::Result<(), 
         return Err(Refusal::ReadOnly);
     }
     match cmd {
-        Command::ImportMedia { .. } | Command::RelinkMedia { .. } | Command::AnimateFromMidi { .. } => Err(Refusal::ReadsFiles),
+        Command::ImportMedia { .. } | Command::RelinkMedia { .. } | Command::AnimateFromMidi { .. } | Command::SetEffectFile { .. } => Err(Refusal::ReadsFiles),
         Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } if !perms.analysis => Err(Refusal::NeedsAnalysis),
         _ => Ok(()),
     }
@@ -103,7 +117,7 @@ impl Ctx {
     fn send(&self, cmd: Command) -> Res<()> {
         match vet(self.perms, &cmd) {
             Err(Refusal::ReadOnly) => return Err(fail("this script is running read-only (a dry run): editing is not allowed")),
-            Err(Refusal::ReadsFiles) => return Err(fail("scripts cannot read files from disk (import_media / relink_media / animate_from_midi are not allowed)")),
+            Err(Refusal::ReadsFiles) => return Err(fail("scripts cannot read files from disk (import_media / relink_media / animate_from_midi / set_effect_file are not allowed)")),
             Err(Refusal::NeedsAnalysis) => return Err(fail("this command analyses the project's audio with FFmpeg; run the script with analysis allowed")),
             Ok(()) => {}
         }
@@ -112,7 +126,13 @@ impl Ctx {
             return Err(fail(format!("a script may issue at most {MAX_COMMANDS} editing commands")));
         }
         self.count.set(n);
-        self.eng.borrow_mut().dispatch(cmd).map_err(|e| fail(e.to_string()))
+        let name = cmd.label();
+        self.eng.borrow_mut().dispatch(cmd).map_err(|e| fail(e.to_string()))?;
+        let mut changes = self.changes.borrow_mut();
+        if changes.len() < MAX_CHANGES {
+            changes.push(name);
+        }
+        Ok(())
     }
 
     fn clip_ids(&self) -> HashSet<String> {
@@ -282,13 +302,19 @@ fn describe(e: &EvalAltResult) -> String {
 /// Run `source` against `eng` as one undo step (named after `label`). `selected` is what `selected()` returns (a clip id the user
 /// picked, or none). On any error nothing the script did is kept.
 pub fn run(eng: &mut Engine, source: &str, selected: Option<&str>, perms: Permissions, label: &str) -> Result<Report> {
+    run_with(eng, source, selected, perms, label, true)
+}
+
+/// [`run`] that can keep nothing: with `keep` false the script runs for real (so its errors, log and the commands it would
+/// issue are exact) and every change is then taken back, leaving the project and its undo history as they were.
+pub fn run_with(eng: &mut Engine, source: &str, selected: Option<&str>, perms: Permissions, label: &str, keep: bool) -> Result<Report> {
     if source.len() > MAX_SOURCE {
         return Err(Error::validation(format!("the script is too long ({} bytes; the limit is {MAX_SOURCE})", source.len())));
     }
     // the script's functions need the engine behind a shared handle; it is put back whatever happens
     let stand_in = Engine::new("script stand-in", Default::default(), eng.tools.clone());
     let shared = Rc::new(RefCell::new(std::mem::replace(eng, stand_in)));
-    let ctx = Rc::new(Ctx { eng: Rc::clone(&shared), perms, count: Cell::new(0), selected: selected.unwrap_or("").to_string() });
+    let ctx = Rc::new(Ctx { eng: Rc::clone(&shared), perms, count: Cell::new(0), changes: RefCell::default(), selected: selected.unwrap_or("").to_string() });
     let log: Rc<RefCell<Vec<String>>> = Rc::default();
 
     let outcome = (|| -> Result<()> {
@@ -319,8 +345,12 @@ pub fn run(eng: &mut Engine, source: &str, selected: Option<&str>, perms: Permis
         let ast = rhai.compile(source).map_err(|e| Error::validation(format!("script: {e}")))?;
         let group = shared.borrow_mut().begin_group();
         match rhai.run_ast(&ast) {
-            Ok(()) => {
+            Ok(()) if keep => {
                 shared.borrow_mut().end_group(group, label);
+                Ok(())
+            }
+            Ok(()) => {
+                shared.borrow_mut().abort_group(group);
                 Ok(())
             }
             Err(e) => {
@@ -331,9 +361,10 @@ pub fn run(eng: &mut Engine, source: &str, selected: Option<&str>, perms: Permis
     })();
 
     let commands = ctx.count.get();
+    let changes = ctx.changes.take();
     drop(ctx);
     *eng = Rc::try_unwrap(shared).map_err(|_| Error::validation("internal: the script kept a hold on the project"))?.into_inner();
     outcome?;
     let log = Rc::try_unwrap(log).map(RefCell::into_inner).unwrap_or_default();
-    Ok(Report { log, commands })
+    Ok(Report { log, commands, changes })
 }

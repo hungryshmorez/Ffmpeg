@@ -240,7 +240,7 @@ fn handle(engine: &Arc<Mutex<Engine>>, token: &str, addr: SocketAddr, allow: All
 /// Why a command may not come through the API (they read files or run analyses the caller has not been allowed).
 fn refuse(cmd: &Command, allow: Allow) -> Option<String> {
     match cmd {
-        Command::ImportMedia { .. } | Command::RelinkMedia { .. } | Command::AnimateFromMidi { .. } => Some("import_media / relink_media / animate_from_midi read files from disk and are not available through the API".into()),
+        Command::ImportMedia { .. } | Command::RelinkMedia { .. } | Command::AnimateFromMidi { .. } | Command::SetEffectFile { .. } => Some("import_media / relink_media / animate_from_midi / set_effect_file read files from disk and are not available through the API".into()),
         Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } if !allow.analysis => Some("this command analyses the project's audio; start the API with analysis allowed".into()),
         Command::Batch { commands, .. } => commands.iter().find_map(|c| refuse(c, allow)),
         _ => None,

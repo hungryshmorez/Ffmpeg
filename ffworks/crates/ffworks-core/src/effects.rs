@@ -77,6 +77,7 @@ fn builtin_registry() -> Vec<EffectDef> {
         e("grayscale", "Black & white", "Color", &["hue"], vec![]),
         e("sepia", "Sepia", "Color", &["colorchannelmixer"], vec![]),
         e("negate", "Invert colours", "Color", &["negate"], vec![]),
+        e("lut", "Colour lookup table (LUT)", "Color", &["lut3d"], vec![]),
         e("posterize", "Posterize", "Stylize", &["lutrgb"], vec![p("bits", "Bits per channel", 1.0, 7.0, 3.0, 1.0, "")]),
         e("edges", "Edge detect", "Stylize", &["edgedetect"], vec![]),
         e("rgb_split", "RGB split (glitch)", "Glitch", &["rgbashift"], vec![p("amount", "Shift", 0.0, 60.0, 8.0, 1.0, "px")]),
@@ -157,7 +158,15 @@ pub struct EffectInstance {
     /// Only for `pixel_sort`: the project media (a picture or a video) whose brightness is the mask when `mask` is 3.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<String>,
+    /// Only for `lut`: the lookup-table file (`.cube`, `.3dl`, `.dat`, `.m3d`, `.csp`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
 }
+
+/// File types FFmpeg's `lut3d` reads.
+pub const LUT_EXTENSIONS: &[&str] = &["cube", "3dl", "dat", "m3d", "csp"];
+/// Largest lookup table accepted (bytes).
+pub const LUT_MAX_BYTES: u64 = 64 << 20;
 
 /// Effect id of the node-graph effect.
 pub const GRAPH_EFFECT: &str = "graph";
@@ -178,7 +187,7 @@ impl EffectInstance {
             params.insert(k.clone(), *v);
         }
         let graph = (effect == GRAPH_EFFECT).then(crate::filtergraph::FilterGraph::passthrough);
-        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph, picture: None })
+        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph, picture: None, file: None })
     }
 }
 
@@ -326,6 +335,14 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
             }
             crate::bake::mark(&sort)
         }
+        "lut" => {
+            // nothing happens until a file is chosen; a chosen file that has gone missing is an error, not a silent no-op
+            let Some(f) = inst.file.as_deref() else { return Ok(None) };
+            if !std::path::Path::new(f).is_file() {
+                return Err(Error::validation(format!("the LUT file '{f}' is missing")));
+            }
+            format!("lut3d=file={}:interp=tetrahedral", crate::titles::escape_filter_value(f))
+        }
         "chroma_shift" => {
             let a = g("amount")?.round() as i64;
             if a == 0 { return Ok(None); }
@@ -406,7 +423,7 @@ mod tests {
         for d in registry() {
             let e = EffectInstance::new("x".into(), d.id, &BTreeMap::new()).unwrap();
             // crop, eq and volume at their defaults are deliberate no-ops
-            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume"].contains(&d.id), "{}", d.id);
+            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume", "lut"].contains(&d.id), "{}", d.id);
         }
     }
 

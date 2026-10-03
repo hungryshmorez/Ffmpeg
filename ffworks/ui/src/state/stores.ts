@@ -98,6 +98,8 @@ interface UiStore {
   setCorruptClip: (c: string | null) => void;
   framesClip: string | null;
   setFramesClip: (c: string | null) => void;
+  scriptOpen: boolean;
+  setScriptOpen: (o: boolean) => void;
   setVariationsClip: (c: string | null) => void;
   snapshotsOpen: boolean;
   pluginsOpen: boolean;
@@ -150,6 +152,8 @@ export const useUi = create<UiStore>((set) => ({
   setCorruptClip: (corruptClip) => set({ corruptClip }),
   framesClip: null,
   setFramesClip: (framesClip) => set({ framesClip }),
+  scriptOpen: false,
+  setScriptOpen: (scriptOpen) => set({ scriptOpen }),
   setVariationsClip: (variationsClip) => set({ variationsClip }),
   snapshotsOpen: false,
   pluginsOpen: false,

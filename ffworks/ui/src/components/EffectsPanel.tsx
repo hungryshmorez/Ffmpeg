@@ -1,3 +1,4 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { activeSequence } from "../state/sequences";
 import { api } from "../api";
@@ -124,6 +125,16 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
               <div className="field">
                 <button onClick={() => useUi.getState().setGraphEdit({ clip: clip.id, fx: fx.id })}>Edit graph…</button>
                 <span className="muted"> {fx.graph ? `${fx.graph.nodes.length - 2} filter(s)` : ""}</span>
+              </div>
+            )}
+            {fx.effect === "lut" && (
+              <div className="field row">
+                <button onClick={() => void (async () => {
+                  const f = await open({ title: "Colour lookup table", filters: [{ name: "LUT", extensions: ["cube", "3dl", "dat", "m3d", "csp"] }] });
+                  if (typeof f === "string") void dispatch({ type: "set_effect_file", clip: clip.id, effect_id: fx.id, path: f });
+                })()}>Choose a LUT file…</button>
+                <span className="muted grow">{fx.file ? `LUT: ${fx.file.split(/[\\/]/).pop()}` : "no file chosen: the picture is unchanged"}</span>
+                {fx.file && <button className="small" aria-label="Remove the LUT file" onClick={() => void dispatch({ type: "set_effect_file", clip: clip.id, effect_id: fx.id, path: null })}>✕</button>}
               </div>
             )}
             {fx.effect === "pixel_sort" && Math.round(fx.params.mask ?? 0) === 3 && (

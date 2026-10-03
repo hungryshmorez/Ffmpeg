@@ -86,7 +86,7 @@
   };
   const check = (name, found) => step(name, found.length === 0, found.length + " problem(s):\n" + found.join("\n"));
   const checkBoth = (name) => { check(name, scan()); check("contrast: " + name, contrast()); };
-  const closeAll = async () => { window.__ffworks.useJobs.getState().setQueueOpen(false); for (const k of ["setSnapshotsOpen", "setShortcutsOpen", "setPaletteOpen", "setDemoOpen", "setEnginesOpen", "setFavsOpen", "setFiltersOpen", "setExportOpen", "setDiagOpen", "setLibraryOpen", "setPluginsOpen"]) U()[k]?.(false);
+  const closeAll = async () => { window.__ffworks.useJobs.getState().setQueueOpen(false); for (const k of ["setSnapshotsOpen", "setScriptOpen", "setShortcutsOpen", "setPaletteOpen", "setDemoOpen", "setEnginesOpen", "setFavsOpen", "setFiltersOpen", "setExportOpen", "setDiagOpen", "setLibraryOpen", "setPluginsOpen"]) U()[k]?.(false);
     U().setCorruptClip?.(null); await sleep(150); };
   try {
     await waitFor(() => $(".app") && view());
@@ -111,7 +111,7 @@
     checkBoth("with an effect and keyframes on the clip");
     U().select(view().project.sequences[0].tracks[0].clips[1].id); await sleep(600);
     checkBoth("with a title clip selected");
-    for (const [name, setter] of [["export", "setExportOpen"], ["diagnostics", "setDiagOpen"], ["snapshots", "setSnapshotsOpen"], ["keyboard shortcuts", "setShortcutsOpen"], ["FFmpeg builds", "setEnginesOpen"], ["favourites", "setFavsOpen"], ["filter browser", "setFiltersOpen"], ["demo mode", "setDemoOpen"], ["render queue", "setQueueOpen"], ["media library", "setLibraryOpen"], ["plugins", "setPluginsOpen"]]) {
+    for (const [name, setter] of [["export", "setExportOpen"], ["script editor", "setScriptOpen"], ["diagnostics", "setDiagOpen"], ["snapshots", "setSnapshotsOpen"], ["keyboard shortcuts", "setShortcutsOpen"], ["FFmpeg builds", "setEnginesOpen"], ["favourites", "setFavsOpen"], ["filter browser", "setFiltersOpen"], ["demo mode", "setDemoOpen"], ["render queue", "setQueueOpen"], ["media library", "setLibraryOpen"], ["plugins", "setPluginsOpen"]]) {
       await closeAll();
       (setter === "setQueueOpen" ? window.__ffworks.useJobs.getState() : U())[setter](true); await sleep(700);
       checkBoth(`the ${name} dialog`);

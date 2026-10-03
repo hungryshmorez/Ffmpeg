@@ -561,6 +561,12 @@ pub fn prepare_asset(tools: &Tools, path: &Path) -> Result<MediaAsset> {
     })
 }
 
+/// The absolute form of `path` as text, without the `\\?\` prefix Windows' `canonicalize` adds. The file must exist.
+pub fn absolute_path(path: &Path) -> Result<String> {
+    let abs = fs::canonicalize(path).map_err(|e| Error::io(path, e))?;
+    Ok(strip_verbatim(&abs).to_string_lossy().into_owned())
+}
+
 /// Remove the `\\?\` prefix `canonicalize` adds on Windows so paths stay readable and portable.
 fn strip_verbatim(p: &Path) -> PathBuf {
     let s = p.to_string_lossy();

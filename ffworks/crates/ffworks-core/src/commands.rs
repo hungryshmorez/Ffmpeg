@@ -3,6 +3,7 @@
 //! [`Patch`]es without mutating anything; the engine then applies the patches and records them.
 
 use crate::error::{Error, Result};
+use std::path::Path;
 use crate::patch::Patch;
 use crate::project::{new_id, Clip, Id, Marker, MediaAsset, Project, ProjectSettings, Track, TrackKind};
 use crate::time::{snap_to_frame, Rational};
@@ -64,6 +65,8 @@ pub enum Command {
     SetEffectGraph { clip: Id, effect_id: Id, graph: crate::filtergraph::FilterGraph },
     /// The picture (project media) a pixel sort's mask 3 reads, or none.
     SetEffectPicture { clip: Id, effect_id: Id, media: Option<Id> },
+    /// The lookup-table file a `lut` effect applies, or none.
+    SetEffectFile { clip: Id, effect_id: Id, path: Option<String> },
     MoveEffect { clip: Id, effect_id: Id, index: usize },
     SetClipOpacity { clip: Id, opacity: f64 },
     /// Set a static clip parameter (`x`, `y`, `scale`, `rotation`, `opacity`) or `fx:<effect id>:<param>`. Refused while the parameter is animated.
@@ -172,6 +175,7 @@ impl Command {
             Command::SetEffectEnabled { .. } => "Toggle effect".into(),
             Command::SetEffectGraph { .. } => "Edit filter graph".into(),
             Command::SetEffectPicture { .. } => "Set mask picture".into(),
+            Command::SetEffectFile { .. } => "Set LUT file".into(),
             Command::MoveEffect { .. } => "Reorder effect".into(),
             Command::SetClipOpacity { .. } => "Clip opacity".into(),
             Command::SetClipParam { param, .. } => format!("Set {param}"),
@@ -520,9 +524,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(out)
         }
-        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::SetEffectPicture { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::SetKeyframes { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
+        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::SetEffectPicture { .. } | Command::SetEffectFile { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::SetKeyframes { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
             let clip_id = match cmd {
-                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::SetEffectGraph { clip, .. } | Command::SetEffectPicture { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::SetKeyframes { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
+                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::SetEffectGraph { clip, .. } | Command::SetEffectPicture { clip, .. } | Command::SetEffectFile { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::SetKeyframes { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
                 _ => unreachable!(),
             };
             let (t, c) = seq.find_clip(clip_id).ok_or_else(|| Error::NotFound(format!("clip {clip_id}")))?;
@@ -589,6 +593,26 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                         }
                     }
                     c2.effects[i].picture = media.clone();
+                }
+                Command::SetEffectFile { effect_id, path, .. } => {
+                    let i = find_fx(&c2, effect_id)?;
+                    if c2.effects[i].effect != "lut" {
+                        return Err(Error::validation("only a colour lookup table (LUT) effect has a file"));
+                    }
+                    c2.effects[i].file = match path {
+                        None => None,
+                        Some(f) => {
+                            let ext = Path::new(f).extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+                            if !effects::LUT_EXTENSIONS.contains(&ext.as_str()) {
+                                return Err(Error::validation(format!("'{f}' is not a lookup table file ({})", effects::LUT_EXTENSIONS.iter().map(|e| format!(".{e}")).collect::<Vec<_>>().join(", "))));
+                            }
+                            let meta = std::fs::metadata(f).map_err(|e| Error::io(Path::new(f), e))?;
+                            if !meta.is_file() || meta.len() == 0 || meta.len() > effects::LUT_MAX_BYTES {
+                                return Err(Error::validation(format!("'{f}' is not a usable lookup table (empty, too large, or not a file)")));
+                            }
+                            Some(crate::engine::absolute_path(Path::new(f))?)
+                        }
+                    };
                 }
                 Command::MoveEffect { effect_id, index, .. } => {
                     let i = find_fx(&c2, effect_id)?;

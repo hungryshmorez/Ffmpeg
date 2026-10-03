@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs, MoshFx } from "./types";
+import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs, MoshFx, ScriptOutcome } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -29,7 +29,11 @@ export const api = {
   listPlugins: () => invoke<PluginList>("list_plugins"),
   installPlugin: (folder: string) => invoke<PluginInfo>("install_plugin", { folder }),
   runPlugin: (folder: string, action: string, selected: string | null) => invoke<{ log: string[]; commands: number; view: StateView }>("run_plugin", { folder, action, selected }),
-  runScript: (path: string, selected: string | null, allowAnalysis: boolean) => invoke<{ log: string[]; commands: number; view: StateView }>("run_script", { path, selected, allowAnalysis }),
+  runScript: (path: string, selected: string | null, allowAnalysis: boolean) => invoke<ScriptOutcome>("run_script", { path, selected, allowAnalysis }),
+  runScriptText: (source: string, selected: string | null, allowAnalysis: boolean, dry: boolean) => invoke<ScriptOutcome>("run_script_text", { source, selected, allowAnalysis, dry }),
+  scriptExamples: () => invoke<[string, string, string][]>("script_examples"),
+  readScriptFile: (path: string) => invoke<string>("read_script_file", { path }),
+  writeScriptFile: (path: string, source: string) => invoke<void>("write_script_file", { path, source }),
   setActiveSequence: (id: string) => invoke<StateView>("set_active_sequence", { id }),
   localApiStatus: () => invoke<LocalApi>("local_api_status"),
   setLocalApi: (enabled: boolean, newToken: boolean) => invoke<LocalApi>("set_local_api", { enabled, newToken }),
