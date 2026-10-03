@@ -90,8 +90,11 @@
     const half = rat(c2().duration) / 2;
     step("Apply writes the ramp: about half way up half way through the clip", !!fk && Math.abs(evalK(fk, half) - 0.5) < 0.03, fk && evalK(fk, half));
     step("it is one undo step named after the parameter", /Formula on opacity/.test(view().undoLabel || ""), view().undoLabel);
-    setNum(fp.querySelector("[aria-label='Formula']"), "sin("); await sleep(200);
-    [...fp.querySelectorAll("button")].find((b) => /Replace|Apply/.test(b.textContent)).click(); await sleep(600);
+    $("[data-param='opacity'] button[aria-label^='Formula for']").click(); await sleep(300);
+    const fp2 = $("[data-param='opacity'] .kf-follow[aria-label^='Formula for']");
+    step("the formula button reopens the panel", !!fp2);
+    setNum(fp2.querySelector("[aria-label='Formula']"), "sin("); await sleep(200);
+    [...fp2.querySelectorAll("button")].find((b) => /Replace|Apply/.test(b.textContent)).click(); await sleep(800);
     step("a broken formula is refused with a toast and keeps the curve", (view().undoLabel || "") === "Formula on opacity" && !!$$(".toast").find((t) => /expression/i.test(t.textContent)), $$(".toast").map((t) => t.textContent).join("|"));
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await window.__TAURI_INTERNALS__.invoke("uitest_report", { report: JSON.stringify(R) });
