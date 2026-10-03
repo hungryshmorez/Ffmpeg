@@ -249,8 +249,8 @@ fn sort_line(line: &mut [u8], inside: Option<&[u8]>, p: &Params, rng: &mut Rng, 
         let mut cut = Vec::with_capacity(spans.len());
         for &(a, b) in spans.iter() {
             let mut start = None;
-            for i in a..b {
-                match (f[i] != 0, start) {
+            for (i, &flag) in f.iter().enumerate().take(b).skip(a) {
+                match (flag != 0, start) {
                     (true, None) => start = Some(i),
                     (false, Some(s)) => {
                         cut.push((s, i));
