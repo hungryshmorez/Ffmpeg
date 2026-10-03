@@ -26,6 +26,12 @@ struct Entry {
     inverse: Vec<Patch>,
 }
 
+/// An open group of commands (see [`Engine::begin_group`]).
+pub struct Group {
+    base: usize,
+    redo: Vec<Entry>,
+}
+
 pub struct Engine {
     pub project: Project,
     pub tools: Tools,
@@ -80,6 +86,12 @@ impl Engine {
         if let Err(e) = self.run(&cmd, &mut fwd, &mut inv) {
             self.rollback(&inv);
             return Err(e);
+        }
+        // a compound's media follows its contents (grows with them), as part of the same step
+        for patch in crate::nest::grown(&self.project) {
+            let undo_patch = apply(&mut self.project, &patch)?;
+            fwd.push(patch);
+            inv.push(undo_patch);
         }
         if let Err(e) = self.project.validate() {
             self.rollback(&inv);
@@ -136,6 +148,46 @@ impl Engine {
             Command::RemoveRanges { clip, ranges } => self.remove_ranges(clip, ranges, fwd, inv),
             Command::AnimateFromBeats { clip, param, source, low, high, decay } => {
                 let keys = self.beat_keys(clip, param, source.as_deref(), *low, *high, *decay)?;
+                self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
+            }
+            Command::AnimateFromLfo { clip, param, shape, rate, low, high, phase, seed } => {
+                let dur = {
+                    let (_, c) = self.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+                    // both ends must be values the parameter allows, and it must be animatable
+                    crate::clipprops::check_value(c, param, *low, true)?;
+                    crate::clipprops::check_value(c, param, *high, true)?;
+                    c.duration.as_f64()
+                };
+                let keys = crate::reactive::lfo_keys(shape, *rate, *low, *high, *phase, *seed, self.project.settings.fps, dur)?;
+                self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
+            }
+            Command::AnimateFromExpression { clip, param, expr, source, clamp } => {
+                let keys = {
+                    let (_, c) = self.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+                    let (_, lo, hi) = crate::clipprops::param_range(c, param, true)?;
+                    let src = source.as_deref().unwrap_or(param);
+                    crate::clipprops::param_range(c, src, false)?;
+                    // a source that cannot be read (a typo'd effect id) fails here, not halfway through the formula
+                    crate::expr::clip_value(c, src, 0.0)?;
+                    let read = |t: f64| crate::expr::clip_value(c, src, t).unwrap_or(0.0);
+                    crate::expr::keys(expr, &crate::expr::Inputs { fps: self.project.settings.fps, dur: c.duration.as_f64(), source: &read, range: (lo, hi), clamp: *clamp })?
+                };
+                self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
+            }
+            Command::AnimateFromMidi { clip, param, path, source, channel, track, low, high, decay, offset } => {
+                let (start, dur) = {
+                    let (_, c) = self.project.active()?.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+                    crate::clipprops::check_value(c, param, *low, true)?;
+                    crate::clipprops::check_value(c, param, *high, true)?;
+                    (c.start.as_f64(), c.duration.as_f64())
+                };
+                let size = std::fs::metadata(path).map_err(|e| Error::io(path, e))?.len();
+                if size > crate::midi::MAX_FILE_BYTES {
+                    return Err(Error::validation(format!("{path} is too large for a MIDI file ({size} bytes)")));
+                }
+                let file = crate::midi::parse(&std::fs::read(path).map_err(|e| Error::io(path, e))?)?;
+                let opts = crate::midi::Options { source: crate::midi::Source::parse(source)?, channel: *channel, track: *track, low: *low, high: *high, decay: *decay, offset: *offset };
+                let keys = crate::midi::keys(&file, &opts, self.project.settings.fps, start, dur)?;
                 self.run(&Command::SetKeyframes { clip: clip.clone(), param: param.clone(), keys }, fwd, inv)
             }
             Command::AnimateFromAudio { clip, param, source, low, high, smooth, band } => {
@@ -278,6 +330,37 @@ impl Engine {
         }
     }
 
+    /// Start a group: everything dispatched until [`end_group`](Self::end_group) becomes ONE undo step, and
+    /// [`abort_group`](Self::abort_group) takes all of it back. Groups do not nest.
+    pub fn begin_group(&mut self) -> Group {
+        Group { base: self.undo.len(), redo: std::mem::take(&mut self.redo) }
+    }
+
+    /// Merge what ran since `group` began into one undo step named `label` (nothing happened: no step).
+    pub fn end_group(&mut self, group: Group, label: &str) {
+        let tail: Vec<Entry> = self.undo.drain(group.base.min(self.undo.len())..).collect();
+        if tail.is_empty() {
+            self.redo = group.redo;
+            return;
+        }
+        let forward = tail.iter().flat_map(|e| e.forward.clone()).collect();
+        let inverse = tail.iter().rev().flat_map(|e| e.inverse.clone()).collect();
+        self.undo.push(Entry { label: label.into(), forward, inverse });
+        if self.saved_at.is_some_and(|s| s > group.base) {
+            self.saved_at = None;
+        }
+    }
+
+    /// Undo everything since `group` began, leaving the history as it was.
+    pub fn abort_group(&mut self, group: Group) {
+        while self.undo.len() > group.base {
+            if self.undo().is_err() {
+                break;
+            }
+        }
+        self.redo = group.redo;
+    }
+
     pub fn undo_label(&self) -> Option<&str> {
         self.undo.last().map(|e| e.label.as_str())
     }
@@ -290,22 +373,59 @@ impl Engine {
 
     pub fn undo(&mut self) -> Result<()> {
         let e = self.undo.pop().ok_or(Error::NothingTo("undo"))?;
+        self.leave_removed_sequence(&e.inverse);
         for p in &e.inverse {
             apply(&mut self.project, p)?;
         }
         self.redo.push(e);
+        self.fix_active();
         self.revision += 1;
         Ok(())
     }
 
     pub fn redo(&mut self) -> Result<()> {
         let e = self.redo.pop().ok_or(Error::NothingTo("redo"))?;
+        self.leave_removed_sequence(&e.forward);
         for p in &e.forward {
             apply(&mut self.project, p)?;
         }
         self.undo.push(e);
+        self.fix_active();
         self.revision += 1;
         Ok(())
+    }
+
+    /// Show another sequence (a compound clip's contents, or the main timeline). Not an undo step: it only changes which
+    /// timeline commands act on.
+    pub fn set_active_sequence(&mut self, id: &str) -> Result<()> {
+        let s = self.project.sequence(id)?;
+        if s.name.starts_with(crate::commands::SNAPSHOT_PREFIX) {
+            return Err(Error::validation("a snapshot cannot be opened for editing; restore it instead"));
+        }
+        if self.project.active_sequence != id {
+            self.project.active_sequence = id.to_string();
+            self.revision += 1;
+        }
+        Ok(())
+    }
+
+    /// A sequence being shown cannot be removed: step back to the main timeline before patches that remove it are applied.
+    fn leave_removed_sequence(&mut self, patches: &[Patch]) {
+        let shown = self.project.active_sequence.clone();
+        if patches.iter().any(|p| matches!(p, Patch::RemoveSequence { id } if *id == shown)) {
+            if let Some(s) = self.project.sequences.iter().find(|s| s.id != shown && !s.compound && !s.name.starts_with(crate::commands::SNAPSHOT_PREFIX)) {
+                self.project.active_sequence = s.id.clone();
+            }
+        }
+    }
+
+    /// After undo/redo the sequence being shown may be gone (undoing the step that made a compound): go back to the main one.
+    fn fix_active(&mut self) {
+        if self.project.sequence(&self.project.active_sequence).is_err() {
+            if let Some(s) = self.project.sequences.iter().find(|s| !s.compound && !s.name.starts_with(crate::commands::SNAPSHOT_PREFIX)) {
+                self.project.active_sequence = s.id.clone();
+            }
+        }
     }
 
     // ---- automation recorder (spec §56) ------------------------------------------------------
@@ -439,6 +559,12 @@ pub fn prepare_asset(tools: &Tools, path: &Path) -> Result<MediaAsset> {
         generator: None,
         info,
     })
+}
+
+/// The absolute form of `path` as text, without the `\\?\` prefix Windows' `canonicalize` adds. The file must exist.
+pub fn absolute_path(path: &Path) -> Result<String> {
+    let abs = fs::canonicalize(path).map_err(|e| Error::io(path, e))?;
+    Ok(strip_verbatim(&abs).to_string_lossy().into_owned())
 }
 
 /// Remove the `\\?\` prefix `canonicalize` adds on Windows so paths stay readable and portable.

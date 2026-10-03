@@ -8,6 +8,13 @@
 //!                                                               tokens ({project} {date}...); --keep never overwrites
 //!   ffworks run <project|new> <commands.json> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]
 //!                                                             apply a JSON list of commands (one undo step each, all or nothing)
+//!   ffworks plugin <plugin-folder> [<action> <project|new> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>]
+//!                                [--allow-analysis] [--allow-host <host>]... [--allow-folder /guest=/real]...]
+//!                                                             list a WebAssembly plugin's actions, or run one as one undo step
+//!   ffworks script <project|new> <script.rhai> [--dry-run] [--save <out.ffworks>] [--selected <clip-id>] [--allow-analysis]
+//!                                                             run a Rhai script (loops, conditions, variables) as one undo step
+//!   ffworks serve <project|new> [--port N] [--token T] [--allow-analysis]
+//!                                                             local HTTP API on 127.0.0.1 for the project (see core/src/api.rs); Ctrl-C stops it
 //!   ffworks detect <media> <silence|black|freeze> [level] [min-seconds]
 //!   ffworks sync <reference-media> <other-media>              how much later the second recording is
 //!   ffworks package <project> <folder>                        copy the project and all its media into one folder
@@ -158,16 +165,89 @@ fn run() -> ffworks_core::Result<()> {
                 println!("saved {target}");
             }
         }
+        Some("script") => {
+            let (project, file) = (args.get(1).ok_or_else(|| usage("script <project|new> <script.rhai> [--dry-run] [--save out]"))?, args.get(2).ok_or_else(|| usage("script <project|new> <script.rhai>"))?);
+            let dry = args.iter().any(|a| a == "--dry-run");
+            let save = args.iter().position(|a| a == "--save").and_then(|i| args.get(i + 1)).cloned();
+            let selected = args.iter().position(|a| a == "--selected").and_then(|i| args.get(i + 1)).cloned();
+            let mut eng = if project == "new" { Engine::new("Untitled", ProjectSettings::default(), tools.clone()) } else { Engine::load(Path::new(project), tools.clone())? };
+            let source = std::fs::read_to_string(file).map_err(|e| Error::io(Path::new(file), e))?;
+            let perms = ffworks_core::script::Permissions { edit: true, analysis: args.iter().any(|a| a == "--allow-analysis") };
+            let report = ffworks_core::script::run(&mut eng, &source, selected.as_deref(), perms, &format!("script {file}"))?;
+            for line in &report.log {
+                println!("{line}");
+            }
+            println!("script issued {} commands{}", report.commands, if dry { " (dry run, nothing saved)" } else { "" });
+            if !dry {
+                let target = save.or_else(|| (project != "new").then(|| project.clone())).ok_or_else(|| Error::validation("a new project needs --save <file>"))?;
+                eng.save(Path::new(&target))?;
+                println!("saved {target}");
+            }
+        }
+        Some("plugin") => {
+            let dir = args.get(1).ok_or_else(|| usage("plugin <plugin-folder> [<action> <project|new> [--dry-run] [--save out] [--selected <clip-id>]]"))?;
+            let pkg = ffworks_core::plugin::load(Path::new(dir))?;
+            let (Some(action), Some(project)) = (args.get(2), args.get(3)) else {
+                println!("{} {} - {}", pkg.manifest.name, pkg.manifest.version, pkg.manifest.description);
+                let r = &pkg.manifest.permissions;
+                println!("asks for: edit={} analysis={} network={:?} folders={:?} wasi={}", r.edit, r.analysis, r.network, r.files, pkg.manifest.wasi);
+                for a in &pkg.manifest.actions {
+                    println!("  {}  {}", a.id, a.label);
+                }
+                return Ok(());
+            };
+            let dry = args.iter().any(|a| a == "--dry-run");
+            let save = args.iter().position(|a| a == "--save").and_then(|i| args.get(i + 1)).cloned();
+            let selected = args.iter().position(|a| a == "--selected").and_then(|i| args.get(i + 1)).cloned();
+            let mut eng = if project == "new" { Engine::new("Untitled", ProjectSettings::default(), tools.clone()) } else { Engine::load(Path::new(project), tools.clone())? };
+            // what the plugin may do beyond editing is granted here, per run: --allow-analysis, --allow-host H, --allow-folder /guest=/real
+            let mut grants = ffworks_core::plugin::Grants { edit: true, analysis: args.iter().any(|a| a == "--allow-analysis"), ..Default::default() };
+            for (i, a) in args.iter().enumerate() {
+                match (a.as_str(), args.get(i + 1)) {
+                    ("--allow-host", Some(h)) => grants.hosts.push(h.clone()),
+                    ("--allow-folder", Some(f)) => {
+                        let (guest, real) = f.split_once('=').ok_or_else(|| usage("--allow-folder /guest/path=/real/folder"))?;
+                        grants.folders.insert(guest.to_string(), PathBuf::from(real));
+                    }
+                    _ => {}
+                }
+            }
+            let report = ffworks_core::plugin::run_with(&mut eng, &pkg, action, selected.as_deref(), &grants, &format!("Plugin {}: {action}", pkg.manifest.name))?;
+            for line in &report.log {
+                println!("{line}");
+            }
+            println!("plugin issued {} commands{}", report.commands, if dry { " (dry run, nothing saved)" } else { "" });
+            if !dry {
+                let target = save.or_else(|| (project != "new").then(|| project.clone())).ok_or_else(|| Error::validation("a new project needs --save <file>"))?;
+                eng.save(Path::new(&target))?;
+                println!("saved {target}");
+            }
+        }
+        Some("serve") => {
+            let project = args.get(1).ok_or_else(|| usage("serve <project|new> [--port N] [--token T] [--allow-analysis]"))?;
+            let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+            let port: u16 = flag("--port").map(|p| p.parse().map_err(|_| Error::validation("--port must be a number from 0 to 65535"))).transpose()?.unwrap_or(0);
+            let token = flag("--token").unwrap_or_else(ffworks_core::api::new_token);
+            let eng = if project == "new" { Engine::new("Untitled", ProjectSettings::default(), tools.clone()) } else { Engine::load(Path::new(project), tools.clone())? };
+            let engine = std::sync::Arc::new(std::sync::Mutex::new(eng));
+            let server = ffworks_core::api::serve(engine, port, token, ffworks_core::api::Allow { analysis: args.iter().any(|a| a == "--allow-analysis") }, None)?;
+            println!("listening on {}\ntoken: {}\nexample: curl -H 'Authorization: Bearer {}' {}/v1/status", server.url(), server.token(), server.token(), server.url());
+            // runs until the process is stopped
+            loop {
+                std::thread::park();
+            }
+        }
         Some("detect") => {
-            let (media, kind) = (args.get(1).ok_or_else(|| usage("detect <media> <silence|black|freeze>"))?, args.get(2).ok_or_else(|| usage("detect <media> <silence|black|freeze>"))?);
+            let (media, kind) = (args.get(1).ok_or_else(|| usage("detect <media> <silence|black|freeze|transients> [level] [min seconds]"))?, args.get(2).ok_or_else(|| usage("detect <media> <silence|black|freeze|transients> [level] [min seconds]"))?);
             let kind = match kind.as_str() {
                 "silence" => Kind::Silence,
                 "black" => Kind::Black,
                 "freeze" => Kind::Freeze,
-                other => return Err(Error::validation(format!("unknown detector '{other}' (silence, black, freeze)"))),
+                "transients" => Kind::Transients,
+                other => return Err(Error::validation(format!("unknown detector '{other}' (silence, black, freeze, transients)"))),
             };
-            let level = args.get(3).and_then(|v| v.parse().ok()).unwrap_or(match kind { Kind::Silence => -35.0, Kind::Black => 0.1, Kind::Freeze => -60.0 });
-            let min: f64 = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(0.5);
+            let level = args.get(3).and_then(|v| v.parse().ok()).unwrap_or(match kind { Kind::Silence => -35.0, Kind::Black => 0.1, Kind::Freeze => -60.0, Kind::Transients => 1.5 });
+            let min: f64 = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(if kind == Kind::Transients { 0.18 } else { 0.5 });
             let dur = ffworks_core::ffprobe::probe(&tools, Path::new(media))?.duration.as_f64();
             for (a, b) in detect(&tools, Path::new(media), dur, kind, level, min)? {
                 println!("{a:.3} {b:.3}");
@@ -244,7 +324,7 @@ fn run() -> ffworks_core::Result<()> {
                 return Err(Error::validation(format!("{failed} file(s) failed")));
             }
         }
-        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
+        _ => println!("usage: ffworks <caps|presets|probe|command|render|run|script|plugin|serve|detect|sync|package|batch|watch> ... (see the top of crates/ffworks-cli/src/main.rs)"),
     }
     Ok(())
 }

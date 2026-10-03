@@ -4,6 +4,7 @@ import { evalKeyframes, keyNear } from "../keyframes";
 import { usePlayhead, useProject } from "../state/stores";
 import type { Clip, ClipProps, Interp } from "../types";
 import { CommitSlider } from "./CommitSlider";
+import { MidiFollow } from "./MidiFollow";
 
 export interface FieldSpec { param: string; label: string; unit?: string; min: number; max: number; step: number; value: number; animatable: boolean }
 
@@ -33,6 +34,28 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
   const [band, setBand] = useState("all");
   const [mode, setMode] = useState<"loudness" | "beats">("loudness");
   const [decay, setDecay] = useState(0.25);
+  const [lfo, setLfo] = useState(false);
+  const [shape, setShape] = useState("sine");
+  const [rate, setRate] = useState(1);
+  const [phase, setPhase] = useState(0);
+  const [formula, setFormula] = useState(false);
+  const [midi, setMidi] = useState(false);
+  const [expr, setExpr] = useState("p");
+  const [source, setSource] = useState("");
+  const [clamp, setClamp] = useState(true);
+  const sources = clip.kind === "audio" ? [["gain_db", "volume"], ["pan", "balance"]] : [["opacity", "opacity"], ["x", "position X"], ["y", "position Y"], ["scale", "scale"], ["rotation", "rotation"]];
+  const applyFormula = async () => {
+    setBusy(true);
+    try {
+      if (await dispatch({ type: "animate_from_expression", clip: clip.id, param: spec.param, expr, source: source || null, clamp })) { setFormula(false); setOpen(true); }
+    } finally { setBusy(false); }
+  };
+  const applyLfo = async () => {
+    setBusy(true);
+    try {
+      if (await dispatch({ type: "animate_from_lfo", clip: clip.id, param: spec.param, shape, rate, low, high, phase, seed: 1 })) { setLfo(false); setOpen(true); }
+    } finally { setBusy(false); }
+  };
   const applyFollow = async () => {
     setBusy(true);
     try {
@@ -65,10 +88,48 @@ export function KeyframeField({ clip, spec, interps }: { clip: Clip; spec: Field
           >◆</button>
         )}
         {spec.animatable && (
-          <button className={`small ${follow ? "on" : ""}`} aria-label={`Follow audio for ${spec.label}`} aria-pressed={follow} title="Make this parameter follow the loudness of the clip's audio (creates keyframes)" onClick={() => setFollow(!follow)}>♪</button>
+          <button className={`small ${follow ? "on" : ""}`} aria-label={`Follow audio for ${spec.label}`} aria-pressed={follow} title="Make this parameter follow the loudness of the clip's audio (creates keyframes)" onClick={() => { setFollow(!follow); setLfo(false); setFormula(false); setMidi(false); }}>♪</button>
+        )}
+        {spec.animatable && (
+          <button className={`small ${lfo ? "on" : ""}`} aria-label={`LFO for ${spec.label}`} aria-pressed={lfo} title="Make this parameter oscillate (sine, triangle, saw, square, random); creates keyframes" onClick={() => { setLfo(!lfo); setFollow(false); setFormula(false); setMidi(false); }}>∿</button>
+        )}
+        {spec.animatable && (
+          <button className={`small ${formula ? "on" : ""}`} aria-label={`Formula for ${spec.label}`} aria-pressed={formula} title="Drive this parameter with a formula in time (t, p, n, d, fps, v, sin, noise…), optionally following another parameter; creates keyframes" onClick={() => { setFormula(!formula); setLfo(false); setFollow(false); setMidi(false); }}>ƒ</button>
+        )}
+        {spec.animatable && (
+          <button className={`small ${midi ? "on" : ""}`} aria-label={`MIDI for ${spec.label}`} aria-pressed={midi} title="Drive this parameter from a MIDI file (a controller, note velocity, held notes, pitch or the pitch wheel); creates keyframes" onClick={() => { setMidi(!midi); setLfo(false); setFollow(false); setFormula(false); }}>♬</button>
         )}
         {animated && <button className="small" aria-label={`${open ? "Hide" : "Show"} keyframes for ${spec.label}`} title="Keyframe list" onClick={() => setOpen(!open)}>{kfs.length}</button>}
       </div>
+      {midi && <MidiFollow clip={clip} spec={spec} animated={animated} onDone={() => { setMidi(false); setOpen(true); }} />}
+      {formula && (
+        <div className="kf-follow" aria-label={`Formula for ${spec.label}`}>
+          <label>{spec.label} = <input aria-label="Formula" className="wide" type="text" spellCheck={false} maxLength={500} value={expr} onChange={(e) => setExpr(e.currentTarget.value)} /></label>
+          <label>v is <select aria-label="Value of v" value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="">this parameter now</option>
+            {sources.filter(([id]) => id !== spec.param).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select></label>
+          <label><input aria-label="Clamp to the allowed range" type="checkbox" checked={clamp} onChange={(e) => setClamp(e.currentTarget.checked)} /> clamp to {spec.min}…{spec.max}</label>
+          <span className="muted">t seconds · p progress 0–1 · n frame · d length · v value · sin cos abs min max noise(x) pi()</span>
+          <button className="small primary" disabled={busy || !expr.trim()} onClick={() => void applyFormula()}>{animated ? "Replace keyframes" : "Apply"}</button>
+        </div>
+      )}
+      {lfo && (
+        <div className="kf-follow" aria-label={`LFO for ${spec.label}`}>
+          <select aria-label="LFO shape" value={shape} onChange={(e) => setShape(e.target.value)}>
+            <option value="sine">sine</option>
+            <option value="triangle">triangle</option>
+            <option value="saw">saw (rises, then drops)</option>
+            <option value="square">square</option>
+            <option value="random">random (smooth)</option>
+          </select>
+          <label>rate <input aria-label="LFO rate in Hz" className="num" type="number" min={0.05} max={10} step={0.05} value={rate} onChange={(e) => setRate(e.currentTarget.valueAsNumber)} /> Hz</label>
+          <label>low <input aria-label="LFO low value" className="num" type="number" min={spec.min} max={spec.max} step={spec.step} value={low} onChange={(e) => setLow(e.currentTarget.valueAsNumber)} /></label>
+          <label>high <input aria-label="LFO high value" className="num" type="number" min={spec.min} max={spec.max} step={spec.step} value={high} onChange={(e) => setHigh(e.currentTarget.valueAsNumber)} /></label>
+          <label>start at <input aria-label="LFO phase" className="num" type="number" min={0} max={0.95} step={0.05} value={phase} onChange={(e) => setPhase(e.currentTarget.valueAsNumber)} /> of a cycle</label>
+          <button className="small primary" disabled={busy || ![rate, low, high, phase].every(Number.isFinite)} onClick={() => void applyLfo()}>{animated ? "Replace keyframes" : "Apply"}</button>
+        </div>
+      )}
       {follow && (
         <div className="kf-follow" aria-label={`Follow audio for ${spec.label}`}>
           <span className="muted">{clip.kind === "audio" ? "Follow this clip's" : "Follow the linked audio's"}</span>

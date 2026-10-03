@@ -40,8 +40,11 @@ fn halves(dir: &Path, name: &str, left: &str, right: &str, secs_: u32) -> PathBu
 fn export(eng: &Engine, out: &Path) {
     let t = tools();
     let caps = Capabilities::discover(&t).unwrap();
-    let g = render_graph::build(&eng.project).unwrap();
+    let mut g = render_graph::build(&eng.project).unwrap();
+    // pixel sorts are baked before FFmpeg runs, as `compile_project` plans them
+    let stages = ffworks_core::bake::prepare(&mut g, None, &ffworks_core::bake::cache_dir(), false).unwrap();
     let mut job = compile(&g, &RenderOptions { output: out.to_path_buf(), settings: ExportSettings::find("h264_mp4").unwrap(), range: None, scale_div: 1 }, Some(&caps)).unwrap_or_else(|e| panic!("compile: {e}"));
+    job.stages = stages;
     job.program = t.ffmpeg.clone();
     run_job(&t, &job, "t", "export", &CancelToken::new(), &out.parent().unwrap().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("export failed: {e}"));
 }

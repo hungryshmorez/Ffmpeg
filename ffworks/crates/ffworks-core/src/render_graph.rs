@@ -2,7 +2,7 @@
 //! Both preview and final export compile from this one structure so they share edit semantics (spec §156).
 
 use crate::clipprops::Transform;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::keyframes::Keyframe;
 use crate::project::{Clip, Project, TrackKind};
 use std::collections::{BTreeMap, HashMap};
@@ -27,6 +27,11 @@ pub struct InputRef {
     pub alpha: bool,
     /// Source length the renderer must supply for this use (stills and generated media are cut to it).
     pub need: Rational,
+    /// A compound clip: the id of the sequence whose rendered picture and sound this input reads. `path` stays empty until
+    /// `nest::prepare` has planned (and run) that render.
+    pub nested: Option<String>,
+    /// What this footage needs before it joins the Rec.709 picture (see `colormgmt`).
+    pub color: crate::colormgmt::Conversion,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -56,6 +61,9 @@ pub struct VideoSegment {
     pub alpha_fx: bool,
     /// Title text and its resolved font file (the clip's media is the transparent title canvas).
     pub title: Option<(crate::titles::Title, std::path::PathBuf)>,
+    /// An adjustment layer: `filters` apply to everything composited beneath it for `[start, start + duration)`; `input`
+    /// (the transparent canvas) is never read.
+    pub adjustment: bool,
 }
 
 impl VideoSegment {
@@ -144,10 +152,17 @@ pub struct RenderGraph {
 }
 
 /// (filters, required FFmpeg filter names, whether any writes transparency)
-fn effect_filters(c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
+fn effect_filters(project: &Project, c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
     let (mut filters, mut requires, mut alpha) = (vec![], vec![], false);
     for fx in &c.effects {
-        if let Some(f) = crate::effects::to_filter(fx, &c.keyframes)? {
+        if let Some(mut f) = crate::effects::to_filter(fx, &c.keyframes)? {
+            if crate::bake::is_mark(&f) {
+                if let Some(pic) = &fx.picture {
+                    f = crate::bake::with_picture(&f, &project.media(pic)?.path)?;
+                } else if crate::bake::parse(&f).is_some_and(|p| p.mask == 3) {
+                    return Err(Error::validation("pixel sort mask 3 uses a picture: choose one for the effect"));
+                }
+            }
             filters.push(f);
             let def = crate::effects::find(&fx.effect)?;
             requires.extend(def.requires.iter().map(|r| r.to_string()));
@@ -181,7 +196,12 @@ fn main_key(c: &Clip) -> String {
 type Trims = HashMap<String, (Rational, Rational)>;
 
 pub fn build(project: &Project) -> Result<RenderGraph> {
-    let seq = project.active()?;
+    build_for(project, &project.active_sequence)
+}
+
+/// The render graph of any sequence of the project (compound clips are rendered from theirs).
+pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
+    let seq = project.sequence(sequence)?;
     let mut g = RenderGraph {
         width: project.settings.width,
         height: project.settings.height,
@@ -203,14 +223,20 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
         g.inputs.push(InputRef {
             key: key.to_string(),
             media_id: m.id.clone(),
-            path: m.path.clone(),
+            // a compound has no file until `nest::prepare` renders it
+            path: if matches!(m.generator, Some(crate::generators::Generator::Nested { .. })) { String::new() } else { m.path.clone() },
             has_video: m.info.has_video(),
             has_audio: m.info.has_audio(),
             src_fps: m.info.video.first().and_then(|v| v.fps),
-            generated: m.generator.as_ref().map(|g| g.ffmpeg_color()),
+            generated: m.generator.as_ref().and_then(|g| g.ffmpeg_color()),
             still: m.info.still && !m.is_generated(),
             alpha: m.info.video.first().and_then(|v| v.color.pix_fmt.as_deref()).is_some_and(has_alpha),
             need: Rational::ZERO,
+            color: if m.is_generated() || m.info.still { Default::default() } else { m.info.video.first().map(|v| crate::colormgmt::plan(&v.color)).unwrap_or_default() },
+            nested: match &m.generator {
+                Some(crate::generators::Generator::Nested { sequence }) => Some(sequence.clone()),
+                _ => None,
+            },
         });
         Ok(g.inputs.len() - 1)
     };
@@ -230,8 +256,8 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                 let half = tr.half();
                 trims.entry(a.id.clone()).or_default().1 = trims.get(&a.id).map(|x| x.1).unwrap_or(Rational::ZERO) + half;
                 trims.entry(b.id.clone()).or_default().0 = trims.get(&b.id).map(|x| x.0).unwrap_or(Rational::ZERO) + half;
-                let (fa, ra, _) = effect_filters(a)?;
-                let (fb, rb, _) = effect_filters(b)?;
+                let (fa, ra, _) = effect_filters(project, a)?;
+                let (fb, rb, _) = effect_filters(project, b)?;
                 let (ia, ib) = (input_index(&mut g, &a.media, &format!("tr:{}:a", tr.id))?, input_index(&mut g, &b.media, &format!("tr:{}:b", tr.id))?);
                 g.video_transitions.push(VideoTransition {
                     layer,
@@ -277,7 +303,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                     for c in &t.clips {
                         let Some((start, source_in, duration)) = trimmed(c) else { continue };
                         let input = input_index(&mut g, &c.media, &main_key(c))?;
-                        let (filters, requires, alpha_fx) = effect_filters(c)?;
+                        let (filters, requires, alpha_fx) = effect_filters(project, c)?;
                         g.video.push(VideoSegment {
                             input,
                             layer,
@@ -298,6 +324,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                                 Some(t) => Some((t.clone(), crate::fonts::resolve(&t.font)?)),
                                 None => None,
                             },
+                            adjustment: c.adjustment,
                         });
                     }
                 }
@@ -312,7 +339,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                     }
                     let Some((start, source_in, duration)) = trimmed(c) else { continue };
                     let input = input_index(&mut g, &c.media, &main_key(c))?;
-                    let (filters, requires, _) = effect_filters(c)?;
+                    let (filters, requires, _) = effect_filters(project, c)?;
                     g.audio.push(AudioSegment {
                         input,
                         start,

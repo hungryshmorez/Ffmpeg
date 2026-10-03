@@ -77,7 +77,7 @@ pub fn effect_stack(clip: &Clip, count: usize, seed: u64, pool: Option<&[String]
         return Err(Error::validation("stack 1 to 20 effects"));
     }
     let want = if clip.kind == crate::project::TrackKind::Video { "video" } else { "audio" };
-    let defs: Vec<effects::EffectDef> = effects::registry().into_iter().filter(|d| d.kind == want && d.id != effects::GRAPH_EFFECT && pool.is_none_or(|p| p.iter().any(|x| x == d.id))).collect();
+    let defs: Vec<effects::EffectDef> = effects::registry().into_iter().filter(|d| d.kind == want && d.id != effects::GRAPH_EFFECT && !(clip.adjustment && d.id == "pixel_sort") && pool.is_none_or(|p| p.iter().any(|x| x == d.id))).collect();
     if defs.is_empty() {
         return Err(Error::validation(format!("none of the chosen effects can be used on a {want} clip")));
     }

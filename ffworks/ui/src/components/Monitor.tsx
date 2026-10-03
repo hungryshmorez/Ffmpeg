@@ -82,6 +82,12 @@ export function Monitor() {
   // A processed preview is only used while it matches the project's current content hash and covers the playhead.
   const preview = useUi((s) => s.preview);
   const busy = useUi((s) => s.previewBusy);
+  const [progress, setProgress] = useState<number | null>(null);
+  useEffect(() => {
+    if (!busy) { setProgress(null); return; }
+    const un = api.onPreviewProgress(setProgress);
+    return () => { void un.then((f) => f()); };
+  }, [busy]);
   const [div, setDiv] = useState(2);
   const previewCurrent = preview !== null && preview.renderHash === view.renderHash;
   const usePreview = previewCurrent && t >= toSec(preview.start) && t < toSec(preview.end);
@@ -103,14 +109,16 @@ export function Monitor() {
     try {
       useUi.getState().setPreview(await api.renderPreview(fromSec(start), fromSec(Math.min(dur, start + span)), div));
     } catch (e) {
-      useProject.getState().toast("error", `Preview failed: ${e}`);
+      if (/cancel/i.test(String(e))) useProject.getState().toast("info", "Preview canceled");
+      else useProject.getState().toast("error", `Preview failed: ${e}`);
     } finally {
       useUi.getState().setPreviewBusy(false);
     }
   };
   const c0 = vis?.clip;
   const audioActive = seq.tracks.some((tr) => tr.kind === "audio" && !tr.muted && ((clipAt(tr, t)?.effects.some((e) => e.enabled) ?? false) || tr.pan !== 0 || (() => { const c = clipAt(tr, t); return !!c && (c.pan !== 0 || toSec(c.fade_in) > 0 || toSec(c.fade_out) > 0); })()));
-  const effectsActive = audioActive || !!c0 && (c0.opacity < 1 || c0.effects.some((e) => e.enabled) || c0.blend !== "normal" || c0.speed !== "1" || c0.reverse || c0.freeze !== null || hasMotion(c0.keyframes) || c0.transform.x !== 0 || c0.transform.y !== 0 || c0.transform.scale !== 1 || c0.transform.rotation !== 0);
+  const adjustActive = seq.tracks.some((tr) => tr.kind === "video" && !tr.muted && (() => { const c = clipAt(tr, t); return !!c?.adjustment && (c.opacity > 0 && c.effects.some((e) => e.enabled)); })());
+  const effectsActive = audioActive || adjustActive || !!c0 && (c0.opacity < 1 || c0.effects.some((e) => e.enabled) || c0.blend !== "normal" || c0.speed !== "1" || c0.reverse || c0.freeze !== null || hasMotion(c0.keyframes) || c0.transform.x !== 0 || c0.transform.y !== 0 || c0.transform.scale !== 1 || c0.transform.rotation !== 0);
 
   // Playback clock: wall-clock driven so audio/video drift is corrected against it, not the other way round.
   const durRef = useRef(duration);
@@ -184,7 +192,8 @@ export function Monitor() {
         <select aria-label="Preview quality" value={div} onChange={(e) => setDiv(Number(e.target.value))}>
           <option value={1}>Full</option><option value={2}>1/2</option><option value={4}>1/4</option><option value={8}>1/8</option>
         </select>
-        <button disabled={busy} onClick={() => void renderPreview()} title="Render a processed preview of the next 10 seconds from the playhead">{busy ? "Rendering preview…" : "Render preview"}</button>
+        <button disabled={busy} onClick={() => void renderPreview()} title="Render a processed preview of the next 10 seconds from the playhead">{busy ? `Rendering preview…${progress !== null ? ` ${Math.round(progress * 100)}%` : ""}` : "Render preview"}</button>
+        {busy && <button aria-label="Cancel preview" title="Stop rendering the preview" onClick={() => void api.cancelPreview()}>Cancel</button>}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
+import type { LocalApi } from "../types";
 
 export function Diagnostics() {
   const open = useUi((s) => s.diagOpen);
@@ -14,6 +15,11 @@ export function Diagnostics() {
   const toast = useProject((st) => st.toast);
   useEffect(() => { if (open) void api.getSettings().then((st) => { setFfmpegPath(st.ffmpeg_path ?? ""); setFfprobePath(st.ffprobe_path ?? ""); }); }, [open]);
   const browse = async (set: (v: string) => void) => { const p = await pickFile({ title: "Select executable" }); if (typeof p === "string") set(p); };
+  const [localApi, setLocalApi] = useState<LocalApi | null>(null);
+  useEffect(() => { if (open) void api.localApiStatus().then(setLocalApi).catch(() => undefined); }, [open]);
+  const toggleApi = async (enabled: boolean, newToken = false) => {
+    try { setLocalApi(await api.setLocalApi(enabled, newToken)); } catch (e) { toast("error", String(e)); }
+  };
   const apply = async () => {
     try {
       const v = await api.setSettings(ffmpegPath.trim() || null, ffprobePath.trim() || null);
@@ -45,6 +51,17 @@ export function Diagnostics() {
         <div className="field"><label htmlFor="ffm">FFmpeg executable</label><div className="row"><input id="ffm" type="text" value={ffmpegPath} onChange={(e) => setFfmpegPath(e.target.value)} placeholder="ffmpeg" /><button onClick={() => void browse(setFfmpegPath)}>Browse…</button></div></div>
         <div className="field"><label htmlFor="ffp">FFprobe executable</label><div className="row"><input id="ffp" type="text" value={ffprobePath} onChange={(e) => setFfprobePath(e.target.value)} placeholder="ffprobe" /><button onClick={() => void browse(setFfprobePath)}>Browse…</button></div></div>
         <div className="row end"><button onClick={() => void apply()}>Apply</button></div>
+        <h3>Local API</h3>
+        <p className="muted">Lets other programs on this computer edit the open project through the same commands the editor uses (HTTP on 127.0.0.1 only, every request needs the token, web pages are refused, scripts run in the sandbox). Off unless you turn it on.</p>
+        <div className="row">
+          <label><input type="checkbox" aria-label="Local API" checked={!!localApi?.enabled} onChange={(e) => void toggleApi(e.currentTarget.checked)} /> Turn on the local API</label>
+        </div>
+        {localApi?.enabled && (
+          <dl className="metadata">
+            <div><dt>Address</dt><dd className="mono" aria-label="Local API address">{localApi.url}</dd></div>
+            <div><dt>Token</dt><dd className="mono" aria-label="Local API token">{localApi.token} <button className="small" onClick={() => void navigator.clipboard?.writeText(localApi.token ?? "")}>Copy</button> <button className="small" onClick={() => void toggleApi(true, true)}>New token</button></dd></div>
+          </dl>
+        )}
         <dl className="metadata">
           <div><dt>Missing project media</dt><dd>{view.offlineMedia.length ? `${view.offlineMedia.length} file(s) offline` : "none"}</dd></div>
         </dl>

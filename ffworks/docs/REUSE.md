@@ -14,9 +14,11 @@ Rule: **search first, adopt if the license (MIT/BSD/Apache) and quality allow, b
 | Need | Source | Plan |
 |---|---|---|
 | Expression evaluator | [`fasteval`](https://github.com/likebike/fasteval) (MIT) | Phase 6 modulators/expressions |
-| MIDI | [`midir`](https://github.com/Boddlnagg/midir) (MIT) | Phase 6 |
+| MIDI files | [`midly`](https://github.com/negamartin/midly) (Unlicense) | adopted (`midi.rs`) |
+| MIDI devices (live input) | [`midir`](https://github.com/Boddlnagg/midir) (MIT) | open: needs hardware to verify |
+| SQLite | [`rusqlite`](https://github.com/rusqlite/rusqlite) (MIT, bundled SQLite) | adopted (`library.rs`) |
 | Node graph UI | [`@xyflow/react`](https://github.com/xyflow/xyflow) (MIT) | **Adopted** for the Phase 3 filter-graph editor (MIT, v12); still planned for Phases 4/6 (blueprints, compositor) |
-| Plugin sandbox | [Extism](https://extism.org) (BSD-3) | Phase 10 |
+| Plugin sandbox | [Extism](https://extism.org) (BSD-3) | adopted (`plugin.rs`) |
 | Pixel sorting | [`patsore/pixel-sorter`](https://github.com/patsore/pixel-sorter) (MIT) | Phase 7 reference algorithm (decode → sort → encode helper job) |
 | Optical flow | [`iris-cv`](https://github.com/muhammad-fiaz/iris-cv) (MIT, v0.0.0 — immature) | Phase 9 candidate; evaluate against OpenCV bindings |
 | Custom shader transitions | [`gl-transitions`](https://github.com/gl-transitions/gl-transitions) (MIT, 125 GLSL files) | Phase 7+: needs a GPU compositor; not usable through plain FFmpeg |
@@ -32,8 +34,13 @@ Read through the screenshots the user sent (≈250 programs). Most are players, 
 
 | Project | What it offers | Use for FFWORKS | Status |
 |---|---|---|---|
+| [**fasteval**](https://crates.io/crates/fasteval) (MIT) | Fast expression parser/evaluator for Rust (variables via a callback, no unsafe eval of code) | `expr.rs`: formulas over clip time and another parameter, baked to keyframes | **Adopted** |
+| [**tiny_http**](https://crates.io/crates/tiny_http) (MIT/Apache-2.0) | Small synchronous HTTP server | `api.rs`: the loopback-only local API | **Adopted** |
+| [**Rhai**](https://rhai.rs) (MIT/Apache-2.0) | Embedded scripting language for Rust, sandboxed by default (no files/network unless the host adds them) | `script.rs`: user scripts with variables/loops/conditions; the host exposes only project reads and command-bus writes, plus operation/time/size limits | **Adopted** |
 | **frei0r** (incl. **glitch0r**, GPL-2+*; official Win64 .dll releases at github.com/dyne/frei0r/releases) | ~136 small video plugins; FFmpeg's `frei0r` filter loads them by name | Glitch/colour/distort effects. Parameter tables read with `scripts/frei0r/dump.py`; 73 filters (numbers/switches only) offered as "Frei0r" effects when the plugin file is installed and the FFmpeg build has the `frei0r` filter | **Done** (user-installed plugins only; none shipped) |
 | **Kdenlive** manual / **MLT** (LGPL*) / **Shotcut** (GPL-3+*) / **Flowblade** (GPL-3*) | MLT = effects + transitions framework; Kdenlive builds effect GUIs automatically from filter metadata or an XML description; Shotcut uses frei0r for video and LADSPA for audio plugins | Same idea already used: filter browser + registry-generated UI. LADSPA audio plugins now driven through FFmpeg's `ladspa` filter (control tables read with `scripts/ladspa/dump.py`); LV2 still needs a build with `lv2` | LADSPA adopted |
+| Frame-order datamoshing (AVI frame reordering, keyframe removal, bloom/pulse/overlap/jiggle) | [tomato](https://github.com/itsKaspar/tomato) by Kaspar Ravel (MIT) and [Datamosher Pro](https://github.com/Akascape/Datamosher-Pro) by Akascape (MIT) | Reimplemented from their documented behaviour only, no code copied (`framelab.rs`); its FFglitch-script effects are our own scripts (`FX_JS`, 11 of them) |
+| Pixel sorting (technique popularised by Kim Asendorf's "ASDF Pixel Sort") | Sort runs of pixels by brightness within a threshold range | Reimplemented from the idea only (`pixelsort.rs`, counting sort per span); no code copied. FFmpeg has no filter for it, and frei0r's `pixels0rt` exists only on the Windows bundle | **Done** |
 | MLT luma wipes / compositing transitions | Image-driven wipes | Could be done with FFmpeg `maskedmerge` + a grayscale ramp; not started | Idea logged |
 | **LosslessCut** (GPL-2*), **VidCutter** | Cut without re-encoding (`-c copy`) | "Quick export / smart cut" — already on the Phase 2 list | Todo |
 | **VeeJay** / **LiVES** (GPL*) | Live VJ effect chains | Inspiration for demo mode; their plugin sets are frei0r/own formats | Reference |

@@ -18,13 +18,13 @@ export function clipAt(track: Track, t: number): Clip | null {
   return null;
 }
 
-/** Topmost visible video clip at time `t` (later video tracks are on top; muted = hidden). */
+/** Topmost visible video clip at time `t` (later video tracks are on top; muted = hidden). Adjustment layers paint nothing themselves, so they are skipped. */
 export function visibleVideoAt(seq: Sequence, t: number): { clip: Clip; track: Track } | null {
   let found: { clip: Clip; track: Track } | null = null;
   for (const track of seq.tracks) {
     if (track.kind !== "video" || track.muted) continue;
     const clip = clipAt(track, t);
-    if (clip) found = { clip, track };
+    if (clip && !clip.adjustment) found = { clip, track };
   }
   return found;
 }
@@ -108,4 +108,29 @@ export function beatPoints(seq: Sequence, beatsByMedia: Record<string, readonly 
       for (const b of beats) if (b >= sourceIn && b <= sourceIn + duration) out.push(start + (b - sourceIn));
     }
   return out;
+}
+
+/** What a keyboard shortcut on a focused clip does to it (seconds), or null for no change / a key that means nothing here. */
+export type KeyEdit = { kind: "move"; start: number } | { kind: "trim-start"; start: number } | { kind: "trim-end"; end: number } | { kind: "track"; up: boolean };
+
+/**
+ * Alt+←/→ moves the clip a frame (Shift: a second); Ctrl+←/→ trims its end a frame; Ctrl+Shift+←/→ trims its start a frame;
+ * Alt+↑/↓ moves it to the track above / below (same time). Never goes before zero or leaves less than one frame.
+ */
+export function keyEdit(e: { key: string; altKey: boolean; ctrlKey: boolean; shiftKey: boolean }, start: number, duration: number, fps: number): KeyEdit | null {
+  if ((e.key === "ArrowUp" || e.key === "ArrowDown") && e.altKey && !e.ctrlKey && !e.shiftKey) return { kind: "track", up: e.key === "ArrowUp" };
+  const dir = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+  if (dir === 0 || e.altKey === e.ctrlKey) return null;
+  const frame = 1 / fps;
+  const snap = (t: number) => Math.round(t * fps) / fps;
+  if (e.altKey) {
+    const next = snap(Math.max(0, start + dir * (e.shiftKey ? 1 : frame)));
+    return next === snap(start) ? null : { kind: "move", start: next };
+  }
+  if (e.shiftKey) {
+    const next = snap(start + dir * frame);
+    return next < 0 || snap(start + duration) - next < frame - 1e-9 ? null : { kind: "trim-start", start: next };
+  }
+  const end = snap(start + duration + dir * frame);
+  return end - snap(start) < frame - 1e-9 ? null : { kind: "trim-end", end };
 }

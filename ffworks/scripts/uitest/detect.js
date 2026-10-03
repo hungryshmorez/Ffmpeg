@@ -38,6 +38,19 @@
     await waitFor(() => { const e = $("[data-testid=range-summary]"); return e && /^\d+ ranges/.test(e.textContent) && e.textContent !== (sum && sum.textContent); }, 20000);
     sum = $("[data-testid=range-summary]");
     step("black frames found at about 2-4 s", sum && /^1 ranges · [12]\.[0-9]–[34]\.[0-9]/.test(sum.textContent), sum && sum.textContent);
+
+    // audio hits: the tone that starts at 4 s is a sharp attack
+    await select($$(".track.video .clip")[0]);
+    pick("transients"); await sleep(150);
+    const lvl = $("input[aria-label='Detection level']"), gap = $("input[aria-label='Minimum length']");
+    step("choosing audio hits sets a sensitivity of 1.5 and a 0.18 s minimum gap", lvl.value === "1.5" && gap.value === "0.18", `${lvl.value} ${gap.value}`);
+    btn("Find audio hits").click();
+    await waitFor(() => { const e = $("[data-testid=range-summary]"); return e && /^\d+ ranges/.test(e.textContent) && e.textContent !== (sum && sum.textContent); }, 20000);
+    sum = $("[data-testid=range-summary]");
+    step("a hit is found where the tone starts, about 4 s", sum && /(3\.9|4\.0|4\.1)–/.test(sum.textContent), sum && sum.textContent);
+    step("Cut ranges out is disabled for hits (they are points, not stretches)", btn("Cut ranges out").disabled);
+    btn("Mark ranges").click(); await sleep(400);
+    step("Mark ranges names them hit", view().project.sequences[0].markers.length >= 1 && view().project.sequences[0].markers.every((m) => m.name === "hit"), JSON.stringify(view().project.sequences[0].markers.map((m) => m.name)));
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

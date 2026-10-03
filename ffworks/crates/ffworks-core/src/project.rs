@@ -133,6 +133,10 @@ pub struct Clip {
     /// Title text/styling; only on clips whose media is the transparent title canvas.
     #[serde(default)]
     pub title: Option<Title>,
+    /// An adjustment layer: its effect stack (and opacity, as the strength) applies to everything beneath it on lower
+    /// tracks for as long as the clip lasts. Its media is the transparent canvas and is never drawn itself.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub adjustment: bool,
     /// FFmpeg `blend` mode name, "normal" for plain compositing.
     #[serde(default = "normal_blend")]
     pub blend: String,
@@ -155,7 +159,7 @@ impl Clip {
     /// A plain clip: speed 1, no effects, identity transform.
     #[allow(clippy::too_many_arguments)]
     pub fn new(id: Id, media: Id, name: String, kind: TrackKind, start: Rational, source_in: Rational, duration: Rational, link: Option<Id>) -> Clip {
-        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, title: None, blend: normal_blend(), keyframes: BTreeMap::new() }
+        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, title: None, adjustment: false, blend: normal_blend(), keyframes: BTreeMap::new() }
     }
 
     pub fn end(&self) -> Rational {
@@ -198,6 +202,9 @@ pub struct Sequence {
     pub tracks: Vec<Track>,
     #[serde(default)]
     pub markers: Vec<Marker>,
+    /// A compound clip's contents: not a timeline to export, shown inside the clip that nests it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub compound: bool,
 }
 
 impl Sequence {
@@ -206,6 +213,7 @@ impl Sequence {
             id: new_id("seq"),
             name: name.into(),
             markers: vec![],
+            compound: false,
             tracks: vec![
                 Track { id: new_id("trk"), name: "V1".into(), kind: TrackKind::Video, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
                 Track { id: new_id("trk"), name: "A1".into(), kind: TrackKind::Audio, muted: false, locked: false, gain_db: 0.0, pan: 0.0, solo: false, clips: vec![], transitions: vec![] },
@@ -277,6 +285,9 @@ impl Project {
     pub fn validate(&self) -> Result<()> {
         self.sequence(&self.active_sequence)?;
         for seq in &self.sequences {
+            if seq.compound && crate::nest::is_cyclic(self, &seq.id) {
+                return Err(Error::validation(format!("compound clip '{}' would contain itself", seq.name)));
+            }
             for m in &seq.markers {
                 if m.time < Rational::ZERO || m.name.chars().count() > 100 || m.note.chars().count() > 2000 {
                     return Err(Error::validation(format!("marker '{}' is invalid (negative time, name over 100 or note over 2000 characters)", m.name)));
@@ -310,7 +321,7 @@ impl Project {
                     crate::clipprops::check_blend(&c.blend)?;
                     if let Some(t) = &c.title {
                         t.validate()?;
-                        if !m.is_generated() || c.kind != TrackKind::Video {
+                        if !matches!(m.generator, Some(Generator::Solid { .. })) || c.kind != TrackKind::Video {
                             return Err(Error::validation(format!("clip '{}' has title text but is not a generated video clip", c.name)));
                         }
                     }

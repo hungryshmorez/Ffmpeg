@@ -3,6 +3,7 @@
 //! [`Patch`]es without mutating anything; the engine then applies the patches and records them.
 
 use crate::error::{Error, Result};
+use std::path::Path;
 use crate::patch::Patch;
 use crate::project::{new_id, Clip, Id, Marker, MediaAsset, Project, ProjectSettings, Track, TrackKind};
 use crate::time::{snap_to_frame, Rational};
@@ -62,6 +63,10 @@ pub enum Command {
     SetEffectEnabled { clip: Id, effect_id: Id, enabled: bool },
     /// Replace the node graph of a `graph` effect.
     SetEffectGraph { clip: Id, effect_id: Id, graph: crate::filtergraph::FilterGraph },
+    /// The picture (project media) a pixel sort's mask 3 reads, or none.
+    SetEffectPicture { clip: Id, effect_id: Id, media: Option<Id> },
+    /// The lookup-table file a `lut` effect applies, or none.
+    SetEffectFile { clip: Id, effect_id: Id, path: Option<String> },
     MoveEffect { clip: Id, effect_id: Id, index: usize },
     SetClipOpacity { clip: Id, opacity: f64 },
     /// Set a static clip parameter (`x`, `y`, `scale`, `rotation`, `opacity`) or `fx:<effect id>:<param>`. Refused while the parameter is animated.
@@ -81,6 +86,15 @@ pub enum Command {
     /// Make `param` jump to `high` on every beat of `source` (same default as above) and fall back to `low` over `decay`
     /// seconds. Beats come from FFWORKS's onset detector. Stored as keyframes. One undo step.
     AnimateFromBeats { clip: Id, param: String, #[serde(default)] source: Option<Id>, low: f64, high: f64, decay: f64 },
+    /// Keyframes from a Standard MIDI File on disk: `source` is `cc:N`, `velocity`, `gate`, `pitch` or `bend`; `channel` is 1-16.
+    AnimateFromMidi { clip: Id, param: String, path: String, source: String, #[serde(default)] channel: Option<u8>, #[serde(default)] track: Option<usize>, low: f64, high: f64, #[serde(default)] decay: f64, #[serde(default)] offset: f64 },
+    /// Make `param` oscillate: `shape` (sine, triangle, saw, square, random) at `rate` Hz between `low` and `high`, starting
+    /// `phase` of a cycle in; `seed` only matters for random. Stored as keyframes (at most 200). One undo step.
+    AnimateFromLfo { clip: Id, param: String, shape: String, rate: f64, low: f64, high: f64, #[serde(default)] phase: f64, #[serde(default)] seed: u64 },
+    /// Make `param` follow a formula evaluated once per frame (see `expr`): variables `t`, `n`, `d`, `p`, `fps`, and `v` = the value of
+    /// `source` (another parameter of the same clip; default: `param` itself). Stored as keyframes (a link, not a live binding).
+    /// Results outside the parameter's range are refused unless `clamp`. One undo step.
+    AnimateFromExpression { clip: Id, param: String, expr: String, #[serde(default)] source: Option<String>, #[serde(default)] clamp: bool },
     RemoveKeyframe { clip: Id, param: String, time: Rational },
     /// Remove all keyframes of `param`; the static value becomes the first key's value.
     ClearKeyframes { clip: Id, param: String },
@@ -97,6 +111,9 @@ pub enum Command {
     AddTitle { track: Id, start: Rational, duration: Rational, text: String },
     /// Replace a title clip's text and styling.
     SetTitle { clip: Id, title: Title },
+    /// An adjustment layer on a video track: effects added to this clip apply to everything beneath it (lower tracks) for its
+    /// length, and its opacity sets how strongly. No transform, blend, speed or transitions; no pixel sort.
+    AddAdjustment { track: Id, start: Rational, duration: Rational },
     /// A solid-colour clip (`#RRGGBB` or `#RRGGBBAA`) on a video track.
     AddSolid { track: Id, start: Rational, duration: Rational, color: String },
     /// Change the colour of a solid-colour clip.
@@ -118,6 +135,14 @@ pub enum Command {
     /// Cut the given timeline time ranges out of `clip` and everything linked to it, closing each gap (ripple on those
     /// tracks only). Used for "remove silences". Ranges are clamped to the clip, merged when they overlap, and one undo step.
     RemoveRanges { clip: Id, ranges: Vec<(Rational, Rational)> },
+    /// Fold the clips (and everything linked to them) into one compound clip that stays editable: its contents become a
+    /// sequence of their own (open it to edit). The compound replaces them where the topmost selected video clip was. One undo step.
+    NestClips { clips: Vec<Id>, #[serde(default)] name: Option<String> },
+    /// Replace a compound clip by the clips it holds, on new tracks. Refused while the clip has settings of its own (speed,
+    /// effects, transform, blend, opacity, volume, fades, keyframes) or a transition.
+    UnnestClip { clip: Id },
+    /// Make a compound's length equal to what its sequence holds now (it grows by itself but never shrinks).
+    FitCompound { media: Id },
     /// Several commands applied as one undo step (spec §112).
     Batch { label: String, commands: Vec<Command> },
 }
@@ -149,6 +174,8 @@ impl Command {
             Command::SetEffectParam { .. } => "Effect parameter".into(),
             Command::SetEffectEnabled { .. } => "Toggle effect".into(),
             Command::SetEffectGraph { .. } => "Edit filter graph".into(),
+            Command::SetEffectPicture { .. } => "Set mask picture".into(),
+            Command::SetEffectFile { .. } => "Set LUT file".into(),
             Command::MoveEffect { .. } => "Reorder effect".into(),
             Command::SetClipOpacity { .. } => "Clip opacity".into(),
             Command::SetClipParam { param, .. } => format!("Set {param}"),
@@ -165,6 +192,9 @@ impl Command {
             Command::SetKeyframes { param, keys, .. } => format!("Set {} keyframes on {param}", keys.len()),
             Command::AnimateFromAudio { param, .. } => format!("Animate {param} from audio"),
             Command::AnimateFromBeats { param, .. } => format!("Pulse {param} on beats"),
+            Command::AnimateFromMidi { param, .. } => format!("Follow MIDI with {param}"),
+            Command::AnimateFromLfo { param, shape, .. } => format!("{shape} LFO on {param}"),
+            Command::AnimateFromExpression { param, .. } => format!("Formula on {param}"),
             Command::RemoveKeyframe { param, .. } => format!("Remove keyframe {param}"),
             Command::ClearKeyframes { param, .. } => format!("Clear keyframes {param}"),
             Command::SetClipSpeed { .. } => "Clip speed".into(),
@@ -179,6 +209,10 @@ impl Command {
             Command::AddFilterEffect { filter, .. } => format!("Add filter {filter}"),
             Command::ImportCues { cues, .. } => format!("Import {} subtitles", cues.len()),
             Command::RemoveRanges { ranges, .. } => format!("Cut out {} ranges", ranges.len()),
+            Command::AddAdjustment { .. } => "Add adjustment layer".into(),
+            Command::NestClips { .. } => "Make compound clip".into(),
+            Command::UnnestClip { .. } => "Take compound clip apart".into(),
+            Command::FitCompound { .. } => "Fit compound length".into(),
             Command::Batch { label, .. } => label.clone(),
         }
     }
@@ -190,7 +224,10 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
     let sid = seq.id.clone();
     let fps = p.settings.fps;
     match cmd {
-        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::Batch { .. } | Command::RemoveRanges { .. } | Command::ImportCues { .. } | Command::AddFilterEffect { .. } | Command::AnimateFromAudio { .. } | Command::AnimateFromBeats { .. } | Command::AnimateFromMidi { .. } | Command::AnimateFromLfo { .. } | Command::AnimateFromExpression { .. } => Err(Error::validation("batch is handled by the engine")),
+        Command::NestClips { clips, name } => crate::nest::plan_nest(p, clips, name.as_deref()),
+        Command::UnnestClip { clip } => crate::nest::plan_unnest(p, clip),
+        Command::FitCompound { media } => crate::nest::plan_fit(p, media),
         Command::RenameProject { name } => {
             if name.trim().is_empty() {
                 return Err(Error::validation("project name cannot be empty"));
@@ -487,9 +524,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             Ok(out)
         }
-        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::SetKeyframes { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
+        Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::SetEffectPicture { .. } | Command::SetEffectFile { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::SetKeyframes { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
             let clip_id = match cmd {
-                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::SetEffectGraph { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::SetKeyframes { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
+                Command::AddEffect { clip, .. } | Command::RemoveEffect { clip, .. } | Command::SetEffectParam { clip, .. } | Command::SetEffectEnabled { clip, .. } | Command::SetEffectGraph { clip, .. } | Command::SetEffectPicture { clip, .. } | Command::SetEffectFile { clip, .. } | Command::MoveEffect { clip, .. } | Command::SetClipOpacity { clip, .. } | Command::SetClipParam { clip, .. } | Command::SetClipBlend { clip, .. } | Command::SetClipFades { clip, .. } | Command::SetKeyframe { clip, .. } | Command::SetKeyframes { clip, .. } | Command::RemoveKeyframe { clip, .. } | Command::ClearKeyframes { clip, .. } => clip,
                 _ => unreachable!(),
             };
             let (t, c) = seq.find_clip(clip_id).ok_or_else(|| Error::NotFound(format!("clip {clip_id}")))?;
@@ -499,6 +536,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             if c.kind != TrackKind::Audio && matches!(cmd, Command::SetClipFades { .. }) {
                 return Err(Error::validation("fades apply to audio clips; select the audio clip"));
+            }
+            if c.adjustment {
+                adjustment_refuses(cmd)?;
             }
             let mut c2 = c.clone();
             let find_fx = |c: &Clip, id: &str| c.effects.iter().position(|e| e.id == id).ok_or_else(|| Error::NotFound(format!("effect {id}")));
@@ -540,6 +580,39 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                     }
                     graph.validate()?;
                     c2.effects[i].graph = Some(graph.clone());
+                }
+                Command::SetEffectPicture { effect_id, media, .. } => {
+                    let i = find_fx(&c2, effect_id)?;
+                    if c2.effects[i].effect != "pixel_sort" {
+                        return Err(Error::validation("only a pixel sort has a mask picture"));
+                    }
+                    if let Some(id) = media {
+                        let m = p.media(id)?;
+                        if m.is_generated() || !m.info.has_video() {
+                            return Err(Error::validation("a mask picture must be an imported picture or video, not a title, solid colour, compound or audio file"));
+                        }
+                    }
+                    c2.effects[i].picture = media.clone();
+                }
+                Command::SetEffectFile { effect_id, path, .. } => {
+                    let i = find_fx(&c2, effect_id)?;
+                    if c2.effects[i].effect != "lut" {
+                        return Err(Error::validation("only a colour lookup table (LUT) effect has a file"));
+                    }
+                    c2.effects[i].file = match path {
+                        None => None,
+                        Some(f) => {
+                            let ext = Path::new(f).extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+                            if !effects::LUT_EXTENSIONS.contains(&ext.as_str()) {
+                                return Err(Error::validation(format!("'{f}' is not a lookup table file ({})", effects::LUT_EXTENSIONS.iter().map(|e| format!(".{e}")).collect::<Vec<_>>().join(", "))));
+                            }
+                            let meta = std::fs::metadata(f).map_err(|e| Error::io(Path::new(f), e))?;
+                            if !meta.is_file() || meta.len() == 0 || meta.len() > effects::LUT_MAX_BYTES {
+                                return Err(Error::validation(format!("'{f}' is not a usable lookup table (empty, too large, or not a file)")));
+                            }
+                            Some(crate::engine::absolute_path(Path::new(f))?)
+                        }
+                    };
                 }
                 Command::MoveEffect { effect_id, index, .. } => {
                     let i = find_fx(&c2, effect_id)?;
@@ -640,6 +713,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             let mut copy = seq.clone();
             copy.id = new_id("snap");
+            copy.compound = false;
             copy.name = format!("{SNAPSHOT_PREFIX}{n}");
             Ok(vec![Patch::InsertSequence { index: p.sequences.len(), sequence: copy }])
         }
@@ -733,6 +807,27 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             out.push(Patch::PutClip { seq: sid, track: t.id.clone(), clip: Clip::new(new_id("clp"), asset.id.clone(), asset.name.clone(), TrackKind::Video, start, Rational::ZERO, dur, None) });
             Ok(out)
         }
+        Command::AddAdjustment { track, start, duration } => {
+            let t = seq.track(track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
+            ensure_unlocked(t)?;
+            if t.kind != TrackKind::Video {
+                return Err(Error::validation("adjustment layers go on a video track"));
+            }
+            let (start, dur) = (snap_to_frame(*start, fps), snap_to_frame(*duration, fps));
+            if start < Rational::ZERO || dur < Rational::from_int(1).div(fps) {
+                return Err(Error::validation("an adjustment layer needs a start >= 0 and at least one frame of duration"));
+            }
+            check_free(t, start, start + dur, &[])?;
+            let asset = generators::solid_asset(generators::TRANSPARENT, &p.settings)?;
+            let mut out = vec![];
+            if !p.media.iter().any(|m| m.id == asset.id) {
+                out.push(Patch::InsertMedia { index: p.media.len(), asset: asset.clone() });
+            }
+            let mut clip = Clip::new(new_id("clp"), asset.id, "Adjustment layer".into(), TrackKind::Video, start, Rational::ZERO, dur, None);
+            clip.adjustment = true;
+            out.push(Patch::PutClip { seq: sid, track: t.id.clone(), clip });
+            Ok(out)
+        }
         Command::SetSolidColor { clip, color } => {
             let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
             ensure_unlocked(t)?;
@@ -752,6 +847,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             Ok(out)
         }
         Command::SetClipSpeed { clip, speed } => {
+            if seq.find_clip(clip).is_some_and(|(_, c)| c.adjustment) {
+                return Err(Error::validation("an adjustment layer has no footage to retime"));
+            }
             if *speed < Rational::new(1, 10) || *speed > Rational::from_int(10) {
                 return Err(Error::validation("speed must be between 10% and 1000%"));
             }
@@ -783,6 +881,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             Ok(out)
         }
         Command::SetClipReverse { clip, reverse } => {
+            if seq.find_clip(clip).is_some_and(|(_, c)| c.adjustment) {
+                return Err(Error::validation("an adjustment layer has no footage to reverse"));
+            }
             let group = seq.linked_group(clip);
             if group.is_empty() {
                 return Err(Error::NotFound(format!("clip {clip}")));
@@ -802,6 +903,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             ensure_unlocked(t)?;
             if c.kind != TrackKind::Video {
                 return Err(Error::validation("only video clips can be frozen"));
+            }
+            if c.adjustment {
+                return Err(Error::validation("an adjustment layer has no footage to freeze"));
             }
             let mut c2 = c.clone();
             let mut out = vec![];
@@ -830,8 +934,11 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
         }
         Command::AddTransition { clip_a, clip_b, kind, duration } => {
             transitions::check_kind(kind)?;
-            let (ta, _) = seq.find_clip(clip_a).ok_or_else(|| Error::NotFound(format!("clip {clip_a}")))?;
-            let (tb, _) = seq.find_clip(clip_b).ok_or_else(|| Error::NotFound(format!("clip {clip_b}")))?;
+            let (ta, ca) = seq.find_clip(clip_a).ok_or_else(|| Error::NotFound(format!("clip {clip_a}")))?;
+            let (tb, cb) = seq.find_clip(clip_b).ok_or_else(|| Error::NotFound(format!("clip {clip_b}")))?;
+            if ca.adjustment || cb.adjustment {
+                return Err(Error::validation("transitions are between footage clips, not adjustment layers"));
+            }
             if ta.id != tb.id {
                 return Err(Error::validation("both clips of a transition must be on the same track"));
             }
@@ -908,6 +1015,19 @@ fn title_name(text: &str) -> String {
     let line = text.lines().next().unwrap_or("").trim();
     let short: String = line.chars().take(40).collect();
     if short.is_empty() { "Title".into() } else { short }
+}
+
+/// What an adjustment layer cannot take (it has no footage of its own): picture placement, blend mode, and effects that
+/// need the layer's own footage.
+fn adjustment_refuses(cmd: &Command) -> Result<()> {
+    const PLACEMENT: [&str; 4] = ["x", "y", "scale", "rotation"];
+    let bad_param = |p: &str| PLACEMENT.contains(&p);
+    match cmd {
+        Command::SetClipBlend { .. } => Err(Error::validation("an adjustment layer has no blend mode; its opacity sets how strongly it applies")),
+        Command::SetClipParam { param, .. } | Command::SetKeyframe { param, .. } | Command::SetKeyframes { param, .. } if bad_param(param) => Err(Error::validation("an adjustment layer has no position, scale or rotation")),
+        Command::AddEffect { effect, .. } if effect == "pixel_sort" => Err(Error::validation("pixel sort needs footage of its own; put it on a clip, not on an adjustment layer")),
+        _ => Ok(()),
+    }
 }
 
 fn ensure_unlocked(t: &Track) -> Result<()> {

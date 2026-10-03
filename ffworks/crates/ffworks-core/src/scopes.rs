@@ -2,10 +2,11 @@
 //! FFmpeg's own filters into a PNG in the cache folder.
 
 use crate::error::{Error, Result};
-use crate::process::{suppress_console_window, Tools};
+use crate::jobs::CancelToken;
+use crate::process::{run_cancellable, Tools};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -29,6 +30,11 @@ impl Scope {
 
 /// Draw `scope` for `media` (at `time` seconds for the video scopes; the whole file for the spectrogram). Cached by key, time and scope.
 pub fn render(tools: &Tools, media: &Path, time: f64, scope: Scope, cache_dir: &Path, key: &str) -> Result<PathBuf> {
+    render_with(tools, media, time, scope, cache_dir, key, &CancelToken::new())
+}
+
+/// [`render`] that stops (with [`Error::Canceled`]) when `cancel` is raised.
+pub fn render_with(tools: &Tools, media: &Path, time: f64, scope: Scope, cache_dir: &Path, key: &str, cancel: &CancelToken) -> Result<PathBuf> {
     if !time.is_finite() || time < 0.0 {
         return Err(Error::validation("scope time must be zero or more"));
     }
@@ -54,9 +60,14 @@ pub fn render(tools: &Tools, media: &Path, time: f64, scope: Scope, cache_dir: &
         }
     }
     let partial = out.with_extension("partial.png");
-    cmd.arg(&partial).stdout(Stdio::null()).stderr(Stdio::piped()).stdin(Stdio::null());
-    suppress_console_window(&mut cmd);
-    let o = cmd.output().map_err(|e| Error::ToolUnavailable { tool: tools.ffmpeg.display().to_string(), reason: e.to_string() })?;
+    cmd.arg(&partial);
+    let o = match run_cancellable(&mut cmd, cancel) {
+        Ok(o) => o,
+        Err(e) => {
+            let _ = std::fs::remove_file(&partial);
+            return Err(e);
+        }
+    };
     if !o.status.success() || !partial.exists() {
         let _ = std::fs::remove_file(&partial);
         let msg = String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or("").to_string();

@@ -69,5 +69,5 @@ pub fn compile(project: &Project, opts: &RenderOptions) -> Result<FfmpegJob> {
     }
     post.extend(["-c", "copy", "-avoid_negative_ts", "make_zero"].map(String::from));
     post.push(opts.output.to_string_lossy().into_owned());
-    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: String::new(), post, total_duration: dur, output: opts.output.clone(), force_file: false })
+    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: String::new(), post, total_duration: dur, output: opts.output.clone(), force_file: false, stages: vec![], nests: vec![] })
 }

@@ -5,7 +5,7 @@ export type TrackKind = "video" | "audio";
 export interface VideoStream { index: number; codec: string; width: number; height: number; fps: Rational | null; bit_rate: number | null; color: { pix_fmt: string | null; color_space: string | null; color_transfer: string | null; color_primaries: string | null; color_range: string | null; bits_per_raw_sample: number | null } }
 export interface AudioStream { index: number; codec: string; sample_rate: number; channels: number; channel_layout: string | null; bit_rate: number | null }
 export interface MediaInfo { container: string; duration: Rational; bit_rate: number | null; size_bytes: number | null; video: VideoStream[]; audio: AudioStream[]; tags: [string, string][]; /** A single picture or generated media: lasts as long as it is placed for. */ still: boolean }
-export type Generator = { kind: "solid"; color: string };
+export type Generator = { kind: "solid"; color: string } | { kind: "nested"; sequence: string };
 export interface MediaAsset { id: string; name: string; path: string; info: MediaInfo; fingerprint: string | null; /** Generated media (solid colour, title canvas) has no file. */ generator: Generator | null }
 export type Align = "left" | "center" | "right";
 export interface Title { text: string; font: string; size: number; color: string; align: Align; outline_width: number; outline_color: string; shadow: number; box_color: string | null; box_pad: number }
@@ -14,7 +14,7 @@ export interface FontEntry { name: string; path: string; bundled: boolean }
 export interface GNode { id: string; filter: string; options: [string, string][]; x: number; y: number }
 export interface GEdge { from: string; from_pad: number; to: string; to_pad: number }
 export interface FilterGraph { nodes: GNode[]; edges: GEdge[] }
-export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number>; graph?: FilterGraph }
+export interface EffectInstance { id: string; effect: string; enabled: boolean; params: Record<string, number>; graph?: FilterGraph; /** Pixel sort mask 3: the project media whose brightness is the mask. */ picture?: string | null; /** LUT effect: the lookup-table file. */ file?: string | null }
 export interface ParamDef { id: string; name: string; min: number; max: number; default: number; step: number; unit: string; animatable: boolean }
 export interface EffectDef { id: string; name: string; kind: "video" | "audio"; category: string; requires: string[]; params: ParamDef[]; alpha: boolean }
 export type Interp = "linear" | "hold" | "ease_in" | "ease_out" | "ease_in_out";
@@ -30,13 +30,15 @@ export interface Clip {
   pan: number; fade_in: Rational; fade_out: Rational;
   /** Set on title clips (their media is the transparent title canvas). */
   title: Title | null;
+  /** Adjustment layer: its effects apply to everything on lower tracks while it lasts (absent when false). */
+  adjustment?: boolean;
   /** Keyed by parameter id: `opacity`, `x`, `y`, `scale`, `rotation` or `fx:<effect id>:<param>`. */
   keyframes: Record<string, Keyframe[]>;
 }
 export interface Transition { id: string; clip_a: string; clip_b: string; kind: string; duration: Rational }
 export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; pan: number; solo: boolean; clips: Clip[]; transitions: Transition[] }
 export interface Marker { id: string; time: Rational; name: string; color: string; note: string }
-export interface Sequence { id: string; name: string; tracks: Track[]; markers: Marker[] }
+export interface Sequence { id: string; name: string; tracks: Track[]; markers: Marker[]; /** The contents of a compound clip (absent when false). */ compound?: boolean }
 export interface ProjectSettings { width: number; height: number; fps: Rational; sample_rate: number }
 export interface Project { schema_version: number; name: string; settings: ProjectSettings; media: MediaAsset[]; sequences: Sequence[]; active_sequence: string }
 
@@ -69,6 +71,7 @@ export type Command =
   | { type: "remove_marker"; marker: string }
   | { type: "add_title"; track: string; start: Rational; duration: Rational; text: string }
   | { type: "set_title"; clip: string; title: Title }
+  | { type: "add_adjustment"; track: string; start: Rational; duration: Rational }
   | { type: "add_solid"; track: string; start: Rational; duration: Rational; color: string }
   | { type: "set_solid_color"; clip: string; color: string }
   | { type: "set_clip_fades"; clip: string; fade_in?: Rational | null; fade_out?: Rational | null }
@@ -83,6 +86,8 @@ export type Command =
   | { type: "set_effect_param"; clip: string; effect_id: string; param: string; value: number }
   | { type: "set_effect_enabled"; clip: string; effect_id: string; enabled: boolean }
   | { type: "set_effect_graph"; clip: string; effect_id: string; graph: FilterGraph }
+  | { type: "set_effect_picture"; clip: string; effect_id: string; media: string | null }
+  | { type: "set_effect_file"; clip: string; effect_id: string; path: string | null }
   | { type: "move_effect"; clip: string; effect_id: string; index: number }
   | { type: "set_clip_opacity"; clip: string; opacity: number }
   | { type: "set_clip_param"; clip: string; param: string; value: number }
@@ -91,7 +96,9 @@ export type Command =
   | { type: "remove_keyframe"; clip: string; param: string; time: Rational }
   | { type: "clear_keyframes"; clip: string; param: string }
   | { type: "set_keyframes"; clip: string; param: string; keys: { t: Rational; v: number; interp?: Interp }[] }
+  | { type: "animate_from_lfo"; clip: string; param: string; shape: string; rate: number; low: number; high: number; phase?: number; seed?: number }
   | { type: "animate_from_beats"; clip: string; param: string; source?: string | null; low: number; high: number; decay: number }
+  | { type: "animate_from_midi"; clip: string; param: string; path: string; source: string; channel?: number | null; track?: number | null; low: number; high: number; decay?: number; offset?: number }
   | { type: "animate_from_audio"; clip: string; param: string; source?: string | null; low: number; high: number; smooth: number; band?: string | null }
   | { type: "set_clip_speed"; clip: string; speed: Rational }
   | { type: "set_clip_reverse"; clip: string; reverse: boolean }
@@ -100,6 +107,10 @@ export type Command =
   | { type: "remove_transition"; transition: string }
   | { type: "set_transition"; transition: string; kind?: string | null; duration?: Rational | null }
   | { type: "remove_ranges"; clip: string; ranges: [Rational, Rational][] }
+  | { type: "animate_from_expression"; clip: string; param: string; expr: string; source: string | null; clamp: boolean }
+  | { type: "nest_clips"; clips: string[]; name?: string | null }
+  | { type: "unnest_clip"; clip: string }
+  | { type: "fit_compound"; media: string }
   | { type: "batch"; label: string; commands: Command[] }
   | { type: "rename_project"; name: string };
 
@@ -123,7 +134,7 @@ export interface RelinkResult { state: StateView; relinked: string[]; unresolved
 export interface BeatAnalysis { beats: number[]; bpm: number; duration: number }
 export interface SceneAnalysis { cuts: number[]; scenes: [number, number][]; threshold: number }
 export interface EffectPreset { kind: "video" | "audio"; effects: { effect: string; params: Record<string, number> }[] }
-export type DetectKind = "silence" | "black" | "freeze";
+export type DetectKind = "silence" | "black" | "freeze" | "transients";
 export interface Loudness { integrated_lufs: number | null; range_lu: number; true_peak_dbtp: number | null }
 
 export interface ProxyStatus { mediaId: string; eligible: boolean; ready: boolean; path: string | null; bytes: number | null }
@@ -141,3 +152,42 @@ export interface FoundEngine { ffmpeg_path: string; ffprobe_path: string; sugges
 
 export interface DemoStep { index: number; start: number; transition: string | null; effects: string[]; fx: { effect: string; params: Record<string, number> }[] }
 export interface DemoBatch { path: string; steps: DemoStep[]; seed: number; duration: number }
+
+/** Whether FFglitch (the mosh lab's tool) is installed, and where it was found. */
+export interface GlitchStatus {
+  found: boolean;
+  ffedit: string | null;
+  dir: string | null;
+  bundled: boolean;
+}
+
+/** The local HTTP API (off by default): where to reach it and the secret callers must send. */
+export interface LocalApi { enabled: boolean; url: string | null; token: string | null; port: number }
+
+/** What the frame-lab dialog sends: a mode id plus the fields that mode uses. */
+export interface FrameArgs {
+  kind: string;
+  count?: number;
+  at?: number;
+  every?: number;
+  spread?: number;
+  seed?: number;
+  descending?: boolean;
+  donor?: string;
+  spliceAt?: number;
+  keyframeEvery: number;
+  dropKeyframes: boolean;
+  keepFirst: boolean;
+  kill?: number;
+}
+
+/** One number a motion-vector effect takes. */
+export interface MoshFxParam { id: string; label: string; min: number; max: number; default: number; step: number }
+/** A motion-vector effect of the datamosh lab (from the engine, so the list and the ranges live in one place). */
+export interface MoshFx { id: string; name: string; about: string; params: MoshFxParam[] }
+
+/** What a script run (or dry run) reports: what it printed, how many commands it issued, their names in order, and the project after. */
+export interface ScriptOutcome { log: string[]; commands: number; changes: string[]; view: StateView }
+
+/** How the lag between two recordings changes along them (separate recorders' clocks), and the speed that cancels it. */
+export interface DriftResult { lag_start: number; lag_later: number; at: number; drift: number; speed: number; confidence: number }

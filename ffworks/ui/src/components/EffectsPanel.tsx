@@ -1,4 +1,6 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
+import { activeSequence } from "../state/sequences";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
 import type { Clip, EffectDef, EffectPreset } from "../types";
@@ -35,8 +37,8 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
     void dispatch({ type: "batch", label: `Paste ${clip$.effects.length - skipped} effects onto ${targets.length} clip(s)`, commands: all });
   };
   const extraIds = useUi((s) => s.extra);
-  const allClips = view?.project.sequences[0]?.tracks.flatMap((t) => t.clips) ?? [];
-  const trackClips = view?.project.sequences[0]?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
+  const allClips = (view ? activeSequence(view.project) : undefined)?.tracks.flatMap((t) => t.clips) ?? [];
+  const trackClips = (view ? activeSequence(view.project) : undefined)?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
   const kind = clip.kind === "audio" ? "audio" : "video";
   const [presets, setPresets] = useState<Record<string, EffectPreset>>({});
   const [presetName, setPresetName] = useState("");
@@ -98,7 +100,14 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           </div>
         )}
       </div>
-      {clip.kind === "video" && <div className="field"><button onClick={() => useUi.getState().setVariationsClip(clip.id)} title="See a sheet of random looks for this clip and pick one">Look variations…</button></div>}
+      {clip.kind === "video" && (
+        <div className="field row">
+          <button onClick={() => useUi.getState().setVariationsClip(clip.id)} title="See a sheet of random looks for this clip and pick one">Look variations…</button>
+          <button onClick={() => useUi.getState().setMoshClip(clip.id)} title="Rewrite the motion inside this clip's compressed video (needs FFglitch) and put the result on a new track">Datamosh lab…</button>
+          <button onClick={() => useUi.getState().setCorruptClip(clip.id)} title="Damage this clip's compressed video on purpose (flipped bits, dropped packets) and put the wreck on a new track">Corruption lab…</button>
+          <button onClick={() => useUi.getState().setFramesClip(clip.id)} title="Datamosh by rearranging the clip's compressed frames (remove keyframes, bloom, shuffle, splice another clip) and put the result on a new track">Frame lab…</button>
+        </div>
+      )}
       <RandomBar kind="effects" roll={(pool, count, seed) => api.randomEffects(clip.id, count, pool, seed)} />
       {clip.effects.length === 0 && <p className="muted pad">No effects.</p>}
       {clip.effects.map((fx, i) => {
@@ -116,6 +125,27 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
               <div className="field">
                 <button onClick={() => useUi.getState().setGraphEdit({ clip: clip.id, fx: fx.id })}>Edit graph…</button>
                 <span className="muted"> {fx.graph ? `${fx.graph.nodes.length - 2} filter(s)` : ""}</span>
+              </div>
+            )}
+            {fx.effect === "lut" && (
+              <div className="field row">
+                <button onClick={() => void (async () => {
+                  const f = await open({ title: "Colour lookup table", filters: [{ name: "LUT", extensions: ["cube", "3dl", "dat", "m3d", "csp"] }] });
+                  if (typeof f === "string") void dispatch({ type: "set_effect_file", clip: clip.id, effect_id: fx.id, path: f });
+                })()}>Choose a LUT file…</button>
+                <span className="muted grow">{fx.file ? `LUT: ${fx.file.split(/[\\/]/).pop()}` : "no file chosen: the picture is unchanged"}</span>
+                {fx.file && <button className="small" aria-label="Remove the LUT file" onClick={() => void dispatch({ type: "set_effect_file", clip: clip.id, effect_id: fx.id, path: null })}>✕</button>}
+              </div>
+            )}
+            {fx.effect === "pixel_sort" && Math.round(fx.params.mask ?? 0) === 3 && (
+              <div className="field row">
+                <label>Mask picture
+                  <select aria-label="Mask picture" value={fx.picture ?? ""} onChange={(e) => void dispatch({ type: "set_effect_picture", clip: clip.id, effect_id: fx.id, media: e.target.value || null })}>
+                    <option value="">Choose a picture…</option>
+                    {(view?.project.media ?? []).filter((m) => !m.generator && m.info.video.length > 0).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </label>
+                <span className="muted">white sorts, black stays, grays fade the sort in; stretched to the frame</span>
               </div>
             )}
             {def?.params.map((p) => {

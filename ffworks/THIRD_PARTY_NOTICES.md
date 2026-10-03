@@ -23,9 +23,16 @@ Titles use **DejaVu Sans** and **DejaVu Sans Bold** (embedded in the binary; use
 | Library | Used for | License |
 |---|---|---|
 | [`scenesdetect`](https://crates.io/crates/scenesdetect) (a Rust port of [PySceneDetect](https://github.com/Breakthrough/PySceneDetect), © Brandon Castellano, BSD-3-Clause) | scene/shot cut detection | MIT OR Apache-2.0 |
+| [tomato](https://github.com/itsKaspar/tomato) (© Kaspar Ravel, MIT) and [Datamosher Pro](https://github.com/Akascape/Datamosher-Pro) (© Akascape, MIT) | frame lab (the idea of reordering, repeating and removing frames inside an AVI, and the mode list) and the mosh lab's motion effects (the idea of mirror, noise, zoom, shear … on motion vectors); reimplemented, no code copied | MIT |
 | [`ebur128`](https://github.com/sdroege/ebur128) (port of libebur128, © Jan Kokemüller / Sebastian Dröge) | loudness (LUFS, LRA, true peak) | MIT |
 | [`@xyflow/react`](https://github.com/xyflow/xyflow) (© webkid GmbH) | node-graph editor | MIT |
 | [xfade-easing](https://github.com/scriptituk/xfade-easing) (© 2025 Raymond Luckhurst) and the [gl-transitions](https://github.com/gl-transitions/gl-transitions) shaders it ports (© gl-transitions contributors) | 48 GL transitions as `xfade` custom expressions (`crates/ffworks-core/assets/glx/`, licences alongside) | MIT |
+| [`rhai`](https://github.com/rhaiscript/rhai) (© Jonathan Turner, Stephen Chung and contributors) | embedded scripting language for user scripts | MIT OR Apache-2.0 |
+| [`fasteval`](https://github.com/likebike/fasteval) (© Christopher Sebastian) | formulas for keyframe expressions | MIT |
+| [`extism`](https://github.com/extism/extism) (© Dylibso, Inc. and contributors) and its [`wasmtime`](https://github.com/bytecodealliance/wasmtime) runtime (© Bytecode Alliance) | runs plugins as sandboxed WebAssembly | BSD-3-Clause; Apache-2.0 WITH LLVM-exception |
+| [`rusqlite`](https://github.com/rusqlite/rusqlite) (© rusqlite contributors) with bundled [SQLite](https://sqlite.org) (public domain) | the media library index | MIT; SQLite public domain |
+| [`midly`](https://github.com/negamartin/midly) (© negamartin) | reads Standard MIDI Files for MIDI-driven parameters | Unlicense |
+| [`tiny_http`](https://github.com/tiny-http/tiny-http) (© Pierre Krieger and contributors) | the local API's HTTP server | MIT OR Apache-2.0 |
 | Tauri, React, Zustand, Vite and their dependencies | application shell and UI | MIT / Apache-2.0 |
 
 Complete dependency licenses can be listed with `cargo license` and `npx license-checker` in `ffworks/` and `ffworks/ui/`.
@@ -34,3 +41,4 @@ Complete dependency licenses can be listed with `cargo license` and `npx license
 * **FFmpeg "full" build** (gyan.dev / GyanD/codexffmpeg, 7.1.1): GPL-3.0 build; licence and README ship next to ffmpeg.exe. Source: https://ffmpeg.org and https://github.com/GyanD/codexffmpeg.
 * **frei0r plugins** v3.6.0 (`frei0r-3.6.0_win64.zip`, https://github.com/dyne/frei0r): GPL-2.0-or-later. Shipped as separate DLL files in `frei0r/` and loaded by FFmpeg; FFWORKS does not link them. Source offer: the repository above.
 * **LADSPA plugin control tables** (`crates/ffworks-core/assets/ladspa/plugins.json`): parameter names, ranges and defaults read from swh-plugins (GPL-2+), TAP-plugins (GPL-2+) and CMT (LGPL-2.1+). No plugin code or binaries are shipped; FFmpeg loads plugins the user has installed.
+* **FFglitch** 0.10.2 (`ffedit.exe`, `ffgac.exe`; https://ffglitch.org, © Ramiro Polla and the FFmpeg developers): GPL-2.0-or-later. Shipped as separate programs in `ffglitch/` (Windows installer) and run by the mosh lab; FFWORKS does not link them. Source: https://ffglitch.org/pub/src/ffglitch-0.10.2.tar.xz. Download checksum-pinned in CI (SHA-256 `e5190462eafe9c28428d39f8392a6be93dfd6ac2d59ce08848edec79acf965ca`).

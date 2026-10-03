@@ -12,11 +12,13 @@ use ffworks_core::project::{Project, ProjectSettings};
 use ffworks_core::Rational;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 struct AppState {
-    engine: Mutex<Engine>,
+    engine: Arc<Mutex<Engine>>,
+    /// The local API server while it is on (see `ffworks_core::api`).
+    api: Mutex<Option<ffworks_core::api::ApiServer>>,
     queue: JobQueue,
     caps: Mutex<Option<Capabilities>>,
     /// Hardware encoders that really work on this machine (probed once per FFmpeg build, see `hwenc`).
@@ -30,6 +32,22 @@ struct AppState {
     /// Exports that had not finished when FFWORKS last closed or crashed, until the user queues or discards them.
     unfinished: Mutex<Vec<ffworks_core::queue::SavedJob>>,
     unfinished_file: PathBuf,
+    /// FFglitch shipped with the installer (<resources>/ffglitch), used when the user has not chosen a folder.
+    bundled_ffglitch: Option<PathBuf>,
+    /// Where mosh-lab results are written (they become project media, so they are not in the cache).
+    mosh_dir: PathBuf,
+    /// Installed plugins (one folder each, see `ffworks_core::plugin`).
+    plugins_dir: PathBuf,
+    /// Every source file ever imported on this machine (SQLite, see `ffworks_core::library`); None when it could not be opened.
+    library: Mutex<Option<ffworks_core::library::Library>>,
+    /// Cancel switch of the mosh run in progress.
+    mosh_cancel: Mutex<Option<CancelToken>>,
+    /// Queue job of the preview render in progress (a new preview cancels the old one).
+    preview_job: Mutex<Option<String>>,
+    /// Queue job of the corruption-lab run in progress.
+    corruption_job: Mutex<Option<String>>,
+    /// Queue job of the frame-lab run in progress.
+    framelab_job: Mutex<Option<String>>,
 }
 
 #[derive(Serialize)]
@@ -71,6 +89,12 @@ fn allow_media(app: &AppHandle, e: &Engine) {
     let scope = app.asset_protocol_scope();
     for m in e.project.media.iter().filter(|m| !m.is_generated()) {
         let _ = scope.allow_file(&m.path);
+    }
+    // wherever media becomes part of the open project (import, open, recover, relink) the media library remembers it
+    if let Some(lib) = app.state::<AppState>().library.lock().unwrap().as_ref() {
+        if let Err(err) = lib.record_project(&e.project) {
+            eprintln!("media library: {err}");
+        }
     }
 }
 
@@ -184,6 +208,236 @@ fn run_macro(state: State<AppState>, path: String, selected: Option<String>) -> 
     Ok(view(&e))
 }
 
+/// Show another sequence (a compound clip's contents, or the main timeline). Not an undo step.
+#[tauri::command]
+fn set_active_sequence(state: State<AppState>, id: String) -> Result<StateView, String> {
+    let mut e = state.engine.lock().unwrap();
+    e.set_active_sequence(&id).map_err(s)?;
+    Ok(view(&e))
+}
+
+/// Default port of the local API.
+const API_PORT: u16 = 47831;
+
+fn api_info(state: &AppState) -> serde_json::Value {
+    let on = state.api.lock().unwrap();
+    let st = ffworks_core::settings::Settings::load(&state.settings_file);
+    match on.as_ref() {
+        Some(a) => serde_json::json!({ "enabled": true, "url": a.url(), "token": a.token(), "port": st.local_api_port.unwrap_or(API_PORT) }),
+        None => serde_json::json!({ "enabled": false, "url": null, "token": null, "port": st.local_api_port.unwrap_or(API_PORT) }),
+    }
+}
+
+/// Start the local API with the saved port and token (making a token the first time).
+fn start_api(app: &AppHandle, state: &AppState) -> Result<(), String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    let token = st.local_api_token.clone().unwrap_or_else(ffworks_core::api::new_token);
+    if st.local_api_token.is_none() {
+        st.local_api_token = Some(token.clone());
+        st.save(&state.settings_file).map_err(s)?;
+    }
+    let handle = app.clone();
+    let on_change: ffworks_core::api::OnChange = Arc::new(move || {
+        let _ = handle.emit("project-changed", ());
+    });
+    let server = ffworks_core::api::serve(Arc::clone(&state.engine), st.local_api_port.unwrap_or(API_PORT), token, ffworks_core::api::Allow::default(), Some(on_change)).map_err(s)?;
+    *state.api.lock().unwrap() = Some(server);
+    Ok(())
+}
+
+/// Whether the local API is on, and where and with which token to reach it.
+#[tauri::command]
+fn local_api_status(state: State<AppState>) -> serde_json::Value {
+    api_info(&state)
+}
+
+/// Turn the local API on or off (remembered for next time). `new_token` replaces the secret.
+#[tauri::command]
+fn set_local_api(app: AppHandle, state: State<AppState>, enabled: bool, new_token: bool) -> Result<serde_json::Value, String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    if new_token {
+        st.local_api_token = None;
+    }
+    st.local_api = enabled;
+    st.save(&state.settings_file).map_err(s)?;
+    // stop first: the port is released before a restart needs it
+    if let Some(mut old) = state.api.lock().unwrap().take() {
+        old.stop();
+    }
+    if enabled {
+        start_api(&app, &state)?;
+    }
+    Ok(api_info(&state))
+}
+
+/// What a script run reports back: what it printed, how many commands it issued, and the project afterwards.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScriptOutcome {
+    log: Vec<String>,
+    commands: usize,
+    /// What the commands were called, in order (the undo list's names).
+    changes: Vec<String>,
+    view: StateView,
+}
+
+/// Run a Rhai script file against the open project as ONE undo step (all or nothing). Scripts can edit but cannot touch files, the network or other programs.
+#[tauri::command]
+async fn run_script(state: State<'_, AppState>, path: String, selected: Option<String>, allow_analysis: bool) -> Result<ScriptOutcome, String> {
+    let source = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
+    let mut e = state.engine.lock().unwrap();
+    let name = std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).unwrap_or("script").to_string();
+    let report = ffworks_core::script::run(&mut e, &source, selected.as_deref(), ffworks_core::script::Permissions { edit: true, analysis: allow_analysis }, &format!("Script {name}")).map_err(s)?;
+    Ok(ScriptOutcome { log: report.log, commands: report.commands, changes: report.changes, view: view(&e) })
+}
+
+/// Run script text typed in the editor panel. With `dry` the script runs for real (so errors, output and the list of commands
+/// are exact) and every change is then taken back: the project and its undo history are left as they were.
+#[tauri::command]
+async fn run_script_text(state: State<'_, AppState>, source: String, selected: Option<String>, allow_analysis: bool, dry: bool) -> Result<ScriptOutcome, String> {
+    let mut e = state.engine.lock().unwrap();
+    let report = ffworks_core::script::run_with(&mut e, &source, selected.as_deref(), ffworks_core::script::Permissions { edit: true, analysis: allow_analysis }, "Script (editor)", !dry).map_err(s)?;
+    Ok(ScriptOutcome { log: report.log, commands: report.commands, changes: report.changes, view: view(&e) })
+}
+
+/// The example scripts the editor offers: title, a line about each, and the source.
+#[tauri::command]
+fn script_examples() -> Vec<(&'static str, &'static str, &'static str)> {
+    ffworks_core::script::EXAMPLES.to_vec()
+}
+
+/// Read a script file for the editor panel (text only, size-limited like a script run).
+#[tauri::command]
+fn read_script_file(path: String) -> Result<String, String> {
+    let meta = std::fs::metadata(&path).map_err(|e| format!("{path}: {e}"))?;
+    if meta.len() as usize > ffworks_core::script::MAX_SOURCE {
+        return Err(format!("{path} is larger than a script may be ({} bytes)", ffworks_core::script::MAX_SOURCE));
+    }
+    std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Save the editor's script text to a file.
+#[tauri::command]
+fn write_script_file(path: String, source: String) -> Result<(), String> {
+    if source.len() > ffworks_core::script::MAX_SOURCE {
+        return Err(format!("the script is longer than a script may be ({} bytes)", ffworks_core::script::MAX_SOURCE));
+    }
+    std::fs::write(&path, source).map_err(|e| format!("{path}: {e}"))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginInfo {
+    folder: String,
+    name: String,
+    version: String,
+    description: String,
+    actions: Vec<ffworks_core::plugin::Action>,
+    requests: ffworks_core::plugin::Requested,
+    wasi: bool,
+    /// What the user has allowed it so far.
+    granted: ffworks_core::settings::PluginGrant,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginList {
+    dir: String,
+    plugins: Vec<PluginInfo>,
+    /// Plugin folders that did not load, with the reason.
+    broken: Vec<(String, String)>,
+}
+
+fn plugin_info(p: &ffworks_core::plugin::PluginPackage, settings: &ffworks_core::settings::Settings) -> PluginInfo {
+    let folder = p.dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    PluginInfo {
+        granted: settings.plugin_grants.get(&folder).cloned().unwrap_or_default(),
+        wasi: p.manifest.wasi,
+        folder,
+        name: p.manifest.name.clone(),
+        version: p.manifest.version.clone(),
+        description: p.manifest.description.clone(),
+        actions: p.manifest.actions.clone(),
+        requests: p.manifest.permissions.clone(),
+    }
+}
+
+/// The installed plugins (WebAssembly modules run in a sandbox; see `ffworks_core::plugin`).
+#[tauri::command]
+fn list_plugins(state: State<AppState>) -> PluginList {
+    let mut list = PluginList { dir: state.plugins_dir.display().to_string(), plugins: vec![], broken: vec![] };
+    let settings = ffworks_core::settings::Settings::load(&state.settings_file);
+    for p in ffworks_core::plugin::discover(&state.plugins_dir) {
+        match p {
+            Ok(p) => list.plugins.push(plugin_info(&p, &settings)),
+            Err(b) => list.broken.push(b),
+        }
+    }
+    list
+}
+
+/// Copy a plugin folder (plugin.json + .wasm) into the plugins folder after checking that it loads.
+#[tauri::command]
+fn install_plugin(state: State<AppState>, folder: String) -> Result<PluginInfo, String> {
+    let settings = ffworks_core::settings::Settings::load(&state.settings_file);
+    ffworks_core::plugin::install(&state.plugins_dir, std::path::Path::new(&folder)).map(|p| plugin_info(&p, &settings)).map_err(s)
+}
+
+/// Save what the user allows a plugin beyond editing (analysis, hosts, folders). Only what its manifest asks for takes effect;
+/// folders must exist. Replaces the plugin's earlier grant.
+#[tauri::command]
+fn set_plugin_grant(state: State<AppState>, folder: String, grant: ffworks_core::settings::PluginGrant) -> Result<(), String> {
+    if folder.contains(['/', '\\']) || folder.starts_with('.') {
+        return Err("not a plugin folder name".into());
+    }
+    for (guest, host) in &grant.folders {
+        if !guest.starts_with('/') {
+            return Err(format!("{guest} is not a guest path (it starts with /)"));
+        }
+        if !std::path::Path::new(host).is_dir() {
+            return Err(format!("{host} is not a folder"));
+        }
+    }
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    if grant == Default::default() {
+        st.plugin_grants.remove(&folder);
+    } else {
+        st.plugin_grants.insert(folder, grant);
+    }
+    st.save(&state.settings_file).map_err(s)
+}
+
+/// Run one action of an installed plugin as ONE undo step. Plugins can edit but cannot touch files, the network or other programs.
+#[tauri::command]
+async fn run_plugin(state: State<'_, AppState>, folder: String, action: String, selected: Option<String>) -> Result<ScriptOutcome, String> {
+    if folder.contains(['/', '\\']) || folder.starts_with('.') {
+        return Err("not a plugin folder name".into());
+    }
+    let pkg = ffworks_core::plugin::load(&state.plugins_dir.join(&folder)).map_err(s)?;
+    let grants = ffworks_core::settings::Settings::load(&state.settings_file).plugin_grants.get(&folder).map(|g| g.to_grants()).unwrap_or_else(ffworks_core::plugin::Grants::edit_only);
+    let mut e = state.engine.lock().unwrap();
+    let report = ffworks_core::plugin::run_with(&mut e, &pkg, &action, selected.as_deref(), &grants, &format!("Plugin {}", pkg.manifest.name)).map_err(s)?;
+    Ok(ScriptOutcome { log: report.log, commands: report.commands, changes: vec![], view: view(&e) })
+}
+
+/// Search the media library: files imported on this machine whose name or folder contains every word of `query`.
+#[tauri::command]
+fn search_library(state: State<AppState>, query: String, limit: Option<usize>) -> Result<Vec<ffworks_core::library::Entry>, String> {
+    match state.library.lock().unwrap().as_ref() {
+        Some(lib) => lib.search(&query, limit.unwrap_or(100)).map_err(s),
+        None => Err("the media library could not be opened on this machine".into()),
+    }
+}
+
+/// Drop library entries whose file no longer exists; returns how many.
+#[tauri::command]
+fn forget_missing_library(state: State<AppState>) -> Result<usize, String> {
+    match state.library.lock().unwrap().as_ref() {
+        Some(lib) => lib.forget_missing().map_err(s),
+        None => Err("the media library could not be opened on this machine".into()),
+    }
+}
+
 /// Read a SubRip/WebVTT file and put its cues on a new "Subtitles" track as title clips (one undo step).
 #[tauri::command]
 fn import_subtitles(state: State<AppState>, path: String, offset: f64) -> Result<StateView, String> {
@@ -258,12 +512,32 @@ async fn render_preview(app: AppHandle, state: State<'_, AppState>, start: Strin
     let cache = state.cache_dir.clone();
     let (start, end) = (start.parse::<Rational>()?, end.parse::<Rational>()?);
     let render_hash = ffworks_core::preview::project_hash(&project).map_err(s)?;
-    let r = tauri::async_runtime::spawn_blocking(move || ffworks_core::preview::render(&tools, caps.as_ref(), &project, start, end, scale_div, &cache, &CancelToken::new(), &mut |_| {}))
-        .await
-        .map_err(s)?
-        .map_err(s)?;
+    // the pixel-sort bake can take a while: report how far along the preview is
+    let emitter = app.clone();
+    if let Some(older) = state.preview_job.lock().unwrap().take() {
+        state.queue.cancel(&older);
+    }
+    let label = format!("Preview {:.0} s to {:.0} s", start.as_f64(), end.as_f64());
+    let r = queued(&state, "preview", label, Some(&state.preview_job), move |cancel, progress| {
+        ffworks_core::preview::render(&tools, caps.as_ref(), &project, start, end, scale_div, &cache, cancel, &mut |st| {
+            if let ffworks_core::jobs::JobState::Rendering { fraction: Some(f), .. } = st {
+                let _ = emitter.emit("preview-progress", f);
+                progress(st);
+            }
+        })
+    })
+    .await?;
     let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
     Ok(PreviewInfo { path: r.path.to_string_lossy().into_owned(), start: r.start, end: r.end, render_hash, cached: r.cached, scale_div })
+}
+
+/// Stop the preview render in progress (a pixel sort or a compound can take a long while). False when none is running. The same job can be cancelled from the Queue panel.
+#[tauri::command]
+fn cancel_preview(state: State<AppState>) -> bool {
+    match state.preview_job.lock().unwrap().take() {
+        Some(id) => state.queue.cancel(&id),
+        None => false,
+    }
 }
 
 /// Autosave left behind by an abnormal exit, if any.
@@ -315,7 +589,18 @@ async fn relink_search(app: AppHandle, dir: String) -> Result<serde_json::Value,
     tauri::async_runtime::spawn_blocking(move || {
         let st = app2.state::<AppState>();
         let mut e = st.engine.lock().unwrap();
-        let (done, rest) = e.relink_search(&[PathBuf::from(dir)]).map_err(s)?;
+        let mut dirs = vec![PathBuf::from(dir)];
+        // look first where the library saw the same content (it may have moved to a place nobody chose to search)
+        if let Some(lib) = st.library.lock().unwrap().as_ref() {
+            let offline = e.offline_media();
+            let missing: Vec<&ffworks_core::project::MediaAsset> = e.project.media.iter().filter(|m| offline.contains(&m.id)).collect();
+            for d in lib.likely_dirs(&missing).unwrap_or_default() {
+                if !dirs.contains(&d) {
+                    dirs.push(d);
+                }
+            }
+        }
+        let (done, rest) = e.relink_search(&dirs).map_err(s)?;
         allow_media(&app2, &e);
         Ok(serde_json::json!({ "state": view(&e), "relinked": done, "unresolved": rest.into_iter().map(|(id, c)| serde_json::json!({ "mediaId": id, "candidates": c })).collect::<Vec<_>>() }))
     })
@@ -334,11 +619,32 @@ async fn relink_media(app: AppHandle, state: State<'_, AppState>, media_id: Stri
     Ok(view(&e))
 }
 
+/// Run `work` as a task in the job queue (it shows in the Queue panel with progress and a Cancel button, and does not wait
+/// behind exports) and wait for its result. Returns the job id through `job` as soon as it exists.
+async fn queued<T: Send + 'static>(
+    state: &State<'_, AppState>,
+    operation: &str,
+    label: String,
+    job: Option<&Mutex<Option<String>>>,
+    work: impl FnOnce(&CancelToken, &mut dyn FnMut(ffworks_core::jobs::JobState)) -> ffworks_core::error::Result<T> + Send + 'static,
+) -> Result<T, String> {
+    let (id, rx) = state.queue.run_task(operation, &label, work);
+    if let Some(slot) = job {
+        *slot.lock().unwrap() = Some(id);
+    }
+    tauri::async_runtime::spawn_blocking(move || rx.recv()).await.map_err(s)?.map_err(|_| "the task ended without a result".to_string())?.map_err(s)
+}
+
+fn file_label(path: &std::path::Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
 #[tauri::command]
 async fn get_beats(state: State<'_, AppState>, media_id: String) -> Result<ffworks_core::beats::BeatAnalysis, String> {
     let (tools, path, key) = media_for(&state, &media_id)?;
     let cache = state.cache_dir.clone();
-    tauri::async_runtime::spawn_blocking(move || ffworks_core::beats::detect(&tools, &path, &cache, &key)).await.map_err(s)?.map_err(s)
+    let label = format!("Beats of {}", file_label(&path));
+    queued(&state, "analysis:beats", label, None, move |cancel, _| ffworks_core::beats::detect_with(&tools, &path, &cache, &key, cancel)).await
 }
 
 #[tauri::command]
@@ -346,14 +652,16 @@ async fn detect_scenes(state: State<'_, AppState>, media_id: String, threshold: 
     let (tools, path, key) = media_for(&state, &media_id)?;
     let duration = state.engine.lock().unwrap().project.media(&media_id).map_err(s)?.info.duration.as_f64();
     let cache = state.cache_dir.clone();
-    tauri::async_runtime::spawn_blocking(move || ffworks_core::scenes::detect(&tools, &path, duration, &cache, &key, threshold)).await.map_err(s)?.map_err(s)
+    let label = format!("Scenes of {}", file_label(&path));
+    queued(&state, "analysis:scenes", label, None, move |cancel, _| ffworks_core::scenes::detect_with(&tools, &path, duration, &cache, &key, threshold, cancel)).await
 }
 
 #[tauri::command]
 async fn detect_ranges(state: State<'_, AppState>, media_id: String, kind: ffworks_core::detect::Kind, threshold: f64, min_len: f64) -> Result<Vec<(f64, f64)>, String> {
     let (tools, path, _) = media_for(&state, &media_id)?;
     let duration = state.engine.lock().unwrap().project.media(&media_id).map_err(s)?.info.duration.as_f64();
-    tauri::async_runtime::spawn_blocking(move || ffworks_core::detect::detect(&tools, &path, duration, kind, threshold, min_len)).await.map_err(s)?.map_err(s)
+    let label = format!("Silence, black or freeze ranges of {}", file_label(&path));
+    queued(&state, "analysis:ranges", label, None, move |cancel, _| ffworks_core::detect::detect_with(&tools, &path, duration, kind, threshold, min_len, cancel)).await
 }
 
 /// Where to put `clip` on the timeline so its audio lines up with `reference`'s (cross-correlation of the two recordings).
@@ -373,9 +681,31 @@ async fn sync_offset(state: State<'_, AppState>, reference: String, clip: String
         }
         (e.tools.clone(), PathBuf::from(&rm.path), PathBuf::from(&cm.path), (r.start.as_f64(), r.source_in.as_f64(), c.source_in.as_f64()))
     };
-    let res = tauri::async_runtime::spawn_blocking(move || ffworks_core::audiosync::measure(&tools, &ref_path, &clip_path)).await.map_err(s)?.map_err(s)?;
+    let label = format!("Sync {} to {}", file_label(&clip_path), file_label(&ref_path));
+    let res = queued(&state, "analysis:sync", label, None, move |cancel, _| ffworks_core::audiosync::measure_with(&tools, &ref_path, &clip_path, cancel)).await?;
     let start = ffworks_core::audiosync::aligned_start(geom.0, geom.1, geom.2, res.lag_seconds);
     Ok(serde_json::json!({ "lag": res.lag_seconds, "confidence": res.confidence, "start": start }))
+}
+
+/// Whether `clip`'s recording drifts against `reference`'s (separate recorders' clocks): the lag in the first 30 s against the lag
+/// 30 s before the end of the shorter file, and the speed that would cancel it.
+#[tauri::command]
+async fn sync_drift(state: State<'_, AppState>, reference: String, clip: String) -> Result<ffworks_core::audiosync::DriftResult, String> {
+    let (tools, ref_path, clip_path, span) = {
+        let e = state.engine.lock().unwrap();
+        let seq = e.project.active().map_err(s)?;
+        let (_, r) = seq.find_clip(&reference).ok_or("reference clip not found")?;
+        let (_, c) = seq.find_clip(&clip).ok_or("clip not found")?;
+        let (rm, cm) = (e.project.media(&r.media).map_err(s)?, e.project.media(&c.media).map_err(s)?);
+        if rm.is_generated() || cm.is_generated() {
+            return Err("generated clips have no audio to match".into());
+        }
+        // a few seconds of margin: the other recording starts later than the reference by some lag
+        let span = rm.info.duration.as_f64().min(cm.info.duration.as_f64()) - 5.0;
+        (e.tools.clone(), PathBuf::from(&rm.path), PathBuf::from(&cm.path), span)
+    };
+    let label = format!("Drift of {} against {}", file_label(&clip_path), file_label(&ref_path));
+    queued(&state, "analysis:drift", label, None, move |cancel, _| ffworks_core::audiosync::measure_drift(&tools, &ref_path, &clip_path, span, cancel)).await
 }
 
 /// Draw a waveform / vectorscope / histogram of the source frame at `time`, or the audio spectrogram of the whole file.
@@ -383,7 +713,8 @@ async fn sync_offset(state: State<'_, AppState>, reference: String, clip: String
 async fn render_scope(app: AppHandle, state: State<'_, AppState>, media_id: String, time: f64, scope: ffworks_core::scopes::Scope) -> Result<String, String> {
     let (tools, path, key) = media_for(&state, &media_id)?;
     let cache = state.cache_dir.join("scopes");
-    let out = tauri::async_runtime::spawn_blocking(move || ffworks_core::scopes::render(&tools, &path, time, scope, &cache, &key)).await.map_err(s)?.map_err(s)?;
+    let label = format!("Scope of {}", file_label(&path));
+    let out = queued(&state, "analysis:scope", label, None, move |cancel, _| ffworks_core::scopes::render_with(&tools, &path, time, scope, &cache, &key, cancel)).await?;
     let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
     Ok(out.to_string_lossy().into_owned())
 }
@@ -392,7 +723,8 @@ async fn render_scope(app: AppHandle, state: State<'_, AppState>, media_id: Stri
 async fn measure_loudness(state: State<'_, AppState>, media_id: String) -> Result<ffworks_core::loudness::Loudness, String> {
     let (tools, path, key) = media_for(&state, &media_id)?;
     let cache = state.cache_dir.clone();
-    tauri::async_runtime::spawn_blocking(move || ffworks_core::loudness::analyze(&tools, &path, &cache, &key)).await.map_err(s)?.map_err(s)
+    let label = format!("Loudness of {}", file_label(&path));
+    queued(&state, "analysis:loudness", label, None, move |cancel, _| ffworks_core::loudness::analyze_with(&tools, &path, &cache, &key, cancel)).await
 }
 
 /// Transitions this FFmpeg can really do: its native `xfade` list (falling back to the built-in names) plus the bundled GL
@@ -438,6 +770,235 @@ fn list_effects(state: State<AppState>) -> Vec<ffworks_core::effects::EffectDef>
     usable_effects(&state)
 }
 
+/// FFglitch tools in use (saved folder, else the installer's copy, else `FFWORKS_FFGLITCH` / `PATH`).
+fn glitch_tools(state: &AppState) -> Option<ffworks_core::moshlab::GlitchTools> {
+    let saved = ffworks_core::settings::Settings::load(&state.settings_file).ffglitch_dir.filter(|d| !d.trim().is_empty()).map(PathBuf::from);
+    ffworks_core::moshlab::GlitchTools::discover(saved.or_else(|| state.bundled_ffglitch.clone()).as_deref())
+}
+
+fn glitch_status_json(state: &AppState) -> serde_json::Value {
+    let t = glitch_tools(state);
+    serde_json::json!({
+        "found": t.is_some(),
+        "ffedit": t.as_ref().map(|t| t.ffedit.to_string_lossy().into_owned()),
+        "dir": ffworks_core::settings::Settings::load(&state.settings_file).ffglitch_dir,
+        "bundled": state.bundled_ffglitch.is_some(),
+    })
+}
+
+/// Whether the mosh lab can run (is FFglitch installed?) and which folder was saved.
+#[tauri::command]
+fn ffglitch_status(state: State<AppState>) -> serde_json::Value {
+    glitch_status_json(&state)
+}
+
+/// Save the folder holding `ffedit` and `ffgac` (empty clears it). Refused when the folder does not hold both.
+#[tauri::command]
+fn set_ffglitch_dir(state: State<AppState>, dir: String) -> Result<serde_json::Value, String> {
+    let dir = dir.trim().to_string();
+    if !dir.is_empty() {
+        let found = ffworks_core::moshlab::GlitchTools::discover(Some(std::path::Path::new(&dir)));
+        if !found.is_some_and(|t| t.ffedit.starts_with(&dir)) {
+            return Err(format!("'{dir}' does not contain both ffedit and ffgac"));
+        }
+    }
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    st.ffglitch_dir = (!dir.is_empty()).then_some(dir);
+    st.save(&state.settings_file).map_err(s)?;
+    Ok(glitch_status_json(&state))
+}
+
+/// Make a datamoshed copy of a video clip with FFglitch and put it on a new track beside the original (see `moshlab`).
+/// `kind` is `amplify` (`factor`), `drift` (`x`, `y`), `transfer` (`donor` clip) or `fx` (`fx` effect id from `list_mosh_effects`
+/// and its numbers in `params`). Progress arrives as `mosh-progress`.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn make_mosh(app: AppHandle, state: State<'_, AppState>, clip: String, kind: String, factor: Option<f64>, x: Option<i32>, y: Option<i32>, donor: Option<String>, fx: Option<String>, params: Option<serde_json::Map<String, serde_json::Value>>) -> Result<StateView, String> {
+    use ffworks_core::moshlab::{self, Mode};
+    let glitch = glitch_tools(&state).ok_or("FFglitch was not found. Install it and choose its folder first.")?;
+    let (source, mode, req_base, tools) = {
+        let e = state.engine.lock().unwrap();
+        let source = moshlab::source_of(&e, &clip).map_err(s)?;
+        let mode = match kind.as_str() {
+            "amplify" => Mode::Amplify { factor: factor.unwrap_or(2.0) },
+            "drift" => Mode::Drift { x: x.unwrap_or(0), y: y.unwrap_or(0) },
+            "transfer" => Mode::Transfer { donor: moshlab::source_of(&e, &donor.ok_or("choose the clip whose motion to borrow")?).map_err(s)? },
+            "fx" => Mode::Fx { fx: fx.ok_or("choose a motion effect")?, params: params.unwrap_or_default() },
+            other => return Err(format!("unknown mosh kind '{other}'")),
+        };
+        let st = e.project.settings.clone();
+        (source, mode, (st.width, st.height, st.fps), e.tools.clone())
+    };
+    std::fs::create_dir_all(&state.mosh_dir).map_err(s)?;
+    let output = state.mosh_dir.join(format!("mosh_{}.mkv", uuid_like()));
+    let request = moshlab::Request { source, mode, width: req_base.0, height: req_base.1, fps: req_base.2, output: output.clone() };
+    let cancel = CancelToken::new();
+    *state.mosh_cancel.lock().unwrap() = Some(cancel.clone());
+    let emitter = app.clone();
+    let run = tauri::async_runtime::spawn_blocking(move || moshlab::run(&tools, &glitch, &request, &cancel, &mut |f| {
+        let _ = emitter.emit("mosh-progress", f);
+    }))
+    .await
+    .map_err(s);
+    *state.mosh_cancel.lock().unwrap() = None;
+    run?.map_err(|e| match e {
+        ffworks_core::Error::Canceled => "Canceled".to_string(),
+        other => other.to_string(),
+    })?;
+    let mut e = state.engine.lock().unwrap();
+    moshlab::place(&mut e, &clip, &output).map_err(s)?;
+    allow_media(&app, &e);
+    Ok(view(&e))
+}
+
+/// Corruption lab: damage the compressed packets of a clip's own footage (bits flipped, packets dropped) and decode the wreck
+/// into a new file on a new "Corruption" track. Runs as a queue task (cancel it there or with `cancel_corruption`); progress
+/// arrives as `corruption-progress`. Needs only FFmpeg.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn make_corruption(app: AppHandle, state: State<'_, AppState>, clip: String, codec: String, bits: Option<u32>, drop_every: Option<u32>, keyframe_every: u32) -> Result<StateView, String> {
+    use ffworks_core::corruptlab::{self, Settings};
+    let (source, name, st, tools) = {
+        let e = state.engine.lock().unwrap();
+        let source = ffworks_core::moshlab::source_for(&e, &clip, "corruption lab").map_err(s)?;
+        let name = e.project.active().ok().and_then(|q| q.find_clip(&clip).map(|(_, c)| c.name.clone())).unwrap_or_default();
+        (source, name, e.project.settings.clone(), e.tools.clone())
+    };
+    std::fs::create_dir_all(&state.mosh_dir).map_err(s)?;
+    let output = state.mosh_dir.join(format!("corrupt_{}.mkv", uuid_like()));
+    let request = corruptlab::Request { source, settings: Settings { codec, bits, drop_every, keyframe_every }, width: st.width, height: st.height, fps: st.fps, output: output.clone() };
+    corruptlab::validate(&request).map_err(s)?;
+    let emitter = app.clone();
+    *state.corruption_job.lock().unwrap() = None;
+    let result = queued(&state, "lab:corruption", format!("Corruption lab: {name}"), Some(&state.corruption_job), move |cancel, progress| {
+        corruptlab::run(&tools, &request, cancel, &mut |f| {
+            let _ = emitter.emit("corruption-progress", f);
+            progress(ffworks_core::jobs::JobState::Rendering { fraction: Some(f), fps: None, elapsed_secs: 0.0, eta_secs: None });
+        })
+    })
+    .await;
+    *state.corruption_job.lock().unwrap() = None;
+    result?;
+    let mut e = state.engine.lock().unwrap();
+    ffworks_core::moshlab::place_on_track(&mut e, &clip, &output, "Corruption").map_err(s)?;
+    allow_media(&app, &e);
+    Ok(view(&e))
+}
+
+/// The vector effects the mosh lab offers (ids, names, one-line descriptions and each effect's numbers with ranges).
+#[tauri::command]
+fn list_mosh_effects() -> &'static [ffworks_core::moshlab::FxDef] {
+    ffworks_core::moshlab::FX
+}
+
+/// Stop the corruption-lab run in progress (the same job can be cancelled from the Queue panel).
+#[tauri::command]
+fn cancel_corruption(state: State<AppState>) -> bool {
+    match state.corruption_job.lock().unwrap().take() {
+        Some(id) => state.queue.cancel(&id),
+        None => false,
+    }
+}
+
+/// What the frame-lab dialog sends; `kind` is a mode id from `framelab::MODES`, the other fields belong to particular modes.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FrameArgs {
+    kind: String,
+    count: Option<u32>,
+    at: Option<u32>,
+    every: Option<u32>,
+    spread: Option<u32>,
+    seed: Option<u64>,
+    descending: Option<bool>,
+    /// Clip whose movement is borrowed (splice).
+    donor: Option<String>,
+    /// Seconds into the clip where the splice happens.
+    splice_at: Option<f64>,
+    keyframe_every: u32,
+    drop_keyframes: bool,
+    keep_first: bool,
+    kill: Option<f64>,
+}
+
+/// Frame lab: classic datamoshing by rearranging the compressed frames of a clip's own footage (tomato / Datamosher Pro style),
+/// into a new file on a new "Frames" track. Runs as a queue task (cancel it there or with `cancel_framelab`); progress arrives
+/// as `framelab-progress`. Needs only FFmpeg.
+#[tauri::command]
+async fn make_frames(app: AppHandle, state: State<'_, AppState>, clip: String, args: FrameArgs) -> Result<StateView, String> {
+    use ffworks_core::framelab::{self, Mode, Settings};
+    let (source, name, st, tools, mode) = {
+        let e = state.engine.lock().unwrap();
+        let source = ffworks_core::moshlab::source_for(&e, &clip, "frame lab").map_err(s)?;
+        let name = e.project.active().ok().and_then(|q| q.find_clip(&clip).map(|(_, c)| c.name.clone())).unwrap_or_default();
+        let (count, at, every, seed) = (args.count.unwrap_or(1), args.at.unwrap_or(0), args.every.unwrap_or(1), args.seed.unwrap_or(1));
+        let mode = match args.kind.as_str() {
+            "classic" => Mode::Classic,
+            "random" => Mode::Random { seed },
+            "reverse" => Mode::Reverse,
+            "invert" => Mode::Invert,
+            "invert_reverse" => Mode::InvertReverse,
+            "bloom" => Mode::Bloom { count, at },
+            "pulse" => Mode::Pulse { count, every },
+            "overlap" => Mode::Overlap { count, every },
+            "jiggle" => Mode::Jiggle { spread: args.spread.unwrap_or(1), seed },
+            "repeat" => Mode::Repeat { count, at },
+            "sort" => Mode::Sort { descending: args.descending.unwrap_or(false) },
+            "splice" => {
+                let donor = ffworks_core::moshlab::source_for(&e, &args.donor.clone().ok_or("choose the clip whose movement to borrow")?, "frame lab").map_err(s)?;
+                Mode::Splice { donor, at: ffworks_core::time::snap_to_frame(ffworks_core::Rational::from_secs_f64(args.splice_at.unwrap_or(1.0)), e.project.settings.fps) }
+            }
+            other => return Err(format!("unknown frame mode '{other}'")),
+        };
+        (source, name, e.project.settings.clone(), e.tools.clone(), mode)
+    };
+    std::fs::create_dir_all(&state.mosh_dir).map_err(s)?;
+    let output = state.mosh_dir.join(format!("frames_{}.mkv", uuid_like()));
+    let settings = Settings { mode, keyframe_every: args.keyframe_every, drop_keyframes: args.drop_keyframes, keep_first: args.keep_first, kill: args.kill };
+    let request = framelab::Request { source, settings, width: st.width, height: st.height, fps: st.fps, output: output.clone() };
+    framelab::validate(&request).map_err(s)?;
+    let emitter = app.clone();
+    *state.framelab_job.lock().unwrap() = None;
+    let result = queued(&state, "lab:frames", format!("Frame lab: {name}"), Some(&state.framelab_job), move |cancel, progress| {
+        framelab::run(&tools, &request, cancel, &mut |f| {
+            let _ = emitter.emit("framelab-progress", f);
+            progress(ffworks_core::jobs::JobState::Rendering { fraction: Some(f), fps: None, elapsed_secs: 0.0, eta_secs: None });
+        })
+    })
+    .await;
+    *state.framelab_job.lock().unwrap() = None;
+    result?;
+    let mut e = state.engine.lock().unwrap();
+    ffworks_core::moshlab::place_on_track(&mut e, &clip, &output, "Frames").map_err(s)?;
+    allow_media(&app, &e);
+    Ok(view(&e))
+}
+
+/// Stop the frame-lab run in progress (the same job can be cancelled from the Queue panel).
+#[tauri::command]
+fn cancel_framelab(state: State<AppState>) -> bool {
+    match state.framelab_job.lock().unwrap().take() {
+        Some(id) => state.queue.cancel(&id),
+        None => false,
+    }
+}
+
+/// Stop the mosh run in progress.
+#[tauri::command]
+fn cancel_mosh(state: State<AppState>) -> bool {
+    match state.mosh_cancel.lock().unwrap().as_ref() {
+        Some(c) => {
+            c.cancel();
+            true
+        }
+        None => false,
+    }
+}
+
+fn uuid_like() -> String {
+    format!("{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0))
+}
+
 /// frei0r: plugin folders, the plugins found there that FFWORKS can drive, and whether this FFmpeg can load them.
 #[tauri::command]
 fn frei0r_status(state: State<AppState>) -> serde_json::Value {
@@ -445,6 +1006,7 @@ fn frei0r_status(state: State<AppState>) -> serde_json::Value {
     serde_json::json!({
         "ffmpegHasFilter": caps(&state).is_some_and(|c| c.has_filter("frei0r")),
         "dirs": ffworks_core::settings::Settings::load(&state.settings_file).frei0r_dirs,
+        "ladspaDirs": ffworks_core::settings::Settings::load(&state.settings_file).ladspa_dirs,
         "installed": ffworks_core::frei0r::installed().len(),
         "offered": offered,
         "ladspa": {
@@ -469,6 +1031,16 @@ fn set_frei0r_dirs(state: State<AppState>, dirs: Vec<String>) -> Result<(), Stri
     st.frei0r_dirs = dirs.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
     st.save(&state.settings_file).map_err(s)?;
     ffworks_core::frei0r::configure(&with_bundled(&st.frei0r_dirs, state.bundled_frei0r.as_deref()));
+    Ok(())
+}
+
+/// Save extra LADSPA plugin folders and rescan (the audio effects offered change accordingly).
+#[tauri::command]
+fn set_ladspa_dirs(state: State<AppState>, dirs: Vec<String>) -> Result<(), String> {
+    let mut st = ffworks_core::settings::Settings::load(&state.settings_file);
+    st.ladspa_dirs = dirs.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
+    st.save(&state.settings_file).map_err(s)?;
+    ffworks_core::ladspa::configure(&st.ladspa_dirs);
     Ok(())
 }
 
@@ -1011,7 +1583,9 @@ pub fn run() {
             let loaded = ffworks_core::settings::Settings::load(&settings_file);
             let bundled_frei0r = app.path().resource_dir().ok().map(|d| d.join("frei0r")).filter(|d| d.is_dir());
             ffworks_core::frei0r::configure(&with_bundled(&loaded.frei0r_dirs, bundled_frei0r.as_deref()));
-            ffworks_core::ladspa::configure(&[]);
+            ffworks_core::ladspa::configure(&loaded.ladspa_dirs);
+            // pixel-sort intermediates of exports go here (and are deleted when the export ends)
+            ffworks_core::bake::set_cache_dir(base.join("bake"));
             let tools = loaded.tools_with_bundled(bundled_dir.as_deref());
             let queue = JobQueue::new(tools.clone(), base.join("tmp"), 1);
             // last session's journal is kept aside until the user decides; this session journals afresh
@@ -1027,7 +1601,8 @@ pub fn run() {
                 let _ = emitter.emit("job-state", snap);
             });
             app.manage(AppState {
-                engine: Mutex::new(Engine::new("Untitled", ProjectSettings::default(), tools)),
+                engine: Arc::new(Mutex::new(Engine::new("Untitled", ProjectSettings::default(), tools))),
+                api: Mutex::new(None),
                 queue,
                 caps: Mutex::new(None),
                 hw: Mutex::new(None),
@@ -1038,7 +1613,25 @@ pub fn run() {
                 bundled_frei0r,
                 unfinished: Mutex::new(unfinished),
                 unfinished_file,
+                bundled_ffglitch: app.path().resource_dir().ok().map(|d| d.join("ffglitch")).filter(|d| d.is_dir()),
+                mosh_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("mosh"),
+                plugins_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("plugins"),
+                library: Mutex::new(
+                    ffworks_core::library::Library::open(&app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("library.sqlite"))
+                        .map_err(|e| eprintln!("media library unavailable: {e}"))
+                        .ok(),
+                ),
+                mosh_cancel: Mutex::new(None),
+                preview_job: Mutex::new(None),
+                corruption_job: Mutex::new(None),
+                framelab_job: Mutex::new(None),
             });
+            if loaded.local_api {
+                let st = app.state::<AppState>();
+                if let Err(e) = start_api(app.handle(), &st) {
+                    eprintln!("local API could not start: {e}");
+                }
+            }
             // Autosave unsaved work periodically (spec §47). Never touches the saved project file.
             let secs = std::env::var("FFWORKS_AUTOSAVE_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(20).max(1);
             let h = app.handle().clone();
@@ -1066,12 +1659,12 @@ pub fn run() {
     #[cfg(feature = "uitest")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
+            detect_scenes, detect_ranges, render_scope, sync_offset, sync_drift, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, run_script_text, script_examples, read_script_file, write_script_file, search_library, forget_missing_library, list_plugins, install_plugin, set_plugin_grant, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, list_mosh_effects, cancel_mosh, make_corruption, cancel_corruption, make_frames, cancel_framelab, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics, uitest_report
     ]);
     #[cfg(not(feature = "uitest"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_state, new_project, open_project, save_project, import_media, dispatch, undo, redo, get_waveform, get_thumbnails,
-            detect_scenes, detect_ranges, render_scope, sync_offset, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
+            detect_scenes, detect_ranges, render_scope, sync_offset, sync_drift, import_subtitles, import_image_sequence, start_recording, stop_recording, run_macro, run_script, run_script_text, script_examples, read_script_file, write_script_file, search_library, forget_missing_library, list_plugins, install_plugin, set_plugin_grant, run_plugin, set_active_sequence, cancel_preview, local_api_status, set_local_api, package_project, measure_loudness, list_transitions, get_beats, get_settings, set_settings, relink_search, relink_media, find_recovery, recover_project, discard_recovery, list_effects, list_clip_props, list_fonts, list_filters, filter_help, frei0r_status, set_frei0r_dirs, set_ladspa_dirs, demo_batch, list_engines, scan_engines, add_engine, remove_engine, set_active_engine, get_favourites, set_favourites, contact_sheet, get_effect_presets, save_effect_preset, delete_effect_preset, random_effects, random_transitions, check_filter_graph, proxy_status, create_proxy, clear_proxies, ffglitch_status, set_ffglitch_dir, make_mosh, list_mosh_effects, cancel_mosh, make_corruption, cancel_corruption, make_frames, cancel_framelab, render_preview, list_export_presets, preview_command, start_export, export_name, unfinished_exports, resolve_unfinished, cancel_job, list_jobs, get_job_log, clear_finished_jobs, verify_output, get_diagnostics
     ]);
     builder
         .run(tauri::generate_context!())
