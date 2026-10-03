@@ -18,13 +18,13 @@ export function clipAt(track: Track, t: number): Clip | null {
   return null;
 }
 
-/** Topmost visible video clip at time `t` (later video tracks are on top; muted = hidden). */
+/** Topmost visible video clip at time `t` (later video tracks are on top; muted = hidden). Adjustment layers paint nothing themselves, so they are skipped. */
 export function visibleVideoAt(seq: Sequence, t: number): { clip: Clip; track: Track } | null {
   let found: { clip: Clip; track: Track } | null = null;
   for (const track of seq.tracks) {
     if (track.kind !== "video" || track.muted) continue;
     const clip = clipAt(track, t);
-    if (clip) found = { clip, track };
+    if (clip && !clip.adjustment) found = { clip, track };
   }
   return found;
 }

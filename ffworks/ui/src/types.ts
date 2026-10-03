@@ -30,6 +30,8 @@ export interface Clip {
   pan: number; fade_in: Rational; fade_out: Rational;
   /** Set on title clips (their media is the transparent title canvas). */
   title: Title | null;
+  /** Adjustment layer: its effects apply to everything on lower tracks while it lasts (absent when false). */
+  adjustment?: boolean;
   /** Keyed by parameter id: `opacity`, `x`, `y`, `scale`, `rotation` or `fx:<effect id>:<param>`. */
   keyframes: Record<string, Keyframe[]>;
 }
@@ -69,6 +71,7 @@ export type Command =
   | { type: "remove_marker"; marker: string }
   | { type: "add_title"; track: string; start: Rational; duration: Rational; text: string }
   | { type: "set_title"; clip: string; title: Title }
+  | { type: "add_adjustment"; track: string; start: Rational; duration: Rational }
   | { type: "add_solid"; track: string; start: Rational; duration: Rational; color: string }
   | { type: "set_solid_color"; clip: string; color: string }
   | { type: "set_clip_fades"; clip: string; fade_in?: Rational | null; fade_out?: Rational | null }

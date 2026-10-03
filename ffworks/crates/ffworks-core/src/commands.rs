@@ -97,6 +97,9 @@ pub enum Command {
     AddTitle { track: Id, start: Rational, duration: Rational, text: String },
     /// Replace a title clip's text and styling.
     SetTitle { clip: Id, title: Title },
+    /// An adjustment layer on a video track: effects added to this clip apply to everything beneath it (lower tracks) for its
+    /// length, and its opacity sets how strongly. No transform, blend, speed or transitions; no pixel sort.
+    AddAdjustment { track: Id, start: Rational, duration: Rational },
     /// A solid-colour clip (`#RRGGBB` or `#RRGGBBAA`) on a video track.
     AddSolid { track: Id, start: Rational, duration: Rational, color: String },
     /// Change the colour of a solid-colour clip.
@@ -179,6 +182,7 @@ impl Command {
             Command::AddFilterEffect { filter, .. } => format!("Add filter {filter}"),
             Command::ImportCues { cues, .. } => format!("Import {} subtitles", cues.len()),
             Command::RemoveRanges { ranges, .. } => format!("Cut out {} ranges", ranges.len()),
+            Command::AddAdjustment { .. } => "Add adjustment layer".into(),
             Command::Batch { label, .. } => label.clone(),
         }
     }
@@ -500,6 +504,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             if c.kind != TrackKind::Audio && matches!(cmd, Command::SetClipFades { .. }) {
                 return Err(Error::validation("fades apply to audio clips; select the audio clip"));
             }
+            if c.adjustment {
+                adjustment_refuses(cmd)?;
+            }
             let mut c2 = c.clone();
             let find_fx = |c: &Clip, id: &str| c.effects.iter().position(|e| e.id == id).ok_or_else(|| Error::NotFound(format!("effect {id}")));
             let animated = |c: &Clip, param: &str| c.keyframes.get(param).is_some_and(|k| !k.is_empty());
@@ -733,6 +740,27 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             out.push(Patch::PutClip { seq: sid, track: t.id.clone(), clip: Clip::new(new_id("clp"), asset.id.clone(), asset.name.clone(), TrackKind::Video, start, Rational::ZERO, dur, None) });
             Ok(out)
         }
+        Command::AddAdjustment { track, start, duration } => {
+            let t = seq.track(track).ok_or_else(|| Error::NotFound(format!("track {track}")))?;
+            ensure_unlocked(t)?;
+            if t.kind != TrackKind::Video {
+                return Err(Error::validation("adjustment layers go on a video track"));
+            }
+            let (start, dur) = (snap_to_frame(*start, fps), snap_to_frame(*duration, fps));
+            if start < Rational::ZERO || dur < Rational::from_int(1).div(fps) {
+                return Err(Error::validation("an adjustment layer needs a start >= 0 and at least one frame of duration"));
+            }
+            check_free(t, start, start + dur, &[])?;
+            let asset = generators::solid_asset(generators::TRANSPARENT, &p.settings)?;
+            let mut out = vec![];
+            if !p.media.iter().any(|m| m.id == asset.id) {
+                out.push(Patch::InsertMedia { index: p.media.len(), asset: asset.clone() });
+            }
+            let mut clip = Clip::new(new_id("clp"), asset.id, "Adjustment layer".into(), TrackKind::Video, start, Rational::ZERO, dur, None);
+            clip.adjustment = true;
+            out.push(Patch::PutClip { seq: sid, track: t.id.clone(), clip });
+            Ok(out)
+        }
         Command::SetSolidColor { clip, color } => {
             let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
             ensure_unlocked(t)?;
@@ -752,6 +780,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             Ok(out)
         }
         Command::SetClipSpeed { clip, speed } => {
+            if seq.find_clip(clip).is_some_and(|(_, c)| c.adjustment) {
+                return Err(Error::validation("an adjustment layer has no footage to retime"));
+            }
             if *speed < Rational::new(1, 10) || *speed > Rational::from_int(10) {
                 return Err(Error::validation("speed must be between 10% and 1000%"));
             }
@@ -783,6 +814,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             Ok(out)
         }
         Command::SetClipReverse { clip, reverse } => {
+            if seq.find_clip(clip).is_some_and(|(_, c)| c.adjustment) {
+                return Err(Error::validation("an adjustment layer has no footage to reverse"));
+            }
             let group = seq.linked_group(clip);
             if group.is_empty() {
                 return Err(Error::NotFound(format!("clip {clip}")));
@@ -802,6 +836,9 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             ensure_unlocked(t)?;
             if c.kind != TrackKind::Video {
                 return Err(Error::validation("only video clips can be frozen"));
+            }
+            if c.adjustment {
+                return Err(Error::validation("an adjustment layer has no footage to freeze"));
             }
             let mut c2 = c.clone();
             let mut out = vec![];
@@ -830,8 +867,11 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
         }
         Command::AddTransition { clip_a, clip_b, kind, duration } => {
             transitions::check_kind(kind)?;
-            let (ta, _) = seq.find_clip(clip_a).ok_or_else(|| Error::NotFound(format!("clip {clip_a}")))?;
-            let (tb, _) = seq.find_clip(clip_b).ok_or_else(|| Error::NotFound(format!("clip {clip_b}")))?;
+            let (ta, ca) = seq.find_clip(clip_a).ok_or_else(|| Error::NotFound(format!("clip {clip_a}")))?;
+            let (tb, cb) = seq.find_clip(clip_b).ok_or_else(|| Error::NotFound(format!("clip {clip_b}")))?;
+            if ca.adjustment || cb.adjustment {
+                return Err(Error::validation("transitions are between footage clips, not adjustment layers"));
+            }
             if ta.id != tb.id {
                 return Err(Error::validation("both clips of a transition must be on the same track"));
             }
@@ -908,6 +948,19 @@ fn title_name(text: &str) -> String {
     let line = text.lines().next().unwrap_or("").trim();
     let short: String = line.chars().take(40).collect();
     if short.is_empty() { "Title".into() } else { short }
+}
+
+/// What an adjustment layer cannot take (it has no footage of its own): picture placement, blend mode, and effects that
+/// need the layer's own footage.
+fn adjustment_refuses(cmd: &Command) -> Result<()> {
+    const PLACEMENT: [&str; 4] = ["x", "y", "scale", "rotation"];
+    let bad_param = |p: &str| PLACEMENT.contains(&p);
+    match cmd {
+        Command::SetClipBlend { .. } => Err(Error::validation("an adjustment layer has no blend mode; its opacity sets how strongly it applies")),
+        Command::SetClipParam { param, .. } | Command::SetKeyframe { param, .. } | Command::SetKeyframes { param, .. } if bad_param(param) => Err(Error::validation("an adjustment layer has no position, scale or rotation")),
+        Command::AddEffect { effect, .. } if effect == "pixel_sort" => Err(Error::validation("pixel sort needs footage of its own; put it on a clip, not on an adjustment layer")),
+        _ => Ok(()),
+    }
 }
 
 fn ensure_unlocked(t: &Track) -> Result<()> {

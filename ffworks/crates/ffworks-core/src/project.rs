@@ -133,6 +133,10 @@ pub struct Clip {
     /// Title text/styling; only on clips whose media is the transparent title canvas.
     #[serde(default)]
     pub title: Option<Title>,
+    /// An adjustment layer: its effect stack (and opacity, as the strength) applies to everything beneath it on lower
+    /// tracks for as long as the clip lasts. Its media is the transparent canvas and is never drawn itself.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub adjustment: bool,
     /// FFmpeg `blend` mode name, "normal" for plain compositing.
     #[serde(default = "normal_blend")]
     pub blend: String,
@@ -155,7 +159,7 @@ impl Clip {
     /// A plain clip: speed 1, no effects, identity transform.
     #[allow(clippy::too_many_arguments)]
     pub fn new(id: Id, media: Id, name: String, kind: TrackKind, start: Rational, source_in: Rational, duration: Rational, link: Option<Id>) -> Clip {
-        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, title: None, blend: normal_blend(), keyframes: BTreeMap::new() }
+        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, title: None, adjustment: false, blend: normal_blend(), keyframes: BTreeMap::new() }
     }
 
     pub fn end(&self) -> Rational {

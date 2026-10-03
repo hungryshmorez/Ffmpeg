@@ -116,7 +116,8 @@ export function Monitor() {
   };
   const c0 = vis?.clip;
   const audioActive = seq.tracks.some((tr) => tr.kind === "audio" && !tr.muted && ((clipAt(tr, t)?.effects.some((e) => e.enabled) ?? false) || tr.pan !== 0 || (() => { const c = clipAt(tr, t); return !!c && (c.pan !== 0 || toSec(c.fade_in) > 0 || toSec(c.fade_out) > 0); })()));
-  const effectsActive = audioActive || !!c0 && (c0.opacity < 1 || c0.effects.some((e) => e.enabled) || c0.blend !== "normal" || c0.speed !== "1" || c0.reverse || c0.freeze !== null || hasMotion(c0.keyframes) || c0.transform.x !== 0 || c0.transform.y !== 0 || c0.transform.scale !== 1 || c0.transform.rotation !== 0);
+  const adjustActive = seq.tracks.some((tr) => tr.kind === "video" && !tr.muted && (() => { const c = clipAt(tr, t); return !!c?.adjustment && (c.opacity > 0 && c.effects.some((e) => e.enabled)); })());
+  const effectsActive = audioActive || adjustActive || !!c0 && (c0.opacity < 1 || c0.effects.some((e) => e.enabled) || c0.blend !== "normal" || c0.speed !== "1" || c0.reverse || c0.freeze !== null || hasMotion(c0.keyframes) || c0.transform.x !== 0 || c0.transform.y !== 0 || c0.transform.scale !== 1 || c0.transform.rotation !== 0);
 
   // Playback clock: wall-clock driven so audio/video drift is corrected against it, not the other way round.
   const durRef = useRef(duration);

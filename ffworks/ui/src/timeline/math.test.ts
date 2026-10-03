@@ -49,6 +49,10 @@ describe("timeline math", () => {
     const hidden: Sequence = { ...seq, tracks: seq.tracks.map((t) => (t.id === "v2" ? { ...t, muted: true } : t)) };
     expect(visibleVideoAt(hidden, 1.5)?.clip.id).toBe("a");
   });
+  it("an adjustment layer is never the picture shown: the footage beneath it is", () => {
+    const adj: Sequence = { ...seq, tracks: seq.tracks.map((t) => (t.id === "v2" ? { ...t, clips: t.clips.map((c) => ({ ...c, adjustment: true })) } : t)) };
+    expect(visibleVideoAt(adj, 1.5)?.clip.id).toBe("a");
+  });
   it("maps timeline time to source time", () => {
     expect(sourceTime(clip("x", "10", "5", "video", null, "3"), 12)).toBe(5);
   });

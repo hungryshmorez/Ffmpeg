@@ -306,51 +306,59 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     let speed = seg.speed.as_f64();
                     let span = seg.source_span();
                     let mut chain = String::new();
-                    // source window (frozen: a single frame), restart timestamps, retime
-                    let (t0, t1) = match seg.freeze {
-                        // two frames of margin around the held time; `trim=end_frame=1` below keeps just the first
-                        Some(fz) => {
-                            let a = (fz - src_half(seg.input)).max(Rational::ZERO);
-                            (a, a + Rational::new(2, 1).div(g.fps))
-                        }
-                        None => ((seg.source_in - src_half(seg.input)).max(Rational::ZERO), seg.source_in + span - src_half(seg.input)),
-                    };
-                    chain.push_str(&format!("{}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS", take(seg.input), secs(t0), secs(t1)));
-                    if seg.freeze.is_none() && seg.speed != Rational::from_int(1) {
-                        chain.push_str(&format!(",setpts=PTS/{}", dec(speed)));
-                    }
                     let input = &g.inputs[seg.input];
-                    if input.generated.is_some() {
-                        // generated canvases are already output-sized; keep their alpha
-                        chain.push_str(&format!(",fps={fps},format=yuva420p"));
-                    } else if input.alpha {
-                        // pictures with transparency: even pad offsets (odd ones corrupt the alpha plane in `pad`) and a transparent border
-                        chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,format=yuva420p,pad={w}:{h}:trunc((ow-iw)/4)*2:trunc((oh-ih)/4)*2:color=black@0,setsar=1"));
+                    if seg.adjustment {
+                        // an adjustment layer works on the picture composited so far: a copy of it is cut to the layer's
+                        // span (half a frame early, like source trims), run through the effects, then laid back over
+                        let half = Rational::new(1, 2).div(g.fps);
+                        f.push(format!("[base{n}]split[adk{n}][adf{n}]"));
+                        chain = format!("[adf{n}]trim=start={}:end={},setpts=PTS-STARTPTS", secs((seg.start - half).max(Rational::ZERO)), secs(seg.start + seg.duration - half));
                     } else {
-                        chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"));
-                    }
-                    if let Some((title, font)) = &seg.title {
-                        require(&["drawtext".to_string()])?;
-                        chain.push(',');
-                        chain.push_str(&crate::titles::to_drawtext(title, font, h));
-                    }
-                    if seg.freeze.is_some() {
-                        chain.push_str(&format!(",trim=end_frame=1,tpad=stop_mode=clone:stop_duration={d},trim=end={d},setpts=PTS-STARTPTS", d = secs(seg.duration)));
-                    } else {
-                        chain.push_str(&format!(",trim=end={},setpts=PTS-STARTPTS", secs(seg.duration)));
-                    }
-                    if seg.reverse && seg.freeze.is_none() {
-                        // `reverse` holds every frame in memory; refuse clips that would not fit
-                        let bytes = seg.duration.as_f64() * g.fps.as_f64() * (w as f64) * (h as f64) * 1.5;
-                        if bytes > MAX_REVERSE_BYTES {
-                            return Err(Error::validation(format!(
-                                "reversing {:.1}s at {w}x{h} needs about {:.1} GB of memory (limit {:.0} GB); reverse a shorter clip or render with a lower preview quality",
-                                seg.duration.as_f64(),
-                                bytes / 1e9,
-                                MAX_REVERSE_BYTES / 1e9
-                            )));
+                        // source window (frozen: a single frame), restart timestamps, retime
+                        let (t0, t1) = match seg.freeze {
+                            // two frames of margin around the held time; `trim=end_frame=1` below keeps just the first
+                            Some(fz) => {
+                                let a = (fz - src_half(seg.input)).max(Rational::ZERO);
+                                (a, a + Rational::new(2, 1).div(g.fps))
+                            }
+                            None => ((seg.source_in - src_half(seg.input)).max(Rational::ZERO), seg.source_in + span - src_half(seg.input)),
+                        };
+                        chain.push_str(&format!("{}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS", take(seg.input), secs(t0), secs(t1)));
+                        if seg.freeze.is_none() && seg.speed != Rational::from_int(1) {
+                            chain.push_str(&format!(",setpts=PTS/{}", dec(speed)));
                         }
-                        chain.push_str(",reverse,setpts=PTS-STARTPTS");
+                        if input.generated.is_some() {
+                            // generated canvases are already output-sized; keep their alpha
+                            chain.push_str(&format!(",fps={fps},format=yuva420p"));
+                        } else if input.alpha {
+                            // pictures with transparency: even pad offsets (odd ones corrupt the alpha plane in `pad`) and a transparent border
+                            chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,format=yuva420p,pad={w}:{h}:trunc((ow-iw)/4)*2:trunc((oh-ih)/4)*2:color=black@0,setsar=1"));
+                        } else {
+                            chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"));
+                        }
+                        if let Some((title, font)) = &seg.title {
+                            require(&["drawtext".to_string()])?;
+                            chain.push(',');
+                            chain.push_str(&crate::titles::to_drawtext(title, font, h));
+                        }
+                        if seg.freeze.is_some() {
+                            chain.push_str(&format!(",trim=end_frame=1,tpad=stop_mode=clone:stop_duration={d},trim=end={d},setpts=PTS-STARTPTS", d = secs(seg.duration)));
+                        } else {
+                            chain.push_str(&format!(",trim=end={},setpts=PTS-STARTPTS", secs(seg.duration)));
+                        }
+                        if seg.reverse && seg.freeze.is_none() {
+                            // `reverse` holds every frame in memory; refuse clips that would not fit
+                            let bytes = seg.duration.as_f64() * g.fps.as_f64() * (w as f64) * (h as f64) * 1.5;
+                            if bytes > MAX_REVERSE_BYTES {
+                                return Err(Error::validation(format!(
+                                    "reversing {:.1}s at {w}x{h} needs about {:.1} GB of memory (limit {:.0} GB); reverse a shorter clip or render with a lower preview quality",
+                                    seg.duration.as_f64(),
+                                    bytes / 1e9,
+                                    MAX_REVERSE_BYTES / 1e9
+                                )));
+                            }
+                            chain.push_str(",reverse,setpts=PTS-STARTPTS");
+                        }
                     }
                     for (k, fx) in seg.filters.iter().enumerate() {
                         match fx.strip_prefix(crate::effects::GRAPH_MARK) {
@@ -368,10 +376,10 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                             }
                         }
                     }
-                    let blended = seg.blend != "normal";
+                    let blended = seg.blend != "normal" && !seg.adjustment;
                     let animated_opacity = seg.animated("opacity");
-                    let transform = transform_filter(seg, w, h, g.fps);
-                    let translucent = seg.opacity < 1.0 || animated_opacity || seg.alpha_fx || transform.is_some() || blended || input.generated.is_some() || input.alpha;
+                    let transform = if seg.adjustment { None } else { transform_filter(seg, w, h, g.fps) };
+                    let translucent = seg.opacity < 1.0 || animated_opacity || seg.alpha_fx || transform.is_some() || blended || (!seg.adjustment && (input.generated.is_some() || input.alpha));
                     if animated_opacity {
                         // alpha plane × keyframed opacity, evaluated per frame (T = clip-relative seconds at this point of the chain)
                         chain.push_str(&format!(",format=yuva420p,geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='alpha(X,Y)*({})'", crate::keyframes::to_expr(&seg.keyframes["opacity"], "T")));
@@ -388,7 +396,8 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     f.push(chain);
                     let fmt = if translucent { ":format=auto" } else { "" };
                     if !blended {
-                        f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", n + 1));
+                        let below = if seg.adjustment { format!("adk{n}") } else { format!("base{n}") };
+                        f.push(format!("[{below}][vs{n}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", n + 1));
                     } else {
                         require(&["blend".to_string(), "alphamerge".to_string(), "alphaextract".to_string()])?;
                         // Blend the layer with the picture beneath, then composite that result through the layer's own alpha.

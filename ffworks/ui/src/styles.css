@@ -62,6 +62,7 @@ input.num { width: 70px; }
 .track-clips { position: relative; height: 100%; background: repeating-linear-gradient(90deg, transparent 0 79px, rgba(255,255,255,.03) 79px 80px); }
 .clip { position: absolute; top: 2px; border-radius: 4px; overflow: hidden; cursor: grab; border: 1px solid rgba(255,255,255,.2); user-select: none; touch-action: none; }
 .clip.video { background: #2b4a6e; } .clip.audio { background: #1f3b31; }
+.clip.video.adjustment { background: repeating-linear-gradient(135deg, #5a3d7a, #5a3d7a 8px, #4b3268 8px, #4b3268 16px); }
 .clip.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .clip.dragging { opacity: .8; z-index: 8; }
 .clip-name { position: absolute; left: 6px; top: 2px; font-size: 11px; text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; }

@@ -185,6 +185,7 @@ fn bake_use(g: &mut RenderGraph, mut u: Use, window: Option<(i64, i64)>, cache: 
                 keyframes: BTreeMap::new(),
                 alpha_fx: false,
                 title: u.title.clone(),
+                adjustment: false,
             }],
             audio: vec![],
             video_transitions: vec![],
@@ -576,6 +577,7 @@ mod tests {
             keyframes: BTreeMap::new(),
             alpha_fx: false,
             title: None,
+            adjustment: false,
         };
         let mut g = RenderGraph {
             width: 64,

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { fpsOf, fromSec, snapToFrame, timecode, toSec } from "../time";
 import { beatPoints, dbToGain, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
-import { addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
+import { addAdjustmentAtPlayhead, addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
 import { usePlayhead, useProject, useUi } from "../state/stores";
 import type { Clip, Marker, Sequence, Track, Transition } from "../types";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
@@ -56,6 +56,7 @@ export function Timeline() {
         <button title="Add a marker at the playhead (M)" onClick={() => void addMarkerAtPlayhead(seq)}>+ Marker</button>
         <button title="Add a title at the playhead (5 s) on the topmost free video track" onClick={() => void addTitleAtPlayhead()}>+ Title</button>
         <button title="Add a solid colour clip at the playhead (5 s)" onClick={() => void addSolidAtPlayhead()}>+ Solid</button>
+        <button title="Add an adjustment layer at the playhead (5 s): its effects apply to everything on the tracks beneath it" onClick={() => void addAdjustmentAtPlayhead()}>+ Adjustment</button>
         <button title="Add audio track" onClick={() => dispatch({ type: "add_track", kind: "audio" })}>+ Audio track</button>
         <label className="check" title="Snap clip edges and the playhead to detected beats (detect beats in the Inspector first)"><input type="checkbox" checked={snapBeats} onChange={(e) => setSnapBeats(e.target.checked)} /> Snap to beats</label>
         <span className="muted right">Space play · S split · Del delete · ⇧Del ripple · ←/→ frame · Ctrl+wheel zoom</span>
@@ -227,7 +228,7 @@ const ClipView = memo(
     const g = ghost ?? { start, duration, sourceIn };
     return (
       <div
-        className={`clip ${clip.kind} ${isSel ? "selected" : ""} ${ghost ? "dragging" : ""}`}
+        className={`clip ${clip.kind} ${clip.adjustment ? "adjustment" : ""} ${isSel ? "selected" : ""} ${ghost ? "dragging" : ""}`}
         style={{ left: g.start * px, width: Math.max(2, g.duration * px), height }}
         onPointerDown={begin("move")}
         role="button"

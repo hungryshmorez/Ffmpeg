@@ -56,6 +56,9 @@ pub struct VideoSegment {
     pub alpha_fx: bool,
     /// Title text and its resolved font file (the clip's media is the transparent title canvas).
     pub title: Option<(crate::titles::Title, std::path::PathBuf)>,
+    /// An adjustment layer: `filters` apply to everything composited beneath it for `[start, start + duration)`; `input`
+    /// (the transparent canvas) is never read.
+    pub adjustment: bool,
 }
 
 impl VideoSegment {
@@ -298,6 +301,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                                 Some(t) => Some((t.clone(), crate::fonts::resolve(&t.font)?)),
                                 None => None,
                             },
+                            adjustment: c.adjustment,
                         });
                     }
                 }
