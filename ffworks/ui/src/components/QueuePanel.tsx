@@ -4,6 +4,8 @@ import { useJobs, useProject } from "../state/stores";
 import type { JobEvent, JobLog } from "../types";
 
 const basename = (p: string) => p.split(/[\\/]/).pop() ?? p;
+/** Previews and analyses run as queue tasks: no FFmpeg log of their own, and their "output" is a description, not a path. */
+const isTask = (j: JobEvent) => j.operation === "preview" || j.operation.startsWith("analysis:");
 const active = (j: JobEvent) => j.state === "queued" || j.state === "rendering";
 
 export function QueuePanel() {
@@ -27,11 +29,11 @@ export function QueuePanel() {
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Render queue">
       <div className="modal">
         <h2>Render queue</h2>
-        {list.length === 0 && <p className="muted">No jobs yet. Exports you start appear here and run in the background.</p>}
+        {list.length === 0 && <p className="muted">No jobs yet. Exports, previews and analyses you start appear here; you can cancel any of them.</p>}
         {list.map((j) => (
           <div key={j.jobId} className={`job-row ${j.state}`} data-job={j.jobId}>
             <div className="row">
-              <strong className="grow" title={j.output}>{basename(j.output)}</strong>
+              <strong className="grow" title={j.output}>{isTask(j) ? j.output : basename(j.output)}</strong>
               <span className="muted">{j.operation}</span>
               <span className={`state-badge ${j.state}`}>{j.state}</span>
             </div>
@@ -44,7 +46,7 @@ export function QueuePanel() {
             {j.state === "failed" && <div className="err">{j.message}</div>}
             <div className="row">
               {active(j) && <button className="small" onClick={() => void api.cancelJob(j.jobId)}>Cancel</button>}
-              {j.state !== "queued" && <button className="small" onClick={() => void showLog(j.jobId)}>{shown === j.jobId ? "Hide log" : "Log"}</button>}
+              {j.state !== "queued" && !isTask(j) && <button className="small" onClick={() => void showLog(j.jobId)}>{shown === j.jobId ? "Hide log" : "Log"}</button>}
             </div>
             {shown === j.jobId && (
               <pre className="cmd">{formatLog(logs[j.jobId])}</pre>

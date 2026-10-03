@@ -568,6 +568,21 @@ mod queue_tests {
     }
 
     #[test]
+    fn a_task_does_not_wait_behind_a_running_export() {
+        let dir = tempfile::tempdir().unwrap();
+        let (eng, _) = single_clip_project(dir.path(), "red");
+        let q = JobQueue::new(tools(), dir.path().join("tmp"), 1);
+        let running = q.submit(job_for(&eng, dir.path().join("slow.mp4"), true), "export", PRIORITY_EXPORT);
+        assert!(wait_until(&q, &running, |s| matches!(s, JobState::Rendering { .. }), 10));
+        let (task, rx) = q.run_task("preview", "Preview", |_, _| Ok(7));
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap(), 7, "the only worker is busy, the task still ran");
+        assert!(q.snapshot().iter().any(|j| j.job_id == task && matches!(j.state, JobState::Completed)));
+        assert!(q.snapshot().iter().any(|j| j.job_id == running && matches!(j.state, JobState::Rendering { .. })), "and the export carried on");
+        q.cancel(&running);
+        assert!(wait_until(&q, &running, finished, 30));
+    }
+
+    #[test]
     fn priority_order_cancel_queued_cancel_running_and_logs() {
         let dir = tempfile::tempdir().unwrap();
         let (eng, _) = single_clip_project(dir.path(), "red");

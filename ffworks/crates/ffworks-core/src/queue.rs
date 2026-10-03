@@ -2,6 +2,7 @@
 //! threads with a concurrency limit, can be canceled while queued or running, and keep their full FFmpeg log whether they
 //! succeed, fail or are canceled. Nothing here touches the UI; a listener callback reports every state change.
 
+use crate::error::{Error, Result};
 use crate::ffmpeg::FfmpegJob;
 use crate::jobs::{run_job_logged, CancelToken, JobLog, JobState};
 use crate::process::Tools;
@@ -44,7 +45,8 @@ pub struct JobSnapshot {
 
 struct Record {
     snap: JobSnapshot,
-    job: FfmpegJob,
+    /// The FFmpeg job to run; None for a task (see [`JobQueue::run_task`]), which runs on its own thread.
+    job: Option<FfmpegJob>,
     cancel: CancelToken,
     log: Option<JobLog>,
     seq: u64,
@@ -110,12 +112,65 @@ impl JobQueue {
         g.next_seq += 1;
         let id = format!("job_{}_{seq}", now());
         let snap = JobSnapshot { job_id: id.clone(), operation: operation.into(), output: job.output.to_string_lossy().into_owned(), priority, state: JobState::Queued, enqueued_unix: now() };
-        g.jobs.push(Record { snap: snap.clone(), job, cancel: CancelToken::new(), log: None, seq });
+        g.jobs.push(Record { snap: snap.clone(), job: Some(job), cancel: CancelToken::new(), log: None, seq });
         write_journal_locked(&self.shared, &g);
         drop(g);
         notify(&self.shared, &snap);
         self.shared.cv.notify_one();
         id
+    }
+
+    /// Run `work` on its own thread beside the render workers and list it in the queue (so it shows progress and can be
+    /// canceled like any job). For things the user waits on: previews and analyses must not sit behind a long export, so they do
+    /// not take a worker slot. `work` gets the cancel switch and a progress callback; its result comes back on the receiver
+    /// *after* the job's final state is visible in [`snapshot`](Self::snapshot). Tasks are never journalled.
+    pub fn run_task<T: Send + 'static>(&self, operation: &str, label: &str, work: impl FnOnce(&CancelToken, &mut dyn FnMut(JobState)) -> Result<T> + Send + 'static) -> (String, std::sync::mpsc::Receiver<Result<T>>) {
+        let started = std::time::Instant::now();
+        let (id, cancel, snap) = {
+            let mut g = self.shared.inner.lock().unwrap();
+            let seq = g.next_seq;
+            g.next_seq += 1;
+            let id = format!("job_{}_{seq}", now());
+            let state = JobState::Rendering { fraction: None, fps: None, elapsed_secs: 0.0, eta_secs: None };
+            let snap = JobSnapshot { job_id: id.clone(), operation: operation.into(), output: label.into(), priority: PRIORITY_EXPORT, state, enqueued_unix: now() };
+            let cancel = CancelToken::new();
+            g.jobs.push(Record { snap: snap.clone(), job: None, cancel: cancel.clone(), log: None, seq });
+            (id, cancel, snap)
+        };
+        notify(&self.shared, &snap);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let s = Arc::clone(&self.shared);
+        let task_id = id.clone();
+        std::thread::spawn(move || {
+            let set = |state: JobState| -> Option<JobSnapshot> {
+                let mut g = s.inner.lock().unwrap();
+                let r = g.jobs.iter_mut().find(|r| r.snap.job_id == task_id)?;
+                r.snap.state = state;
+                Some(r.snap.clone())
+            };
+            let result = {
+                let mut progress = |st: JobState| {
+                    if let JobState::Rendering { fraction, fps, .. } = st {
+                        let elapsed = started.elapsed().as_secs_f64();
+                        let eta = fraction.filter(|f| *f > 0.01 && *f < 1.0).map(|f| elapsed * (1.0 - f) / f);
+                        if let Some(snap) = set(JobState::Rendering { fraction, fps, elapsed_secs: elapsed, eta_secs: eta }) {
+                            notify(&s, &snap);
+                        }
+                    }
+                };
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(&cancel, &mut progress))).unwrap_or_else(|_| Err(Error::validation("the task stopped unexpectedly")))
+            };
+            let state = match &result {
+                Ok(_) => JobState::Completed,
+                Err(Error::Canceled) => JobState::Canceled,
+                Err(e) => JobState::Failed { message: e.to_string() },
+            };
+            if let Some(snap) = set(state) {
+                notify(&s, &snap);
+            }
+            let _ = tx.send(result);
+        });
+        (id, rx)
     }
 
     /// Cancel a queued job (it never runs) or a running one (FFmpeg is killed, no output is written). Returns false for unknown/finished jobs.
@@ -200,7 +255,7 @@ fn write_journal_locked(s: &Shared, g: &Inner) {
         .jobs
         .iter()
         .filter(|r| ops.contains(&r.snap.operation) && matches!(r.snap.state, JobState::Queued | JobState::Rendering { .. }))
-        .map(|r| SavedJob { operation: r.snap.operation.clone(), priority: r.snap.priority, enqueued_unix: r.snap.enqueued_unix, was_running: matches!(r.snap.state, JobState::Rendering { .. }), job: r.job.clone() })
+        .filter_map(|r| r.job.as_ref().map(|job| SavedJob { operation: r.snap.operation.clone(), priority: r.snap.priority, enqueued_unix: r.snap.enqueued_unix, was_running: matches!(r.snap.state, JobState::Rendering { .. }), job: job.clone() }))
         .collect();
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -225,13 +280,13 @@ fn worker(s: Arc<Shared>) {
                     .jobs
                     .iter()
                     .enumerate()
-                    .filter(|(_, r)| matches!(r.snap.state, JobState::Queued))
+                    .filter(|(_, r)| matches!(r.snap.state, JobState::Queued) && r.job.is_some())
                     .max_by_key(|(_, r)| (r.snap.priority, std::cmp::Reverse(r.seq)))
                     .map(|(i, _)| i);
                 if let Some(i) = idx {
                     let r = &mut g.jobs[i];
                     r.snap.state = JobState::Rendering { fraction: None, fps: None, elapsed_secs: 0.0, eta_secs: None };
-                    let picked = (r.snap.clone(), r.job.clone(), r.cancel.clone());
+                    let picked = (r.snap.clone(), r.job.clone().expect("only jobs with a command are picked"), r.cancel.clone());
                     write_journal_locked(&s, &g);
                     break picked;
                 }

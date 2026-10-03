@@ -97,7 +97,10 @@ fn sorting_whole_rows_puts_every_row_in_order() {
     let out = dir.path().join("o.mkv");
     let job = export(&eng, &out);
     assert_eq!(job.stages.len(), 1);
-    assert!(job.stages.iter().all(|s| !s.output.exists()), "an export's bake file is deleted afterwards");
+    assert!(job.stages.iter().all(|s| s.output.exists()), "an export's bake file stays in the content-keyed cache for reuse");
+    job.stages.iter().for_each(|s| {
+        let _ = std::fs::remove_file(&s.output);
+    });
     for t in [0.0, 0.5, 1.5] {
         let f = luma_frame(&out, t);
         assert!(falling(&f, false, 3) < 0.005, "rows ascend at t={t}: {}", falling(&f, false, 3));
@@ -345,4 +348,31 @@ fn the_sort_angle_shows_as_a_setting_and_a_zero_angle_changes_nothing() {
     export(&a, &oa);
     export(&b, &ob);
     assert_eq!(luma_frame(&oa, 0.2), luma_frame(&ob, 0.2));
+}
+
+#[test]
+fn a_second_export_after_an_edit_elsewhere_reuses_the_sorted_frames() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = pattern(dir.path(), "n.mkv", "mod(X*97+Y*13+N*7,256)", 2);
+    let (mut eng, c) = one_clip(&src);
+    add(&mut eng, &c, "pixel_sort", &[("mode", 1.0)]);
+    let first = export(&eng, &dir.path().join("a.mkv"));
+    assert_eq!(first.stages.len(), 1);
+    let baked = first.stages[0].output.clone();
+    assert!(baked.exists(), "the sorted frames outlive the export (content-keyed cache)");
+
+    // change something after the sort: a different export, the same sort
+    add(&mut eng, &c, "negate", &[]);
+    let second = compile_project(&eng.project, &RenderOptions { output: dir.path().join("b.mkv"), settings: ExportSettings::find("ffv1_mkv").unwrap(), range: None, scale_div: 1 }, None).unwrap();
+    assert_eq!(second.stages[0].output, baked, "same frames, same file");
+    // a program that cannot run: the stage is satisfied from the cache or it fails
+    let no_ffmpeg = Tools { ffmpeg: PathBuf::from("/definitely/not/ffmpeg"), ffprobe: PathBuf::from("/definitely/not/ffprobe") };
+    ffworks_core::bake::run_stage(&no_ffmpeg, &second.stages[0], &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).expect("reused without running FFmpeg");
+
+    // changing the sort itself is a different bake
+    let (mut eng2, c2) = one_clip(&src);
+    add(&mut eng2, &c2, "pixel_sort", &[("mode", 0.0)]);
+    let other = compile_project(&eng2.project, &RenderOptions { output: dir.path().join("c.mkv"), settings: ExportSettings::find("ffv1_mkv").unwrap(), range: None, scale_div: 1 }, None).unwrap();
+    assert_ne!(other.stages[0].output, baked, "different sort settings, different file");
+    let _ = std::fs::remove_file(&baked);
 }

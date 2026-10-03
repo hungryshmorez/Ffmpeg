@@ -2,10 +2,11 @@
 //! `freezedetect` filters. Results are `(start, end)` ranges in seconds of the source media.
 
 use crate::error::{Error, Result};
-use crate::process::{suppress_console_window, Tools};
+use crate::jobs::CancelToken;
+use crate::process::{run_cancellable, Tools};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -18,6 +19,11 @@ pub enum Kind {
 /// Run one detector over `media`. `threshold` is dB for silence (e.g. -35), picture-black ratio for black (0.1) and dB noise
 /// for freeze (-60); `min_len` is the shortest range reported, in seconds.
 pub fn detect(tools: &Tools, media: &Path, duration: f64, kind: Kind, threshold: f64, min_len: f64) -> Result<Vec<(f64, f64)>> {
+    detect_with(tools, media, duration, kind, threshold, min_len, &CancelToken::new())
+}
+
+/// [`detect`] that stops (with [`Error::Canceled`]) when `cancel` is raised.
+pub fn detect_with(tools: &Tools, media: &Path, duration: f64, kind: Kind, threshold: f64, min_len: f64, cancel: &CancelToken) -> Result<Vec<(f64, f64)>> {
     if !(min_len > 0.0 && min_len.is_finite()) {
         return Err(Error::validation("minimum length must be above zero"));
     }
@@ -29,9 +35,7 @@ pub fn detect(tools: &Tools, media: &Path, duration: f64, kind: Kind, threshold:
     let flag = if kind == Kind::Silence { "-af" } else { "-vf" };
     let mut cmd = Command::new(&tools.ffmpeg);
     cmd.args(["-hide_banner", "-nostdin", "-i"]).arg(media).args(maps).args([flag, &filter, "-f", "null", "-"]);
-    cmd.stdout(Stdio::null()).stderr(Stdio::piped()).stdin(Stdio::null());
-    suppress_console_window(&mut cmd);
-    let out = cmd.output().map_err(|e| Error::ToolUnavailable { tool: tools.ffmpeg.display().to_string(), reason: e.to_string() })?;
+    let out = run_cancellable(&mut cmd, cancel)?;
     let text = String::from_utf8_lossy(&out.stderr);
     if !out.status.success() {
         let hint = text.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").to_string();

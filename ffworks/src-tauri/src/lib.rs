@@ -40,8 +40,8 @@ struct AppState {
     plugins_dir: PathBuf,
     /// Cancel switch of the mosh run in progress.
     mosh_cancel: Mutex<Option<CancelToken>>,
-    /// Cancel switch of the preview render in progress (a new preview cancels the old one).
-    preview_cancel: Mutex<Option<CancelToken>>,
+    /// Queue job of the preview render in progress (a new preview cancels the old one).
+    preview_job: Mutex<Option<String>>,
 }
 
 #[derive(Serialize)]
@@ -415,32 +415,28 @@ async fn render_preview(app: AppHandle, state: State<'_, AppState>, start: Strin
     let render_hash = ffworks_core::preview::project_hash(&project).map_err(s)?;
     // the pixel-sort bake can take a while: report how far along the preview is
     let emitter = app.clone();
-    let cancel = CancelToken::new();
-    if let Some(older) = state.preview_cancel.lock().unwrap().replace(cancel.clone()) {
-        older.cancel();
+    if let Some(older) = state.preview_job.lock().unwrap().take() {
+        state.queue.cancel(&older);
     }
-    let r = tauri::async_runtime::spawn_blocking(move || {
-        ffworks_core::preview::render(&tools, caps.as_ref(), &project, start, end, scale_div, &cache, &cancel, &mut |st| {
+    let label = format!("Preview {:.0} s to {:.0} s", start.as_f64(), end.as_f64());
+    let r = queued(&state, "preview", label, Some(&state.preview_job), move |cancel, progress| {
+        ffworks_core::preview::render(&tools, caps.as_ref(), &project, start, end, scale_div, &cache, cancel, &mut |st| {
             if let ffworks_core::jobs::JobState::Rendering { fraction: Some(f), .. } = st {
                 let _ = emitter.emit("preview-progress", f);
+                progress(st);
             }
         })
     })
-    .await
-        .map_err(s)?
-        .map_err(s)?;
+    .await?;
     let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
     Ok(PreviewInfo { path: r.path.to_string_lossy().into_owned(), start: r.start, end: r.end, render_hash, cached: r.cached, scale_div })
 }
 
-/// Stop the preview render in progress (a pixel sort or a compound can take a long while). False when none is running.
+/// Stop the preview render in progress (a pixel sort or a compound can take a long while). False when none is running. The same job can be cancelled from the Queue panel.
 #[tauri::command]
 fn cancel_preview(state: State<AppState>) -> bool {
-    match state.preview_cancel.lock().unwrap().take() {
-        Some(c) => {
-            c.cancel();
-            true
-        }
+    match state.preview_job.lock().unwrap().take() {
+        Some(id) => state.queue.cancel(&id),
         None => false,
     }
 }
@@ -513,11 +509,32 @@ async fn relink_media(app: AppHandle, state: State<'_, AppState>, media_id: Stri
     Ok(view(&e))
 }
 
+/// Run `work` as a task in the job queue (it shows in the Queue panel with progress and a Cancel button, and does not wait
+/// behind exports) and wait for its result. Returns the job id through `job` as soon as it exists.
+async fn queued<T: Send + 'static>(
+    state: &State<'_, AppState>,
+    operation: &str,
+    label: String,
+    job: Option<&Mutex<Option<String>>>,
+    work: impl FnOnce(&CancelToken, &mut dyn FnMut(ffworks_core::jobs::JobState)) -> ffworks_core::error::Result<T> + Send + 'static,
+) -> Result<T, String> {
+    let (id, rx) = state.queue.run_task(operation, &label, work);
+    if let Some(slot) = job {
+        *slot.lock().unwrap() = Some(id);
+    }
+    tauri::async_runtime::spawn_blocking(move || rx.recv()).await.map_err(s)?.map_err(|_| "the task ended without a result".to_string())?.map_err(s)
+}
+
+fn file_label(path: &std::path::Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
 #[tauri::command]
 async fn get_beats(state: State<'_, AppState>, media_id: String) -> Result<ffworks_core::beats::BeatAnalysis, String> {
     let (tools, path, key) = media_for(&state, &media_id)?;
     let cache = state.cache_dir.clone();
-    tauri::async_runtime::spawn_blocking(move || ffworks_core::beats::detect(&tools, &path, &cache, &key)).await.map_err(s)?.map_err(s)
+    let label = format!("Beats of {}", file_label(&path));
+    queued(&state, "analysis:beats", label, None, move |cancel, _| ffworks_core::beats::detect_with(&tools, &path, &cache, &key, cancel)).await
 }
 
 #[tauri::command]
@@ -525,14 +542,16 @@ async fn detect_scenes(state: State<'_, AppState>, media_id: String, threshold: 
     let (tools, path, key) = media_for(&state, &media_id)?;
     let duration = state.engine.lock().unwrap().project.media(&media_id).map_err(s)?.info.duration.as_f64();
     let cache = state.cache_dir.clone();
-    tauri::async_runtime::spawn_blocking(move || ffworks_core::scenes::detect(&tools, &path, duration, &cache, &key, threshold)).await.map_err(s)?.map_err(s)
+    let label = format!("Scenes of {}", file_label(&path));
+    queued(&state, "analysis:scenes", label, None, move |cancel, _| ffworks_core::scenes::detect_with(&tools, &path, duration, &cache, &key, threshold, cancel)).await
 }
 
 #[tauri::command]
 async fn detect_ranges(state: State<'_, AppState>, media_id: String, kind: ffworks_core::detect::Kind, threshold: f64, min_len: f64) -> Result<Vec<(f64, f64)>, String> {
     let (tools, path, _) = media_for(&state, &media_id)?;
     let duration = state.engine.lock().unwrap().project.media(&media_id).map_err(s)?.info.duration.as_f64();
-    tauri::async_runtime::spawn_blocking(move || ffworks_core::detect::detect(&tools, &path, duration, kind, threshold, min_len)).await.map_err(s)?.map_err(s)
+    let label = format!("Silence, black or freeze ranges of {}", file_label(&path));
+    queued(&state, "analysis:ranges", label, None, move |cancel, _| ffworks_core::detect::detect_with(&tools, &path, duration, kind, threshold, min_len, cancel)).await
 }
 
 /// Where to put `clip` on the timeline so its audio lines up with `reference`'s (cross-correlation of the two recordings).
@@ -552,7 +571,8 @@ async fn sync_offset(state: State<'_, AppState>, reference: String, clip: String
         }
         (e.tools.clone(), PathBuf::from(&rm.path), PathBuf::from(&cm.path), (r.start.as_f64(), r.source_in.as_f64(), c.source_in.as_f64()))
     };
-    let res = tauri::async_runtime::spawn_blocking(move || ffworks_core::audiosync::measure(&tools, &ref_path, &clip_path)).await.map_err(s)?.map_err(s)?;
+    let label = format!("Sync {} to {}", file_label(&clip_path), file_label(&ref_path));
+    let res = queued(&state, "analysis:sync", label, None, move |cancel, _| ffworks_core::audiosync::measure_with(&tools, &ref_path, &clip_path, cancel)).await?;
     let start = ffworks_core::audiosync::aligned_start(geom.0, geom.1, geom.2, res.lag_seconds);
     Ok(serde_json::json!({ "lag": res.lag_seconds, "confidence": res.confidence, "start": start }))
 }
@@ -562,7 +582,8 @@ async fn sync_offset(state: State<'_, AppState>, reference: String, clip: String
 async fn render_scope(app: AppHandle, state: State<'_, AppState>, media_id: String, time: f64, scope: ffworks_core::scopes::Scope) -> Result<String, String> {
     let (tools, path, key) = media_for(&state, &media_id)?;
     let cache = state.cache_dir.join("scopes");
-    let out = tauri::async_runtime::spawn_blocking(move || ffworks_core::scopes::render(&tools, &path, time, scope, &cache, &key)).await.map_err(s)?.map_err(s)?;
+    let label = format!("Scope of {}", file_label(&path));
+    let out = queued(&state, "analysis:scope", label, None, move |cancel, _| ffworks_core::scopes::render_with(&tools, &path, time, scope, &cache, &key, cancel)).await?;
     let _ = app.asset_protocol_scope().allow_directory(&state.cache_dir, true);
     Ok(out.to_string_lossy().into_owned())
 }
@@ -571,7 +592,8 @@ async fn render_scope(app: AppHandle, state: State<'_, AppState>, media_id: Stri
 async fn measure_loudness(state: State<'_, AppState>, media_id: String) -> Result<ffworks_core::loudness::Loudness, String> {
     let (tools, path, key) = media_for(&state, &media_id)?;
     let cache = state.cache_dir.clone();
-    tauri::async_runtime::spawn_blocking(move || ffworks_core::loudness::analyze(&tools, &path, &cache, &key)).await.map_err(s)?.map_err(s)
+    let label = format!("Loudness of {}", file_label(&path));
+    queued(&state, "analysis:loudness", label, None, move |cancel, _| ffworks_core::loudness::analyze_with(&tools, &path, &cache, &key, cancel)).await
 }
 
 /// Transitions this FFmpeg can really do: its native `xfade` list (falling back to the built-in names) plus the bundled GL
@@ -1330,7 +1352,7 @@ pub fn run() {
                 mosh_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("mosh"),
                 plugins_dir: app.path().app_data_dir().unwrap_or_else(|_| base.clone()).join("plugins"),
                 mosh_cancel: Mutex::new(None),
-                preview_cancel: Mutex::new(None),
+                preview_job: Mutex::new(None),
             });
             if loaded.local_api {
                 let st = app.state::<AppState>();

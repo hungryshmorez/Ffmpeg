@@ -53,6 +53,40 @@ impl Tools {
     }
 }
 
+/// Run `cmd` to completion with stdout and stderr captured (whatever the caller set), polling `cancel`: when it is raised the
+/// child is killed and [`Error::Canceled`] returned. Both pipes are drained on their own threads, so a chatty child cannot stall.
+pub fn run_cancellable(cmd: &mut Command, cancel: &crate::jobs::CancelToken) -> Result<std::process::Output> {
+    use std::io::Read;
+    use std::time::Duration;
+    suppress_console_window(cmd);
+    let program = cmd.get_program().to_string_lossy().into_owned();
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().map_err(|e| Error::ToolUnavailable { tool: program.clone(), reason: e.to_string() })?;
+    fn drain(mut pipe: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8>> {
+        std::thread::spawn(move || {
+            let mut buf = vec![];
+            let _ = pipe.read_to_end(&mut buf);
+            buf
+        })
+    }
+    let out = drain(child.stdout.take().expect("piped"));
+    let err = drain(child.stderr.take().expect("piped"));
+    let status = loop {
+        if cancel.is_canceled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = (out.join(), err.join());
+            return Err(Error::Canceled);
+        }
+        match child.try_wait() {
+            Ok(Some(st)) => break st,
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(e) => return Err(Error::ToolUnavailable { tool: program, reason: e.to_string() }),
+        }
+    };
+    Ok(std::process::Output { status, stdout: out.join().unwrap_or_default(), stderr: err.join().unwrap_or_default() })
+}
+
 /// On Windows, don't flash a console window for each child process.
 #[cfg(windows)]
 pub fn suppress_console_window(cmd: &mut Command) {

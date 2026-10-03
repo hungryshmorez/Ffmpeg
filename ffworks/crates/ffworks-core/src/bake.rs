@@ -69,7 +69,8 @@ pub struct BakeStage {
     pub fps: String,
     /// Frames the render is expected to produce (progress only).
     pub frames: u64,
-    /// Preview bakes stay in the cache for reuse; export bakes are deleted once the job has finished.
+    /// Kept in the content-keyed cache for reuse (previews and exports alike; the cache is trimmed to a size limit). A stage
+    /// that is not kept is deleted once its job has finished.
     pub keep: bool,
 }
 

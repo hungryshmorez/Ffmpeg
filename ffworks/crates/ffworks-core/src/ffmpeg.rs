@@ -633,8 +633,9 @@ pub fn compile_project(project: &crate::project::Project, opts: &RenderOptions, 
     let mut g = crate::render_graph::build(project)?;
     // compound clips are rendered first; their files may feed pixel sorts, so they are planned before those
     let nests = crate::nest::prepare(project, &mut g, &crate::bake::cache_dir(), caps)?;
-    // pixel sorts are planned here and run by the job before FFmpeg starts; an export's bakes are deleted when it ends
-    let stages = crate::bake::prepare(&mut g, opts.range, &crate::bake::cache_dir(), false)?;
+    // pixel sorts are planned here and run by the job before FFmpeg starts. Their files are kept in the content-keyed cache
+    // (trimmed to a size limit), so exporting again after an edit elsewhere does not sort the same frames twice
+    let stages = crate::bake::prepare(&mut g, opts.range, &crate::bake::cache_dir(), true)?;
     let mut job = compile(&g, opts, caps)?;
     job.stages = stages;
     job.nests = nests;

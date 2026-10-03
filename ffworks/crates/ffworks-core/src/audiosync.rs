@@ -2,12 +2,12 @@
 //! (`rustfft`, MIT/Apache-2.0). Used to line up a camera clip with separately recorded sound, or two cameras.
 
 use crate::error::{Error, Result};
-use crate::process::{suppress_console_window, Tools};
+use crate::jobs::CancelToken;
+use crate::process::{run_cancellable, Tools};
 use rustfft::{num_complex::Complex, FftPlanner};
 use serde::Serialize;
-use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 const SR: u32 = 8000;
 /// Longest stretch analysed per file; sync clap/slate sounds nearly always sit near the start.
@@ -61,23 +61,28 @@ pub fn correlate(a: &[f32], b: &[f32], rate: u32) -> Result<SyncResult> {
 
 /// Decode the first audio stream of `path` to mono f32 at 8 kHz (first two minutes).
 pub fn decode(tools: &Tools, path: &Path) -> Result<Vec<f32>> {
+    decode_with(tools, path, &CancelToken::new())
+}
+
+/// [`decode`] that stops (with [`Error::Canceled`]) when `cancel` is raised.
+pub fn decode_with(tools: &Tools, path: &Path, cancel: &CancelToken) -> Result<Vec<f32>> {
     let mut cmd = Command::new(&tools.ffmpeg);
     cmd.args(["-v", "error", "-nostdin", "-i"]).arg(path).args(["-map", "0:a:0", "-t", &MAX_SECONDS.to_string(), "-ac", "1", "-ar", &SR.to_string(), "-f", "f32le", "-"]);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::null()).stdin(Stdio::null());
-    suppress_console_window(&mut cmd);
-    let mut child = cmd.spawn().map_err(|e| Error::ToolUnavailable { tool: tools.ffmpeg.display().to_string(), reason: e.to_string() })?;
-    let mut bytes = vec![];
-    child.stdout.take().expect("piped").read_to_end(&mut bytes).map_err(|e| Error::io(path, e))?;
-    let st = child.wait().map_err(|e| Error::io(path, e))?;
-    if !st.success() {
-        return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: st.code(), hint: format!("could not read audio from {} (does it have an audio stream?)", path.display()) });
+    let out = run_cancellable(&mut cmd, cancel)?;
+    if !out.status.success() {
+        return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: out.status.code(), hint: format!("could not read audio from {} (does it have an audio stream?)", path.display()) });
     }
-    Ok(bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+    Ok(out.stdout.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
 }
 
 /// How much later `other` is than `reference` (both media files).
 pub fn measure(tools: &Tools, reference: &Path, other: &Path) -> Result<SyncResult> {
-    correlate(&decode(tools, reference)?, &decode(tools, other)?, SR)
+    measure_with(tools, reference, other, &CancelToken::new())
+}
+
+/// [`measure`] that stops (with [`Error::Canceled`]) when `cancel` is raised.
+pub fn measure_with(tools: &Tools, reference: &Path, other: &Path, cancel: &CancelToken) -> Result<SyncResult> {
+    correlate(&decode_with(tools, reference, cancel)?, &decode_with(tools, other, cancel)?, SR)
 }
 
 /// Timeline start (seconds) that makes `clip` line up with `reference`, given that the clip's media is `lag` seconds later

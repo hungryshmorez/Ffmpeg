@@ -166,7 +166,7 @@ fn run_inner(
             return fail(e, on_state);
         }
     }
-    // an export's bake files are of no use afterwards, whichever way the render ends
+    // bake files that were not meant to be kept are of no use afterwards, whichever way the render ends
     struct Discard<'a>(&'a [crate::bake::BakeStage]);
     impl Drop for Discard<'_> {
         fn drop(&mut self) {

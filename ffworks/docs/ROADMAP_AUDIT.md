@@ -31,4 +31,4 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 10: local API: DONE (see STATUS.md). Plugin system (Extism/WASM): DONE (see STATUS.md and docs/PLUGINS.md).
 * DONE: unfinished exports are journalled and offered again after a crash or close.
 * DONE: export naming templates + never-overwrite versioning (dialog and CLI).
-* Cross-cutting: SQLite index, smart rendering across crashes, accessibility pass (names/dialog scan DONE, keyboard clip move/trim DONE; contrast/focus order/screen reader open), colour management (Rec.709 projects: DONE; HDR output/LUTs/ICC open), preview/analysis through the job queue.
+* Cross-cutting: SQLite index, smart rendering across crashes, accessibility pass (names/dialog scan DONE, keyboard clip move/trim DONE; contrast/focus order/screen reader open), colour management (Rec.709 projects: DONE; HDR output/LUTs/ICC open), preview/analysis through the job queue (DONE, see STATUS.md).

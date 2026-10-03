@@ -12,3 +12,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 sha2 = "0.10"
+
+# Line tables are enough for backtraces; full debug info made the debug build (wasmtime included) several GB.
+[profile.dev]
+debug = "line-tables-only"

@@ -4,11 +4,11 @@
 //! folded into 60–200. Deliberate difference: a minimum-strength floor (see `MIN_STRENGTH`) fixes phantom beats in silence.
 
 use crate::error::{Error, Result};
-use crate::process::{suppress_console_window, Tools};
+use crate::jobs::CancelToken;
+use crate::process::{run_cancellable, Tools};
 use serde::{Deserialize, Serialize};
-use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 const SR: u32 = 44_100;
 const FRAME: usize = 1024;
@@ -142,29 +142,35 @@ pub fn estimate_bpm(beats: &[f64]) -> f64 {
 
 /// Decode `media`'s first audio stream and detect beats; cached by `key` in `cache_dir`.
 pub fn detect(tools: &Tools, media: &Path, cache_dir: &Path, key: &str) -> Result<BeatAnalysis> {
+    detect_with(tools, media, cache_dir, key, &CancelToken::new())
+}
+
+/// [`detect`] that stops (with [`Error::Canceled`]) when `cancel` is raised.
+pub fn detect_with(tools: &Tools, media: &Path, cache_dir: &Path, key: &str, cancel: &CancelToken) -> Result<BeatAnalysis> {
     std::fs::create_dir_all(cache_dir).map_err(|e| Error::io(cache_dir, e))?;
     let cache_file = cache_dir.join(format!("{key}.beats.json"));
     if let Some(a) = std::fs::read_to_string(&cache_file).ok().and_then(|t| serde_json::from_str::<BeatAnalysis>(&t).ok()) {
         return Ok(a);
     }
-    let a = analyse(tools, media)?;
+    let a = analyse_with(tools, media, cancel)?;
     let _ = std::fs::write(&cache_file, serde_json::to_vec(&a)?);
     Ok(a)
 }
 
 /// Decode the first audio stream of `media` and find its beats (no cache).
 pub fn analyse(tools: &Tools, media: &Path) -> Result<BeatAnalysis> {
+    analyse_with(tools, media, &CancelToken::new())
+}
+
+/// [`analyse`] that stops (with [`Error::Canceled`]) when `cancel` is raised.
+pub fn analyse_with(tools: &Tools, media: &Path, cancel: &CancelToken) -> Result<BeatAnalysis> {
     let mut cmd = Command::new(&tools.ffmpeg);
     cmd.args(["-v", "error", "-nostdin", "-i"]).arg(media).args(["-map", "0:a:0", "-ac", "1", "-ar", &SR.to_string(), "-f", "f32le", "-"]);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::null()).stdin(Stdio::null());
-    suppress_console_window(&mut cmd);
-    let mut child = cmd.spawn().map_err(|e| Error::ToolUnavailable { tool: tools.ffmpeg.display().to_string(), reason: e.to_string() })?;
-    let mut bytes = vec![];
-    child.stdout.take().expect("piped").read_to_end(&mut bytes).map_err(|e| Error::io(media, e))?;
-    let status = child.wait().map_err(|e| Error::io(media, e))?;
-    if !status.success() {
-        return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: status.code(), hint: "audio decode failed (does the file have an audio stream?)".into() });
+    let out = run_cancellable(&mut cmd, cancel)?;
+    if !out.status.success() {
+        return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: out.status.code(), hint: "audio decode failed (does the file have an audio stream?)".into() });
     }
+    let bytes = out.stdout;
     let samples: Vec<f32> = bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
     let beats = onsets(&samples);
     Ok(BeatAnalysis { bpm: estimate_bpm(&beats), beats, duration: samples.len() as f64 / SR as f64 })
