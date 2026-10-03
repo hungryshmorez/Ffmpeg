@@ -107,8 +107,19 @@ fn relinking_looks_first_where_the_file_was_seen_under_another_name() {
     // the original goes away: the library points at the archive, the only place the same content still is
     std::fs::remove_file(&original).unwrap();
     let dirs = lib.likely_dirs(&[&asset]).unwrap();
-    assert_eq!(dirs, vec![new_dir.clone()]);
+    // Windows temp dirs come as 8.3 short names; the library stores the long form without the \\?\ prefix
+    assert_eq!(dirs, vec![plain(&new_dir)]);
     let found = ffworks_core::relink::find_candidates(&[&asset], &dirs);
     let c = &found[0].1[0];
-    assert!(c.exact && c.path == copy, "{c:?}");
+    assert!(c.exact && plain(&c.path) == plain(&copy), "{c:?}");
+}
+
+/// Canonical path without the `\\?\` prefix Windows adds, so two spellings of one place compare equal.
+fn plain(p: &std::path::Path) -> std::path::PathBuf {
+    let c = p.canonicalize().unwrap();
+    let s = c.to_string_lossy();
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) => std::path::PathBuf::from(rest),
+        None => c.clone(),
+    }
 }
