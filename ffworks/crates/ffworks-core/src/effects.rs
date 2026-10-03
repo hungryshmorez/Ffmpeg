@@ -62,6 +62,16 @@ fn builtin_registry() -> Vec<EffectDef> {
         e("sharpen", "Sharpen", "Sharpen", &["unsharp"], vec![p("amount", "Amount", 0.0, 5.0, 1.0, 0.05, "")]),
         e("noise", "Film grain", "Noise", &["noise"], vec![p("strength", "Strength", 0.0, 100.0, 20.0, 1.0, ""), p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, "")]),
         e("vignette", "Vignette", "Color", &["vignette"], vec![pa("angle", "Angle", 0.1, 1.5, 0.6, 0.01, "rad")]),
+        e("lens_correction", "Lens correction (barrel / pincushion)", "Transform", &["lenscorrection"], vec![p("k1", "Quadratic term k1", -1.0, 1.0, 0.2, 0.01, ""), p("k2", "Double-quadratic term k2", -1.0, 1.0, 0.0, 0.01, "")]),
+        e("temperature", "Colour temperature", "Color", &["colortemperature"], vec![p("kelvin", "Temperature", 1000.0, 40000.0, 4500.0, 100.0, "K")]),
+        e("vibrance", "Vibrance", "Color", &["vibrance"], vec![p("intensity", "Intensity", -2.0, 2.0, 0.6, 0.05, "")]),
+        e("exposure", "Exposure", "Color", &["exposure"], vec![p("stops", "Exposure", -3.0, 3.0, 0.5, 0.05, "EV")]),
+        e("denoise_video", "Denoise (spatial + temporal)", "Restoration", &["hqdn3d"], vec![p("strength", "Strength", 0.0, 20.0, 4.0, 0.5, "")]),
+        e("deflicker", "Remove flicker", "Restoration", &["deflicker"], vec![p("size", "Frames averaged", 2.0, 129.0, 5.0, 1.0, "")]),
+        e("swap_uv", "Swap colour channels U/V (colour glitch)", "Glitch", &["swapuv"], vec![]),
+        e("rgb_rotate", "Rotate colour channels (R→G→B)", "Glitch", &["colorchannelmixer"], vec![p("steps", "Steps (1 or 2)", 1.0, 2.0, 1.0, 1.0, "")]),
+        e("frame_diff", "Frame difference (motion edges)", "Glitch", &["tblend"], vec![]),
+        e("frame_shuffle", "Frame shuffle (time glitch)", "Glitch", &["random"], vec![p("frames", "Frames shuffled together", 2.0, 60.0, 12.0, 1.0, ""), p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, "")]),
         e("flip_h", "Flip horizontal", "Transform", &["hflip"], vec![]),
         e("flip_v", "Flip vertical", "Transform", &["vflip"], vec![]),
         au("eq", "Equalizer (3-band)", "EQ", &["bass", "equalizer", "treble"], vec![p("low", "Low shelf 120 Hz", -18.0, 18.0, 0.0, 0.5, "dB"), p("mid", "Mid", -18.0, 18.0, 0.0, 0.5, "dB"), p("mid_freq", "Mid frequency", 200.0, 5000.0, 1000.0, 10.0, "Hz"), p("high", "High shelf 8 kHz", -18.0, 18.0, 0.0, 0.5, "dB")]),
@@ -257,6 +267,29 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
         // all_seed makes grain deterministic for a given seed (spec §30)
         "noise" => format!("noise=alls={}:allf=t:all_seed={}", g("strength")?.round() as i64, g("seed")?.round() as i64),
         "vignette" => format!("vignette=angle={}{}", val("angle")?, eval("angle")),
+        "lens_correction" => format!("lenscorrection=k1={}:k2={}", g("k1")?, g("k2")?),
+        "temperature" => format!("colortemperature=temperature={}", g("kelvin")?.round() as i64),
+        "vibrance" => format!("vibrance=intensity={}", g("intensity")?),
+        "exposure" => format!("exposure=exposure={}", g("stops")?),
+        "denoise_video" => {
+            let a = g("strength")?;
+            if a == 0.0 {
+                return Ok(None);
+            }
+            format!("hqdn3d={a}:{a}:{}:{}", a * 1.5, a * 1.5)
+        }
+        "deflicker" => format!("deflicker=size={}:mode=pm", g("size")?.round() as i64),
+        "swap_uv" => "swapuv".into(),
+        // red takes green's place, green blue's, blue red's (one step), or the other way round (two)
+        "rgb_rotate" => {
+            if g("steps")?.round() as i64 == 2 {
+                "colorchannelmixer=rr=0:rg=0:rb=1:gr=1:gg=0:gb=0:br=0:bg=1:bb=0".into()
+            } else {
+                "colorchannelmixer=rr=0:rg=1:rb=0:gr=0:gg=0:gb=1:br=1:bg=0:bb=0".into()
+            }
+        }
+        "frame_diff" => "tblend=all_mode=difference".into(),
+        "frame_shuffle" => format!("random=frames={}:seed={}", g("frames")?.round() as i64, g("seed")?.round() as i64),
         "flip_h" => "hflip".into(),
         "flip_v" => "vflip".into(),
         "crop" => {

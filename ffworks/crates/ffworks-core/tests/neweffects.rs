@@ -219,3 +219,67 @@ fn glitch_effects_really_change_the_picture_but_keep_its_size() {
         assert!(differing > want.len() / 50, "{fx} changed only {differing} of {} bytes", want.len());
     }
 }
+
+// ---- glitch, lens and grading effects added in the "more effects" pass ----
+
+/// Mean absolute difference per channel between frame `t` of two videos.
+fn frame_distance(a: &Path, b: &Path, t: f64) -> f64 {
+    let raw = |p: &Path| Proc::new(tools().ffmpeg).args(["-v", "error", "-ss", &format!("{t}"), "-i"]).arg(p).args(["-frames:v", "1", "-vf", "scale=64:48", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]).output().unwrap().stdout;
+    let (x, y) = (raw(a), raw(b));
+    assert!(x.len() == 64 * 48 * 3 && y.len() == x.len(), "no frame at t={t}");
+    x.iter().zip(&y).map(|(p, q)| (*p as f64 - *q as f64).abs()).sum::<f64>() / x.len() as f64
+}
+
+fn export_with(src: &Path, effect: &str, params: &[(&str, f64)], out: &Path) {
+    let mut eng = Engine::new("fx", ProjectSettings { width: 320, height: 240, fps: secs(25), sample_rate: 48000 }, tools());
+    let m = eng.import_media(src).unwrap();
+    let v = eng.project.active().unwrap().tracks.iter().find(|t| t.kind == TrackKind::Video).unwrap().id.clone();
+    eng.dispatch(Command::PlaceClip { media: m, track: v, start: secs(0), source_in: None, duration: None, with_audio: false, audio_track: None }).unwrap();
+    let clip = eng.project.active().unwrap().tracks.iter().find(|t| t.kind == TrackKind::Video).unwrap().clips[0].id.clone();
+    eng.dispatch(Command::AddEffect { clip, effect: effect.into(), params: params.iter().map(|(k, v)| (k.to_string(), *v)).collect(), index: None }).unwrap_or_else(|e| panic!("{effect}: {e}"));
+    let t = tools();
+    let caps = Capabilities::discover(&t).unwrap();
+    let graph = render_graph::build(&eng.project).unwrap();
+    let mut job = compile(&graph, &RenderOptions { output: out.to_path_buf(), settings: ExportSettings::find("ffv1_mkv").unwrap(), range: None, scale_div: 1 }, Some(&caps)).unwrap_or_else(|e| panic!("{effect}: {e}"));
+    job.program = t.ffmpeg.clone();
+    run_job(&t, &job, "fx", "export", &CancelToken::new(), &out.parent().unwrap().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("{effect} export failed: {e}"));
+}
+
+#[test]
+fn the_new_glitch_lens_and_grading_effects_each_render_and_change_the_picture() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("moving.mp4");
+    ffmpeg(&["-f", "lavfi", "-i", "testsrc2=s=320x240:r=25:d=2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "5", src.to_str().unwrap()]);
+    let plain = dir.path().join("plain.mkv");
+    ffmpeg(&["-i", src.to_str().unwrap(), "-c:v", "ffv1", plain.to_str().unwrap()]);
+    for fx in ["lens_correction", "temperature", "vibrance", "exposure", "denoise_video", "deflicker", "swap_uv", "rgb_rotate", "frame_diff", "frame_shuffle"] {
+        let out = dir.path().join(format!("{fx}.mkv"));
+        export_with(&src, fx, &[], &out);
+        let info = probe(&tools(), &out).unwrap();
+        assert!((info.duration.as_f64() - 2.0).abs() < 0.15, "{fx} keeps the clip's length: {}", info.duration.as_f64());
+        let d = frame_distance(&plain, &out, 1.2);
+        eprintln!("{fx}: mean difference {d:.2}");
+        // denoise and deflicker only touch noise and brightness steps, which this picture has little of
+        let floor = if matches!(fx, "denoise_video" | "deflicker") { 0.0 } else { 1.5 };
+        assert!(d >= floor, "{fx} changes the picture: {d}");
+    }
+}
+
+#[test]
+fn colour_channel_effects_move_the_colours_the_way_they_say() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("red.mp4");
+    ffmpeg(&["-f", "lavfi", "-i", "color=c=0xff0000:s=320x240:r=25:d=1", "-c:v", "libx264", "-pix_fmt", "yuv444p", "-crf", "5", src.to_str().unwrap()]);
+    for (steps, want) in [(1.0, "blue"), (2.0, "green")] {
+        let out = dir.path().join(format!("rot{steps}.mkv"));
+        export_with(&src, "rgb_rotate", &[("steps", steps)], &out);
+        let (r, g, b) = rgb_at(&out, 0.5, 160, 120);
+        // one step: red's value goes to blue's place ("R→G→B": each channel's value moves to the next); two steps: to green's
+        let dominant = if r > 200 { "red" } else if g > 200 { "green" } else if b > 200 { "blue" } else { "none" };
+        assert_eq!(dominant, want, "steps {steps}: ({r},{g},{b})");
+    }
+    let out = dir.path().join("uv.mkv");
+    export_with(&src, "swap_uv", &[], &out);
+    let (r, _, b) = rgb_at(&out, 0.5, 160, 120);
+    assert!(r < 150 && b > 100, "red with its colour channels swapped is no longer red: r={r} b={b}");
+}
