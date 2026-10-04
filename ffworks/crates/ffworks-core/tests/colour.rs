@@ -25,7 +25,7 @@ fn footage(dir: &Path, name: &str, rgb: &str, matrix: &str, tags: (&str, &str, &
         .arg(format!("color=c={rgb}:s=160x120:r=25:d=2"))
         .args(["-vf", &format!("format=rgb24,scale=out_color_matrix={matrix}:out_range=tv,format=yuv420p{}", params(tags)), "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p"]);
     for (opt, v) in [("-colorspace", tags.0), ("-color_trc", tags.1), ("-color_primaries", tags.2)] {
-        if v != "-" {
+        if v != "-" && v != "unknown" {
             cmd.args([opt, v]);
         }
     }
@@ -176,4 +176,105 @@ fn a_project_with_no_tagged_footage_compiles_exactly_as_before() {
     let eng = one_clip(&plain);
     let j = job(&eng, &dir.path().join("o.mp4"));
     assert!(!j.filter_graph.contains("colorspace=all=") && !j.filter_graph.contains("zscale") && !j.filter_graph.contains("tonemap"));
+}
+
+fn media_id(eng: &Engine) -> String {
+    eng.project.media[0].id.clone()
+}
+
+#[test]
+fn an_override_fixes_footage_whose_tags_are_missing_and_undo_puts_the_tags_back() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let dir = tempfile::tempdir().unwrap();
+    let want = (0, 255, 0);
+    // BT.601 pixels with no tags at all: nothing in the file says they need converting
+    let src = footage(dir.path(), "sd.mp4", "lime", "bt601", ("unknown", "unknown", "unknown"));
+    assert!(!probe_tag(&src, "color_space").contains("170m") && !probe_tag(&src, "color_space").contains("470bg"), "the fixture really carries no BT.601 tag: {}", probe_tag(&src, "color_space"));
+    let mut eng = one_clip(&src);
+    let before = dir.path().join("before.mp4");
+    export(&eng, &before);
+    let wrong = error(rgb709(&before), want);
+    assert!(wrong > 25, "untagged BT.601 comes out wrong without help: {:?}", rgb709(&before));
+
+    let m = media_id(&eng);
+    eng.dispatch(Command::SetMediaColor { media: m.clone(), color: Some(ColorOverride::Bt601Ntsc) }).unwrap();
+    let after = dir.path().join("after.mp4");
+    let j = export(&eng, &after);
+    assert!(j.filter_graph.contains("colorspace=all=bt709:iall=bt601-6-525"), "{}", j.filter_graph);
+    let e = error(rgb709(&after), want);
+    assert!(e < 12, "with the override: {:?} is {e} off {want:?}", rgb709(&after));
+
+    // it is part of the project file
+    let back: ffworks_core::project::Project = serde_json::from_str(&serde_json::to_string(&eng.project).unwrap()).unwrap();
+    assert_eq!(back.media[0].color_override, Some(ColorOverride::Bt601Ntsc));
+
+    eng.undo().unwrap();
+    assert_eq!(eng.project.media[0].color_override, None);
+    assert!(!job(&eng, &dir.path().join("u.mp4")).filter_graph.contains("colorspace=all="), "undo goes back to trusting the tags");
+}
+
+#[test]
+fn an_override_wins_over_wrong_tags_and_rec709_means_leave_it_alone() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let dir = tempfile::tempdir().unwrap();
+    // pixels really are Rec.709 but the file claims BT.601: the tags would convert and spoil them
+    let src = footage(dir.path(), "liar.mp4", "lime", "bt709", ("smpte170m", "smpte170m", "smpte170m"));
+    let mut eng = one_clip(&src);
+    assert!(job(&eng, &dir.path().join("a.mp4")).filter_graph.contains("colorspace=all="), "the tags alone would convert");
+    eng.dispatch(Command::SetMediaColor { media: media_id(&eng), color: Some(ColorOverride::Rec709) }).unwrap();
+    let out = dir.path().join("o.mp4");
+    let j = export(&eng, &out);
+    assert!(!j.filter_graph.contains("colorspace=all="), "{}", j.filter_graph);
+    let e = error(rgb709(&out), (0, 255, 0));
+    assert!(e < 12, "left alone it is right: {:?}", rgb709(&out));
+}
+
+#[test]
+fn an_hdr_override_tone_maps_footage_that_lost_its_hdr_tags() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let t = tools();
+    let caps = Capabilities::discover(&t).unwrap();
+    if !caps.has_filter("zscale") || !caps.has_filter("tonemap") {
+        eprintln!("SKIPPED: this FFmpeg has no zscale/tonemap");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("hdr_untagged.mp4");
+    // PQ-coded grey with every colour tag left off
+    let out = Proc::new(&t.ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=0x949494:s=160x120:r=25:d=2", "-vf", "format=yuv420p10le", "-c:v", "libx265", "-crf", "10", "-pix_fmt", "yuv420p10le"])
+        .arg(&p)
+        .output()
+        .unwrap();
+    if !out.status.success() {
+        eprintln!("SKIPPED: no libx265 to make the HDR fixture: {}", String::from_utf8_lossy(&out.stderr));
+        return;
+    }
+    let mut eng = one_clip(&p);
+    assert!(!job(&eng, &dir.path().join("a.mp4")).filter_graph.contains("tonemap"), "no tags, no tone mapping");
+    eng.dispatch(Command::SetMediaColor { media: media_id(&eng), color: Some(ColorOverride::Pq) }).unwrap();
+    let o = dir.path().join("o.mp4");
+    let j = export(&eng, &o);
+    assert!(j.filter_graph.contains("color_trc=smpte2084") && j.filter_graph.contains("tonemap=tonemap=hable"), "{}", j.filter_graph);
+    let (r, g, b) = rgb709(&o);
+    assert!((r - g).abs() < 12 && (g - b).abs() < 12, "grey stays grey: {r},{g},{b}");
+    assert!((60..250).contains(&g), "a plausible SDR level: {g}");
+}
+
+#[test]
+fn only_real_video_footage_takes_a_colour_override() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let dir = tempfile::tempdir().unwrap();
+    let mut eng = Engine::new("c", ProjectSettings { width: 160, height: 120, fps: secs(25), sample_rate: 48000 }, tools());
+    let asset = ffworks_core::generators::solid_asset("#ff0000", &eng.project.settings).unwrap();
+    let solid = asset.id.clone();
+    eng.dispatch(Command::ImportMedia { asset }).unwrap();
+    let e = eng.dispatch(Command::SetMediaColor { media: solid, color: Some(ColorOverride::Pq) }).unwrap_err().to_string();
+    assert!(e.contains("only video footage"), "{e}");
+    let png = dir.path().join("s.png");
+    let o = Proc::new(tools().ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64", "-frames:v", "1"]).arg(&png).output().unwrap();
+    assert!(o.status.success());
+    let still = eng.import_media(&png).unwrap();
+    assert!(eng.dispatch(Command::SetMediaColor { media: still, color: Some(ColorOverride::Bt2020) }).is_err());
+    assert!(eng.dispatch(Command::SetMediaColor { media: "nope".into(), color: None }).is_err());
 }

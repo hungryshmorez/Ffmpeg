@@ -83,6 +83,7 @@ mod tests {
             path: "/x/a.mov".into(),
             fingerprint: Some("abc/def+1".into()),
             generator: None,
+            color_override: None,
             info: MediaInfo { video: vec![VideoStream { index: 0, codec: "prores".into(), width: 1920, height: 1080, fps: Some(Rational::new(30000, 1001)), bit_rate: None, color: ColorInfo::default() }], still, ..Default::default() },
         }
     }

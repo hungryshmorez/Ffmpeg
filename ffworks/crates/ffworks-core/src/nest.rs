@@ -63,6 +63,7 @@ pub fn compound_asset(seq: &Sequence, settings: &ProjectSettings) -> MediaAsset 
         path: format!("generated:compound:{}", seq.id),
         fingerprint: None,
         generator: Some(Generator::Nested { sequence: seq.id.clone() }),
+        color_override: None,
         info: MediaInfo {
             container: "compound".into(),
             duration: seq.duration(),

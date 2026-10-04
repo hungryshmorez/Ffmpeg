@@ -33,6 +33,8 @@ pub enum Command {
     SetProjectSettings { settings: ProjectSettings },
     ImportMedia { asset: MediaAsset },
     RemoveMedia { media: Id },
+    /// Tell the engine what a file's colours really are (`None`: trust the file's tags again).
+    SetMediaColor { media: Id, color: Option<crate::colormgmt::ColorOverride> },
     /// Point an existing media entry at a new file (already probed). Clips keep their references.
     RelinkMedia { asset: MediaAsset },
     AddTrack { kind: TrackKind, name: Option<String> },
@@ -159,6 +161,7 @@ impl Command {
             Command::SetProjectSettings { .. } => "Project settings".into(),
             Command::ImportMedia { asset } => format!("Import {}", asset.name),
             Command::RemoveMedia { .. } => "Remove media".into(),
+            Command::SetMediaColor { .. } => "Set source colours".into(),
             Command::RelinkMedia { asset } => format!("Relink {}", asset.name),
             Command::AddTrack { .. } => "Add track".into(),
             Command::RemoveTrack { .. } => "Remove track".into(),
@@ -255,6 +258,15 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 return Err(Error::validation(format!("'{}' lacks a video/audio stream that '{}' had", asset.name, old.name)));
             }
             Ok(vec![Patch::ReplaceMedia { asset: asset.clone() }])
+        }
+        Command::SetMediaColor { media, color } => {
+            let old = p.media(media)?;
+            if old.is_generated() || old.info.still || !old.info.has_video() {
+                return Err(Error::validation("only video footage has source colours to set"));
+            }
+            let mut asset = old.clone();
+            asset.color_override = *color;
+            Ok(vec![Patch::ReplaceMedia { asset }])
         }
         Command::RemoveMedia { media } => {
             p.media(media)?;

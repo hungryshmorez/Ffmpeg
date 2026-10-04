@@ -6,7 +6,8 @@ export interface VideoStream { index: number; codec: string; width: number; heig
 export interface AudioStream { index: number; codec: string; sample_rate: number; channels: number; channel_layout: string | null; bit_rate: number | null }
 export interface MediaInfo { container: string; duration: Rational; bit_rate: number | null; size_bytes: number | null; video: VideoStream[]; audio: AudioStream[]; tags: [string, string][]; /** A single picture or generated media: lasts as long as it is placed for. */ still: boolean }
 export type Generator = { kind: "solid"; color: string } | { kind: "nested"; sequence: string };
-export interface MediaAsset { id: string; name: string; path: string; info: MediaInfo; fingerprint: string | null; /** Generated media (solid colour, title canvas) has no file. */ generator: Generator | null }
+export interface MediaAsset { id: string; name: string; path: string; info: MediaInfo; fingerprint: string | null; /** Generated media (solid colour, title canvas) has no file. */ generator: Generator | null; /** What the footage really is when its tags are missing or wrong; null trusts the tags. */ color_override?: ColorOverride | null }
+export type ColorOverride = "rec709" | "bt601_ntsc" | "bt601_pal" | "bt2020" | "pq" | "hlg";
 export type Align = "left" | "center" | "right";
 export interface Title { text: string; font: string; size: number; color: string; align: Align; outline_width: number; outline_color: string; shadow: number; box_color: string | null; box_pad: number }
 export interface FontEntry { name: string; path: string; bundled: boolean }
@@ -100,6 +101,7 @@ export type Command =
   | { type: "animate_from_beats"; clip: string; param: string; source?: string | null; low: number; high: number; decay: number }
   | { type: "animate_from_midi"; clip: string; param: string; path: string; source: string; channel?: number | null; track?: number | null; low: number; high: number; decay?: number; offset?: number }
   | { type: "animate_from_audio"; clip: string; param: string; source?: string | null; low: number; high: number; smooth: number; band?: string | null }
+  | { type: "set_media_color"; media: string; color: ColorOverride | null }
   | { type: "set_clip_speed"; clip: string; speed: Rational }
   | { type: "set_clip_reverse"; clip: string; reverse: boolean }
   | { type: "set_clip_freeze"; clip: string; at: Rational | null }

@@ -44,6 +44,7 @@ pub fn solid_asset(color: &str, settings: &ProjectSettings) -> Result<MediaAsset
         path: format!("generated:solid:{}", &color[1..]),
         fingerprint: None,
         generator: Some(Generator::Solid { color }),
+        color_override: None,
         info: MediaInfo {
             container: "generated".into(),
             duration: Rational::from_int(STILL_SECONDS),

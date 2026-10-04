@@ -47,6 +47,9 @@ pub struct MediaAsset {
     /// Generated media (solid colour, title canvas) has no file: `path` is a label and nothing is ever read from disk.
     #[serde(default)]
     pub generator: Option<Generator>,
+    /// What the footage really is when its file tags are missing or wrong; `None` trusts the tags.
+    #[serde(default)]
+    pub color_override: Option<crate::colormgmt::ColorOverride>,
 }
 
 impl MediaAsset {

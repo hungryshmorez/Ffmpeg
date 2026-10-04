@@ -5,6 +5,8 @@
 //! Only what a file *says* about itself is acted on: untagged or Rec.709 footage passes through untouched, so a project that
 //! has none of the above renders exactly as before.
 
+use serde::{Deserialize, Serialize};
+
 use crate::ffprobe::ColorInfo;
 
 /// What a clip needs before it joins the Rec.709 picture.
@@ -17,10 +19,44 @@ pub enum Conversion {
     Matrix(&'static str),
     /// PQ or HLG high dynamic range: tone-mapped to SDR through linear light (`zscale` + `tonemap`).
     Hdr,
+    /// HDR whose file says nothing (or the wrong thing): the frames are tagged BT.2020 with this transfer (`smpte2084` or
+    /// `arib-std-b67`) first, then tone-mapped like any HDR clip (zscale refuses explicit input options without tags here).
+    HdrAs(&'static str),
 }
 
 fn tag(v: &Option<String>) -> &str {
     v.as_deref().unwrap_or("unknown")
+}
+
+/// What the user says a clip really is, for footage whose tags are missing or wrong (an SD capture tagged as nothing, a phone
+/// clip with its HDR tags stripped). Overrides what the file says; `Rec709` forces "no conversion".
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ColorOverride {
+    Rec709,
+    /// BT.601 as used for NTSC / 525-line video.
+    Bt601Ntsc,
+    /// BT.601 as used for PAL / 625-line video.
+    Bt601Pal,
+    /// BT.2020 wide gamut, SDR transfer.
+    Bt2020,
+    /// HDR, PQ (HDR10).
+    Pq,
+    /// HDR, hybrid log-gamma.
+    Hlg,
+}
+
+impl ColorOverride {
+    pub fn conversion(self) -> Conversion {
+        match self {
+            ColorOverride::Rec709 => Conversion::None,
+            ColorOverride::Bt601Ntsc => Conversion::Matrix("bt601-6-525"),
+            ColorOverride::Bt601Pal => Conversion::Matrix("bt601-6-625"),
+            ColorOverride::Bt2020 => Conversion::Matrix("bt2020"),
+            ColorOverride::Pq => Conversion::HdrAs("smpte2084"),
+            ColorOverride::Hlg => Conversion::HdrAs("arib-std-b67"),
+        }
+    }
 }
 
 /// Decide from a file's colour tags.
@@ -48,6 +84,7 @@ impl Conversion {
         match self {
             Conversion::None => None,
             Conversion::Matrix(iall) => Some((format!("colorspace=all=bt709:iall={iall}:fast=1,format=yuv420p"), &["colorspace"])),
+            Conversion::HdrAs(tin) => Some((format!("setparams=colorspace=bt2020nc:color_primaries=bt2020:color_trc={tin}:range=tv,zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"), &["zscale", "tonemap"])),
             Conversion::Hdr => Some(("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p".into(), &["zscale", "tonemap"])),
         }
     }
@@ -91,6 +128,19 @@ mod tests {
         assert_eq!(plan(&c("bt2020nc", "smpte2084", "bt2020")), Conversion::Hdr);
         assert_eq!(plan(&c("bt2020nc", "arib-std-b67", "bt2020")), Conversion::Hdr);
         assert_eq!(plan(&c("bt709", "smpte2084", "bt709")), Conversion::Hdr);
+    }
+
+    #[test]
+    fn an_override_replaces_what_the_tags_say() {
+        assert_eq!(ColorOverride::Rec709.conversion(), Conversion::None);
+        assert_eq!(ColorOverride::Bt601Ntsc.conversion(), Conversion::Matrix("bt601-6-525"));
+        assert_eq!(ColorOverride::Bt601Pal.conversion(), Conversion::Matrix("bt601-6-625"));
+        assert_eq!(ColorOverride::Bt2020.conversion(), Conversion::Matrix("bt2020"));
+        let (f, need) = ColorOverride::Pq.conversion().filter().unwrap();
+        assert!(f.starts_with("setparams=colorspace=bt2020nc:color_primaries=bt2020:color_trc=smpte2084") && need == ["zscale", "tonemap"]);
+        let (f, _) = ColorOverride::Hlg.conversion().filter().unwrap();
+        assert!(f.contains("color_trc=arib-std-b67"));
+        assert_eq!(serde_json::to_string(&ColorOverride::Bt601Pal).unwrap(), "\"bt601_pal\"");
     }
 
     #[test]

@@ -540,7 +540,7 @@ pub fn prepare_sequence_asset(tools: &Tools, frame: &Path, fps: crate::time::Fps
     info.video[0].fps = Some(fps);
     info.duration = Rational::new(seq.count as i64 * fps.den(), fps.num());
     let stem = Path::new(&seq.pattern).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    Ok(MediaAsset { id: new_id("med"), name: format!("{stem} ({} frames)", seq.count), path: seq.pattern, fingerprint: None, generator: None, info })
+    Ok(MediaAsset { id: new_id("med"), name: format!("{stem} ({} frames)", seq.count), path: seq.pattern, fingerprint: None, generator: None, color_override: None, info })
 }
 
 /// Probe `path` and build a media asset without touching any project state.
@@ -557,6 +557,7 @@ pub fn prepare_asset(tools: &Tools, path: &Path) -> Result<MediaAsset> {
         path: abs.to_string_lossy().into_owned(),
         fingerprint: fingerprint(&abs).ok(),
         generator: None,
+        color_override: None,
         info,
     })
 }
