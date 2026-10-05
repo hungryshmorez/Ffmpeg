@@ -637,7 +637,24 @@ pub fn compile_project(project: &crate::project::Project, opts: &RenderOptions, 
     // (trimmed to a size limit), so exporting again after an edit elsewhere does not sort the same frames twice
     let stages = crate::bake::prepare(&mut g, opts.range, &crate::bake::cache_dir(), true)?;
     let mut job = compile(&g, opts, caps)?;
+    add_chapters(&mut job, project, opts);
     job.stages = stages;
     job.nests = nests;
     Ok(job)
+}
+
+/// Timeline markers become chapters of the export when the container can hold them: the metadata file is one more input and
+/// `-map_chapters` points at it. A failure to write the file only drops the chapters (the export itself is unaffected).
+fn add_chapters(job: &mut FfmpegJob, project: &crate::project::Project, opts: &RenderOptions) {
+    if !crate::chapters::supports(&opts.settings.extension) || job.post.iter().any(|a| a == "-f") {
+        return;
+    }
+    let Ok(seq) = project.active() else { return };
+    let (start, end) = opts.range.map(|(a, b)| (a, b.min(seq.duration()))).unwrap_or((Rational::ZERO, seq.duration()));
+    let Some(text) = crate::chapters::metadata(&seq.markers, start, end) else { return };
+    let Ok(path) = crate::chapters::write(&crate::bake::cache_dir(), &text) else { return };
+    let index = job.pre.iter().filter(|a| *a == "-i").count();
+    job.pre.extend(["-i".to_string(), path.to_string_lossy().into_owned()]);
+    let at = job.post.len().saturating_sub(1);
+    job.post.splice(at..at, ["-map_chapters".to_string(), index.to_string()]);
 }

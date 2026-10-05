@@ -5,6 +5,7 @@ pub mod audiosync;
 pub mod bake;
 pub mod beats;
 pub mod brand;
+pub mod chapters;
 pub mod clipprops;
 pub mod colormgmt;
 pub mod commands;
