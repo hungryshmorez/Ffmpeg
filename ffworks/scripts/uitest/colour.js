@@ -33,7 +33,7 @@
 
     P().setView(await inv("undo")); await sleep(300);
     step("undo steps back to the previous choice", view().project.media[0].color_override === "pq", JSON.stringify(view().project.media[0].color_override));
-    await P().undo(); P().setView(await inv("undo")); await sleep(300);
+    P().setView(await inv("undo")); await sleep(250); P().setView(await inv("undo")); await sleep(300);
     step("and back to nothing", !view().project.media[0].color_override);
 
     let refused = "";
