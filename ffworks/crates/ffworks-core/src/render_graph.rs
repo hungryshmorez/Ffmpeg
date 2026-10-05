@@ -232,7 +232,7 @@ pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
             still: m.info.still && !m.is_generated(),
             alpha: m.info.video.first().and_then(|v| v.color.pix_fmt.as_deref()).is_some_and(has_alpha),
             need: Rational::ZERO,
-            color: if m.is_generated() || m.info.still { Default::default() } else if let Some(o) = m.color_override { o.conversion() } else { m.info.video.first().map(|v| crate::colormgmt::plan(&v.color)).unwrap_or_default() },
+            color: crate::colormgmt::for_media(m),
             nested: match &m.generator {
                 Some(crate::generators::Generator::Nested { sequence }) => Some(sequence.clone()),
                 _ => None,

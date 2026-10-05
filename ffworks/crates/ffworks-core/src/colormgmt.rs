@@ -78,7 +78,28 @@ pub fn plan(c: &ColorInfo) -> Conversion {
     Conversion::None
 }
 
+/// What a media file needs before it joins the Rec.709 picture: the user's override if there is one, else what its tags say.
+pub fn for_media(m: &crate::project::MediaAsset) -> Conversion {
+    if m.is_generated() || m.info.still {
+        return Conversion::None;
+    }
+    match m.color_override {
+        Some(o) => o.conversion(),
+        None => m.info.video.first().map(|v| plan(&v.color)).unwrap_or_default(),
+    }
+}
+
 impl Conversion {
+    /// Short filename-safe name of the conversion, `None` when nothing is converted (used to key cached copies).
+    pub fn key(&self) -> Option<String> {
+        match self {
+            Conversion::None => None,
+            Conversion::Matrix(iall) => Some(iall.replace('-', "")),
+            Conversion::Hdr => Some("hdr".into()),
+            Conversion::HdrAs(t) => Some(format!("hdras{}", t.replace('-', ""))),
+        }
+    }
+
     /// The filter (without a leading comma) that takes yuv420p frames to Rec.709 SDR yuv420p, and the FFmpeg filters it needs.
     pub fn filter(&self) -> Option<(String, &'static [&'static str])> {
         match self {

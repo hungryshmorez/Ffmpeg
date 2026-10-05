@@ -278,3 +278,30 @@ fn only_real_video_footage_takes_a_colour_override() {
     assert!(eng.dispatch(Command::SetMediaColor { media: still, color: Some(ColorOverride::Bt2020) }).is_err());
     assert!(eng.dispatch(Command::SetMediaColor { media: "nope".into(), color: None }).is_err());
 }
+
+#[test]
+fn a_proxy_of_footage_with_a_colour_override_shows_the_corrected_colours() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let dir = tempfile::tempdir().unwrap();
+    let want = (0, 255, 0);
+    let src = footage(dir.path(), "sd.mp4", "lime", "bt601", ("unknown", "unknown", "unknown"));
+    let mut eng = one_clip(&src);
+    let cache = dir.path().join("cache");
+    let make = |eng: &Engine, name: &str| -> PathBuf {
+        let m = &eng.project.media[0];
+        let out = ffworks_core::proxy::proxy_path(&cache, m);
+        let mut j = ffworks_core::proxy::build_job(m, &out, None).unwrap();
+        j.program = tools().ffmpeg.clone();
+        run_job(&tools(), &j, "c", name, &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("proxy failed: {e}"));
+        out
+    };
+    let plain = make(&eng, "proxy:plain");
+    assert!(error(rgb709(&plain), want) > 25, "no override: the proxy shows the raw wrong colours {:?}", rgb709(&plain));
+
+    eng.dispatch(Command::SetMediaColor { media: media_id(&eng), color: Some(ColorOverride::Bt601Ntsc) }).unwrap();
+    let fixed = make(&eng, "proxy:fixed");
+    assert_ne!(plain, fixed, "a changed override must not reuse the old proxy file");
+    let e = error(rgb709(&fixed), want);
+    assert!(e < 12, "with the override the proxy is right: {:?} is {e} off", rgb709(&fixed));
+    assert_eq!(probe_tag(&fixed, "color_space"), "bt709");
+}
