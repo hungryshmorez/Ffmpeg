@@ -134,3 +134,38 @@ export function keyEdit(e: { key: string; altKey: boolean; ctrlKey: boolean; shi
   const end = snap(start + duration + dir * frame);
   return end - snap(start) < frame - 1e-9 ? null : { kind: "trim-end", end };
 }
+
+/** One step of a keyboard edit applied to several selected clips. */
+export interface GroupStep { clip: string; op: "move" | "trim-start" | "trim-end"; to: number }
+
+/**
+ * Apply the keyboard edit the focused clip would make (`edit`, from [`keyEdit`]) to every selected clip by the same amount.
+ * `items` must hold one clip per linked group (the engine moves a linked partner along). All or nothing: if any clip would end
+ * before zero or shrink below a frame, the whole edit is refused (null). Ordered so clips moving into each other's old place
+ * go first (rightwards: latest first, leftwards: earliest first).
+ */
+export function groupEdit(edit: KeyEdit, anchor: { start: number; duration: number }, items: { id: string; start: number; duration: number }[], fps: number): GroupStep[] | null {
+  if (edit.kind === "track") return null;
+  const frame = 1 / fps;
+  const snapT = (t: number) => Math.round(t * fps) / fps;
+  const delta = edit.kind === "trim-end" ? edit.end - (anchor.start + anchor.duration) : edit.start - anchor.start;
+  const steps: { s: GroupStep; at: number }[] = [];
+  for (const it of items) {
+    const end = it.start + it.duration;
+    if (edit.kind === "move") {
+      const to = snapT(it.start + delta);
+      if (to < 0) return null;
+      steps.push({ s: { clip: it.id, op: "move", to }, at: it.start });
+    } else if (edit.kind === "trim-start") {
+      const to = snapT(it.start + delta);
+      if (to < 0 || end - to < frame - 1e-9) return null;
+      steps.push({ s: { clip: it.id, op: "trim-start", to }, at: it.start });
+    } else {
+      const to = snapT(end + delta);
+      if (to - it.start < frame - 1e-9) return null;
+      steps.push({ s: { clip: it.id, op: "trim-end", to }, at: it.start });
+    }
+  }
+  steps.sort((a, b) => (delta > 0 ? b.at - a.at : a.at - b.at));
+  return steps.map((x) => x.s);
+}

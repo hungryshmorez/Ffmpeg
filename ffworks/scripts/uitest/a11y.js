@@ -202,6 +202,37 @@
     await press2("ArrowDown", { altKey: true });
     step("Alt+↓ on the bottom video track does nothing (it never jumps to an audio track)", find(moving.id).t.id === lowId && view().history.length === hx + 2);
     step("the clip lists the new shortcut", /Alt\+ArrowUp/.test(el2().getAttribute("aria-keyshortcuts") || ""));
+
+    // several selected clips: the same keys edit all of them as one undo step, all or nothing
+    await P().dispatch({ type: "add_track", kind: "video", name: "V3" }); await sleep(400);
+    const v3 = vids()[vids().length - 1], mid = view().project.media.find((m) => m.info.video.length).id;
+    await P().dispatch({ type: "place_clip", media: mid, track: v3.id, start: "20", source_in: "0", duration: "2", with_audio: false }); await sleep(300);
+    await P().dispatch({ type: "place_clip", media: mid, track: v3.id, start: "1/2", source_in: "0", duration: "2", with_audio: false }); await sleep(400);
+    const onV3 = () => find2().clips.slice().sort((a, b) => rat(a.start) - rat(b.start));
+    const find2 = () => view().project.sequences[0].tracks.find((t) => t.id === v3.id);
+    const [early, late] = onV3();
+    const lateEl = () => $(`[data-track-id="${v3.id}"]`).querySelectorAll(".clip")[1];
+    U().select(late.id); U().toggleExtra(early.id); await sleep(200);
+    const pressSel = async (key, mods) => { lateEl().focus(); lateEl().dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...mods })); await sleep(500); };
+    const hm = view().history.length;
+    await pressSel("ArrowRight", { altKey: true });
+    const [e1, l1] = onV3();
+    step("focusing a selected clip keeps the whole selection", U().selected === late.id && U().extra.includes(early.id), JSON.stringify([U().selected, U().extra]));
+    step("Alt+→ with two clips selected moves both a frame, as one undo step", near(rat(e1.start), rat(early.start) + frame) && near(rat(l1.start), rat(late.start) + frame) && view().history.length === hm + 1, `${rat(e1.start)} ${rat(l1.start)} h${view().history.length - hm}`);
+    await pressSel("ArrowLeft", { ctrlKey: true });
+    const [e2, l2] = onV3();
+    step("Ctrl+← trims both ends by a frame", near(rat(e2.duration), rat(early.duration) - frame) && near(rat(l2.duration), rat(late.duration) - frame) && view().history.length === hm + 2);
+    for (let i = 0; i < 2; i++) P().setView(await inv("undo"));
+    await sleep(300);
+    const [e3, l3] = onV3();
+    step("two undos restore both clips exactly", e3.start === early.start && l3.start === late.start && e3.duration === early.duration, `${e3.start} ${l3.start}`);
+    const hr = view().history.length;
+    await pressSel("ArrowLeft", { altKey: true, shiftKey: true });
+    const [e4, l4] = onV3();
+    step("a move one clip cannot make (before zero) changes neither, with an explanation", e4.start === early.start && l4.start === late.start && view().history.length === hr && /none were changed/.test(document.body.innerText), `${e4.start} ${l4.start}`);
+    await pressSel("ArrowDown", { altKey: true });
+    const lower = vids()[vids().length - 2].id;
+    step("Alt+↓ moves both clips to the track below together", [early.id, late.id].every((id) => find(id).t.id === lower) && view().history.length === hr + 1, [early.id, late.id].map((id) => find(id).t.id).join(" "));
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await inv("uitest_report", { report: JSON.stringify(R) });
 })();

@@ -1,10 +1,10 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { fpsOf, fromSec, snapToFrame, timecode, toSec } from "../time";
-import { beatPoints, dbToGain, keyEdit, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
+import { beatPoints, dbToGain, groupEdit, keyEdit, type KeyEdit, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
 import { addAdjustmentAtPlayhead, addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
 import { usePlayhead, useProject, useUi } from "../state/stores";
-import type { Clip, Generator, Marker, Sequence, Track, Transition } from "../types";
+import type { Clip, Command, Generator, Marker, Sequence, Track, Transition } from "../types";
 import { leaveCompound, openCompound } from "./compound";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
 import { activeSequence } from "../state/sequences";
@@ -248,6 +248,7 @@ const ClipView = memo(
           if (!edit || track.locked) return;
           e.preventDefault();
           e.stopPropagation();
+          if (applyToSelection(edit, clip, start, duration, fps)) return;
           if (edit.kind === "track") {
             // video tracks are drawn newest on top, audio tracks oldest on top
             // read the current tracks, not the ones this memoised clip was drawn with: a track may have been added since
@@ -262,7 +263,7 @@ const ClipView = memo(
           else void dispatch({ type: "trim_clip", clip: clip.id, edge: "end", to: fromSec(edit.end) });
         }}
         aria-pressed={isSel}
-        onFocus={() => select(clip.id)}
+        onFocus={() => { const ui = useUi.getState(); if (ui.selected !== clip.id && !ui.extra.includes(clip.id)) select(clip.id); }}
         onDoubleClick={() => void openCompound(clip.id)}
         title={`${clip.name}\nstart ${timecode(g.start, fps)}  dur ${timecode(g.duration, fps)}`}
       >
@@ -276,6 +277,48 @@ const ClipView = memo(
   },
   (a, b) => a.px === b.px && a.fps === b.fps && a.height === b.height && a.track.locked === b.track.locked && a.track.gain_db === b.track.gain_db && JSON.stringify(a.clip) === JSON.stringify(b.clip) && linkKey(a.seq, a.clip) === linkKey(b.seq, b.clip),
 );
+
+/**
+ * With several clips selected (Shift/Ctrl+click), a keyboard move/trim/track change on one of them applies to all of them as one
+ * undo step, all or nothing. Returns false when the selection is just this clip, so the caller handles it alone.
+ */
+function applyToSelection(edit: KeyEdit, focused: Clip, start: number, duration: number, fps: number): boolean {
+  const ui = useUi.getState();
+  const sel = new Set([ui.selected, ...ui.extra].filter((x): x is string => !!x));
+  const live = useProject.getState().view;
+  const seq = live ? activeSequence(live.project) : null;
+  if (!seq || sel.size < 2) return false;
+  const picked: { clip: Clip; track: Track }[] = [];
+  const seen = new Set<string>();
+  for (const tr of seq.tracks) for (const c of tr.clips) {
+    if (!linkedIds(seq, c.id).some((g) => sel.has(g))) continue;
+    const key = c.link ?? c.id;
+    if (seen.has(key)) continue; // a linked pair moves together: one clip stands for both
+    seen.add(key);
+    picked.push({ clip: c, track: tr });
+  }
+  if (!picked.some((p) => p.clip.id === focused.id || linkedIds(seq, focused.id).includes(p.clip.id))) return false;
+  const { dispatch, toast } = useProject.getState();
+  if (picked.some((p) => p.track.locked)) { toast("error", "A selected clip is on a locked track"); return true; }
+  let commands: Command[] | null = null;
+  if (edit.kind === "track") {
+    commands = [];
+    for (const p of picked) {
+      const same = seq.tracks.filter((t) => t.kind === p.track.kind);
+      const at = same.findIndex((t) => t.id === p.track.id);
+      const to = same[p.track.kind === "video" ? at + (edit.up ? 1 : -1) : at + (edit.up ? -1 : 1)];
+      if (!to || to.locked) { commands = null; break; }
+      commands.push({ type: "move_clip", clip: p.clip.id, start: p.clip.start, track: to.id });
+    }
+  } else {
+    const steps = groupEdit(edit, { start, duration }, picked.map((p) => { const t = times(p.clip); return { id: p.clip.id, start: t.start, duration: t.duration }; }), fps);
+    commands = steps && steps.map((st): Command => st.op === "move" ? { type: "move_clip", clip: st.clip, start: fromSec(st.to), track: null } : st.op === "trim-start" ? { type: "trim_clip", clip: st.clip, edge: "start", to: fromSec(st.to) } : { type: "trim_clip", clip: st.clip, edge: "end", to: fromSec(st.to) });
+  }
+  if (!commands) { toast("error", "Not every selected clip can make that change, so none were changed"); return true; }
+  const what = edit.kind === "track" ? "Move" : edit.kind === "move" ? "Nudge" : "Trim";
+  void dispatch({ type: "batch", label: `${what} ${picked.length} clips`, commands });
+  return true;
+}
 
 /** Cheap key capturing only what ClipView reads from the sequence (its link group). */
 function linkKey(seq: Sequence, c: Clip): string {

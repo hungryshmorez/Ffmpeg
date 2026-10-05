@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cutsInsideClip, rangesOnTimeline } from "../components/AnalysisPanel";
-import { beatPoints, dbToGain, keyEdit, linkedIds, neighbourMarkers, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
+import { beatPoints, dbToGain, groupEdit, keyEdit, linkedIds, neighbourMarkers, snap, snapPoints, sourceTime, tickStep, visibleVideoAt } from "./math";
 import { fromSec, snapToFrame, timecode, toSec } from "../time";
 import type { Clip, Sequence } from "../types";
 
@@ -133,5 +133,38 @@ describe("keyEdit", () => {
     expect(keyEdit(k("a", { altKey: true }), 2, 3, 25)).toBeNull();
     expect(keyEdit(k("ArrowLeft", {}), 2, 3, 25)).toBeNull();
     expect(keyEdit(k("ArrowLeft", { altKey: true, ctrlKey: true }), 2, 3, 25)).toBeNull();
+  });
+});
+
+describe("groupEdit", () => {
+  const k = (key: string, mods: Partial<{ altKey: boolean; ctrlKey: boolean; shiftKey: boolean }>) => ({ key, altKey: false, ctrlKey: false, shiftKey: false, ...mods });
+  const items = [{ id: "a", start: 1, duration: 2 }, { id: "b", start: 3, duration: 2 }, { id: "c", start: 8, duration: 1 }];
+  it("moves every clip by the focused clip's step, latest first when going right so they do not collide", () => {
+    const edit = keyEdit(k("ArrowRight", { altKey: true }), 1, 2, 25)!;
+    expect(groupEdit(edit, { start: 1, duration: 2 }, items, 25)).toEqual([
+      { clip: "c", op: "move", to: 8.04 },
+      { clip: "b", op: "move", to: 3.04 },
+      { clip: "a", op: "move", to: 1.04 },
+    ]);
+  });
+  it("goes earliest first when moving left", () => {
+    const edit = keyEdit(k("ArrowLeft", { altKey: true }), 1, 2, 25)!;
+    expect(groupEdit(edit, { start: 1, duration: 2 }, items, 25)!.map((s) => s.clip)).toEqual(["a", "b", "c"]);
+  });
+  it("refuses the whole move when one clip would go before zero", () => {
+    const edit = keyEdit(k("ArrowLeft", { altKey: true, shiftKey: true }), 3, 2, 25)!;
+    expect(edit).toEqual({ kind: "move", start: 2 });
+    expect(groupEdit(edit, { start: 3, duration: 2 }, [{ id: "a", start: 0.5, duration: 2 }, items[1]!, items[2]!], 25)).toBeNull();
+  });
+  it("trims every end the same amount and refuses if one clip would vanish", () => {
+    const edit = keyEdit(k("ArrowLeft", { ctrlKey: true }), 1, 2, 25)!;
+    const steps = groupEdit(edit, { start: 1, duration: 2 }, items, 25)!;
+    expect(steps.map((s) => [s.clip, s.op, s.to])).toEqual([["a", "trim-end", 2.96], ["b", "trim-end", 4.96], ["c", "trim-end", 8.96]]);
+    expect(groupEdit({ kind: "trim-end", end: 0.5 }, { start: 1, duration: 2 }, items, 25)).toBeNull();
+  });
+  it("trims starts, and leaves track moves to the caller", () => {
+    const edit = keyEdit(k("ArrowRight", { ctrlKey: true, shiftKey: true }), 1, 2, 25)!;
+    expect(groupEdit(edit, { start: 1, duration: 2 }, items, 25)!.every((s) => s.op === "trim-start")).toBe(true);
+    expect(groupEdit({ kind: "track", up: true }, { start: 1, duration: 2 }, items, 25)).toBeNull();
   });
 });
