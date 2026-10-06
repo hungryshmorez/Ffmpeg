@@ -220,7 +220,7 @@ pub fn check_audio_chain(text: &str) -> Result<()> {
 /// Video filters a `vfilterchain` may use: colour, blur/sharpen, noise, edges, flips and temporal blends. Nothing that reads or writes files
 /// or draws text.
 pub const VIDEO_CHAIN_FILTERS: &[&str] = &[
-    "eq", "hue", "colorchannelmixer", "negate", "noise", "boxblur", "gblur", "unsharp", "edgedetect", "sobel", "vignette", "lutyuv", "lutrgb", "hflip", "vflip", "curves", "colorbalance", "colorlevels", "colortemperature", "tmix", "tblend", "lagfun", "amplify", "deflicker", "chromashift", "rgbashift", "lenscorrection", "format",
+    "eq", "hue", "colorchannelmixer", "negate", "noise", "boxblur", "gblur", "unsharp", "edgedetect", "sobel", "vignette", "lutyuv", "lutrgb", "hflip", "vflip", "curves", "colorbalance", "colorlevels", "colortemperature", "tmix", "tblend", "lagfun", "amplify", "deflicker", "chromashift", "rgbashift", "lenscorrection", "geq", "format",
 ];
 
 /// Same checks as `check_audio_chain`, against the video filter list.
