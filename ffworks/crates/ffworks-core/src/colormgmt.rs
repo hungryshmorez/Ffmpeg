@@ -115,6 +115,16 @@ impl Conversion {
 /// frames' colour properties and ignores `-color_trc` when they are unset, so the frames themselves have to say it.
 pub const FRAME_TAGS: &str = "setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv";
 
+/// Rec.709 SDR frames to HDR10 (BT.2020 primaries, PQ transfer, 10-bit): SDR white is placed at 203 nits, the HDR reference white.
+/// This is an *inverse* tone map of SDR material (a plain re-labelling would look washed out), not real HDR footage.
+pub const HDR10_FRAMES: &str = "setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv,zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt2020,zscale=t=smpte2084:m=bt2020nc:r=tv:npl=203:dither=error_diffusion,format=yuv420p10le,setparams=colorspace=bt2020nc:color_primaries=bt2020:color_trc=smpte2084:range=tv";
+
+/// Output options that tag the encoded video as HDR10.
+pub const HDR10_OUTPUT_TAGS: [&str; 6] = ["-colorspace", "bt2020nc", "-color_primaries", "bt2020", "-color_trc", "smpte2084"];
+
+/// Export preset id that produces HDR10.
+pub const HDR10_PRESET: &str = "hdr10_mp4";
+
 /// Output options that tag the encoded video as Rec.709.
 pub const OUTPUT_TAGS: [&str; 6] = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"];
 

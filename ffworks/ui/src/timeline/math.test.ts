@@ -6,7 +6,7 @@ import type { Clip, Sequence } from "../types";
 
 const clip = (id: string, start: string, dur: string, kind: "video" | "audio", link: string | null = null, sourceIn = "0"): Clip => ({
   id, media: "m", name: id, kind, start, source_in: sourceIn, duration: dur, link, gain_db: 0, opacity: 1, effects: [],
-  pan: 0, fade_in: "0", fade_out: "0", title: null, speed: "1", reverse: false, freeze: null, transform: { x: 0, y: 0, scale: 1, rotation: 0 }, blend: "normal", keyframes: {},
+  pan: 0, fade_in: "0", fade_out: "0", title: null, speed: "1", reverse: false, smooth: false, freeze: null, transform: { x: 0, y: 0, scale: 1, rotation: 0 }, blend: "normal", keyframes: {},
 });
 const seq: Sequence = {
   id: "s", name: "Main", markers: [{ id: "mk", time: "3", name: "m", color: "#ffb020", note: "" }],

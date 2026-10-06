@@ -37,6 +37,8 @@ impl ExportSettings {
             ExportSettings { id: "datamosh_mp4".into(), name: "Datamosh MP4 (drops keyframes: smeared glitch look)".into(), extension: "mp4".into(), video_codec: Some("libx264".into()), crf: Some(23), encoder_preset: Some("fast".into()), pix_fmt: Some("yuv420p".into()), audio_codec: Some("aac".into()), audio_bitrate: Some("160k".into()), extra: s(&["-g", "15", "-keyint_min", "15", "-sc_threshold", "0", "-bf", "0", "-bsf:v", "noise=drop=key*gt(n\\,0)", "-movflags", "+faststart"]) },
             ExportSettings { id: "vp9_webm".into(), name: "VP9 WebM".into(), extension: "webm".into(), video_codec: Some("libvpx-vp9".into()), crf: Some(32), encoder_preset: None, pix_fmt: Some("yuv420p".into()), audio_codec: Some("libopus".into()), audio_bitrate: Some("128k".into()), extra: s(&["-b:v", "0", "-row-mt", "1"]) },
             ExportSettings { id: "h265_mp4".into(), name: "H.265 / HEVC MP4".into(), extension: "mp4".into(), video_codec: Some("libx265".into()), crf: Some(24), encoder_preset: Some("medium".into()), pix_fmt: Some("yuv420p".into()), audio_codec: Some("aac".into()), audio_bitrate: Some("192k".into()), extra: s(&["-tag:v", "hvc1", "-movflags", "+faststart"]) },
+            // HDR10: SDR (Rec.709) material is mapped to PQ / BT.2020 (see `colormgmt::HDR10_FRAMES`); the mastering display is the usual P3-D65 1000-nit one, MaxCLL/MaxFALL are not measured so they are left out
+            ExportSettings { id: "hdr10_mp4".into(), name: "HDR10 MP4 (H.265 10-bit, SDR mapped to PQ)".into(), extension: "mp4".into(), video_codec: Some("libx265".into()), crf: Some(20), encoder_preset: Some("medium".into()), pix_fmt: Some("yuv420p10le".into()), audio_codec: Some("aac".into()), audio_bitrate: Some("192k".into()), extra: s(&["-tag:v", "hvc1", "-x265-params", "hdr10=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,10)", "-movflags", "+faststart"]) },
             ExportSettings { id: "av1_mp4".into(), name: "AV1 MP4 (SVT-AV1)".into(), extension: "mp4".into(), video_codec: Some("libsvtav1".into()), crf: Some(34), encoder_preset: Some("8".into()), pix_fmt: Some("yuv420p".into()), audio_codec: Some("aac".into()), audio_bitrate: Some("160k".into()), extra: s(&["-movflags", "+faststart"]) },
             ExportSettings { id: "prores_mov".into(), name: "ProRes 422 HQ MOV".into(), extension: "mov".into(), video_codec: Some("prores_ks".into()), crf: None, encoder_preset: None, pix_fmt: Some("yuv422p10le".into()), audio_codec: Some("pcm_s16le".into()), audio_bitrate: None, extra: s(&["-profile:v", "3"]) },
             ExportSettings { id: "dnxhr_mov".into(), name: "DNxHR HQ MOV".into(), extension: "mov".into(), video_codec: Some("dnxhd".into()), crf: None, encoder_preset: None, pix_fmt: Some("yuv422p".into()), audio_codec: Some("pcm_s16le".into()), audio_bitrate: None, extra: s(&["-profile:v", "dnxhr_hq"]) },
@@ -341,6 +343,10 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                         chain.push_str(&format!("{}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS", take(seg.input), secs(t0), secs(t1)));
                         if seg.freeze.is_none() && seg.speed != Rational::from_int(1) {
                             chain.push_str(&format!(",setpts=PTS/{}", dec(speed)));
+                            if seg.smooth {
+                                // optical flow: motion-compensated frames fill the gaps the slow-down leaves
+                                chain.push_str(&format!(",minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"));
+                            }
                         }
                         if input.generated.is_some() {
                             // generated canvases are already output-sized; keep their alpha
@@ -463,7 +469,15 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         }
         // newer FFmpeg takes the encoder's colour tags from the frames, not from the -color_* options: tag the frames
         let tag_frames = !matches!(st.video_codec.as_deref(), Some("png" | "gif" | "rawvideo")) && !st.pix_fmt.as_deref().is_some_and(|p| p.starts_with("rgb") || p.starts_with("gbr"));
-        f.push(format!("[base{}]{}[vout]", items.len(), if tag_frames { crate::colormgmt::FRAME_TAGS } else { "null" }));
+        let tags = if st.id == crate::colormgmt::HDR10_PRESET {
+            require(&["zscale".to_string()])?;
+            crate::colormgmt::HDR10_FRAMES
+        } else if tag_frames {
+            crate::colormgmt::FRAME_TAGS
+        } else {
+            "null"
+        };
+        f.push(format!("[base{}]{}[vout]", items.len(), tags));
     }
     if want_audio {
         let sr = g.sample_rate;
@@ -586,7 +600,8 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         }
         // the picture is Rec.709 whatever came in (see `colormgmt`): say so, or players guess by resolution
         if !matches!(vc.as_str(), "png" | "gif" | "rawvideo") && !st.pix_fmt.as_deref().is_some_and(|p| p.starts_with("rgb") || p.starts_with("gbr")) {
-            post.extend(crate::colormgmt::OUTPUT_TAGS.map(String::from));
+            let tags = if st.id == crate::colormgmt::HDR10_PRESET { crate::colormgmt::HDR10_OUTPUT_TAGS } else { crate::colormgmt::OUTPUT_TAGS };
+            post.extend(tags.map(String::from));
         }
         post.extend(["-r".into(), fps.clone()]);
     }

@@ -50,6 +50,8 @@ pub struct VideoSegment {
     /// Playback speed (source span = duration × speed). 1 for transitioned clips.
     pub speed: Rational,
     pub reverse: bool,
+    /// Interpolate the frames a slow-down leaves out (optical flow).
+    pub smooth: bool,
     /// Source time of the single frame held for the whole segment.
     pub freeze: Option<Rational>,
     pub transform: Transform,
@@ -312,9 +314,10 @@ pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
                             duration,
                             opacity: c.opacity,
                             filters,
-                            requires,
+                            requires: if c.smooth && c.speed < Rational::from_int(1) && c.freeze.is_none() { requires.iter().cloned().chain(["minterpolate".to_string()]).collect() } else { requires },
                             speed: c.speed,
                             reverse: c.reverse,
+                            smooth: c.smooth && c.speed < Rational::from_int(1) && c.freeze.is_none(),
                             freeze: c.freeze,
                             transform: c.transform,
                             blend: c.blend.clone(),

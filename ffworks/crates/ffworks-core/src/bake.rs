@@ -118,6 +118,7 @@ struct Use {
     duration: Rational,
     speed: Rational,
     reverse: bool,
+    smooth: bool,
     freeze: Option<Rational>,
     title: Option<(crate::titles::Title, PathBuf)>,
     filters: Vec<String>,
@@ -133,11 +134,11 @@ pub fn prepare(g: &mut RenderGraph, range: Option<(Rational, Rational)>, cache: 
             continue;
         }
         let s = g.video[i].clone();
-        let u = Use { input: s.input, source_in: s.source_in, duration: s.duration, speed: s.speed, reverse: s.reverse, freeze: s.freeze, title: s.title, filters: s.filters, requires: s.requires };
+        let u = Use { input: s.input, source_in: s.source_in, duration: s.duration, speed: s.speed, reverse: s.reverse, smooth: s.smooth, freeze: s.freeze, title: s.title, filters: s.filters, requires: s.requires };
         let window = visible(range, s.start, s.duration, g.fps, true);
         let b = bake_use(g, u, window, cache, keep, &mut stages)?;
         let seg: &mut VideoSegment = &mut g.video[i];
-        (seg.input, seg.source_in, seg.speed, seg.reverse, seg.freeze, seg.title, seg.filters, seg.requires) = (b.input, b.source_in, b.speed, b.reverse, b.freeze, b.title, b.filters, b.requires);
+        (seg.input, seg.source_in, seg.speed, seg.reverse, seg.smooth, seg.freeze, seg.title, seg.filters, seg.requires) = (b.input, b.source_in, b.speed, b.reverse, b.smooth, b.freeze, b.title, b.filters, b.requires);
     }
     for i in 0..g.video_transitions.len() {
         for side in 0..2 {
@@ -146,7 +147,7 @@ pub fn prepare(g: &mut RenderGraph, range: Option<(Rational, Rational)>, cache: 
             if !part.filters.iter().any(|f| is_mark(f)) {
                 continue;
             }
-            let u = Use { input: part.input, source_in: part.source_in, duration: t.duration, speed: Rational::from_int(1), reverse: false, freeze: None, title: None, filters: part.filters.clone(), requires: part.requires.clone() };
+            let u = Use { input: part.input, source_in: part.source_in, duration: t.duration, speed: Rational::from_int(1), reverse: false, smooth: false, freeze: None, title: None, filters: part.filters.clone(), requires: part.requires.clone() };
             // both sides of a transition must keep the same length, so they are baked whole
             let window = visible(range, t.start, t.duration, g.fps, false);
             let b = bake_use(g, u, window, cache, keep, &mut stages)?;
@@ -206,6 +207,7 @@ fn bake_use(g: &mut RenderGraph, mut u: Use, window: Option<(i64, i64)>, cache: 
                 requires: u.requires.clone(),
                 speed: u.speed,
                 reverse: u.reverse,
+                smooth: u.smooth,
                 freeze: u.freeze,
                 transform: Default::default(),
                 blend: "normal".into(),
@@ -281,6 +283,7 @@ fn bake_use(g: &mut RenderGraph, mut u: Use, window: Option<(i64, i64)>, cache: 
         u.source_in = Rational::ZERO;
         u.speed = Rational::from_int(1);
         u.reverse = false;
+        u.smooth = false;
         u.freeze = None;
         u.title = None;
         u.filters.drain(..=k);
@@ -618,6 +621,7 @@ mod tests {
             requires: vec![],
             speed: Rational::from_int(1),
             reverse: false,
+            smooth: false,
             freeze: None,
             transform: Default::default(),
             blend: "normal".into(),

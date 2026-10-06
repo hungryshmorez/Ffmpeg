@@ -120,6 +120,10 @@ pub struct Clip {
     /// Play the source range backwards. Video reverse buffers the whole clip in memory at render time.
     #[serde(default)]
     pub reverse: bool,
+    /// Slow motion (speed below 100%) fills in the missing frames by motion-compensated interpolation (optical flow, FFmpeg
+    /// `minterpolate`) instead of repeating frames. Slow to render. No effect at 100% or faster.
+    #[serde(default)]
+    pub smooth: bool,
     /// Hold the single source frame at this time for the whole clip (video clips).
     #[serde(default)]
     pub freeze: Option<Rational>,
@@ -162,7 +166,7 @@ impl Clip {
     /// A plain clip: speed 1, no effects, identity transform.
     #[allow(clippy::too_many_arguments)]
     pub fn new(id: Id, media: Id, name: String, kind: TrackKind, start: Rational, source_in: Rational, duration: Rational, link: Option<Id>) -> Clip {
-        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, title: None, adjustment: false, blend: normal_blend(), keyframes: BTreeMap::new() }
+        Clip { id, media, name, kind, start, source_in, duration, link, gain_db: 0.0, opacity: 1.0, effects: vec![], speed: one_rational(), reverse: false, smooth: false, freeze: None, transform: Transform::default(), pan: 0.0, fade_in: Rational::ZERO, fade_out: Rational::ZERO, title: None, adjustment: false, blend: normal_blend(), keyframes: BTreeMap::new() }
     }
 
     pub fn end(&self) -> Rational {

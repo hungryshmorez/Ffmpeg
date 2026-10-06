@@ -305,3 +305,40 @@ fn a_proxy_of_footage_with_a_colour_override_shows_the_corrected_colours() {
     assert!(e < 12, "with the override the proxy is right: {:?} is {e} off", rgb709(&fixed));
     assert_eq!(probe_tag(&fixed, "color_space"), "bt709");
 }
+
+/// Luma of the centre pixel of the first frame as a 10-bit code value.
+fn luma10(video: &Path) -> i32 {
+    let o = Proc::new(tools().ffmpeg).args(["-v", "error", "-i"]).arg(video).args(["-frames:v", "1", "-vf", "scale=1:1:flags=area,format=gray10le", "-f", "rawvideo", "-"]).output().unwrap();
+    assert_eq!(o.stdout.len(), 2, "{}", String::from_utf8_lossy(&o.stderr));
+    i32::from(o.stdout[0]) | (i32::from(o.stdout[1]) << 8)
+}
+
+#[test]
+fn the_hdr10_preset_maps_sdr_to_pq_bt2020_and_tags_the_stream() {
+    let caps = Capabilities::discover(&tools()).unwrap();
+    if !caps.has_encoder("libx265") || !caps.has_filter("zscale") {
+        eprintln!("needs libx265 and zscale; skipping");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let src = footage(dir.path(), "white.mp4", "white", "bt709", ("bt709", "bt709", "bt709"));
+    let eng = one_clip(&src);
+    let out = dir.path().join("hdr.mp4");
+    let t = tools();
+    let mut j = compile_project(&eng.project, &RenderOptions { output: out.clone(), settings: ExportSettings::find("hdr10_mp4").unwrap(), range: None, scale_div: 1 }, Some(&caps)).unwrap();
+    j.program = t.ffmpeg.clone();
+    assert!(j.filter_graph.contains("smpte2084"), "{}", j.filter_graph);
+    run_job(&t, &j, "c", "export", &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("export failed: {e}"));
+
+    assert_eq!(probe_tag(&out, "color_transfer"), "smpte2084");
+    assert_eq!(probe_tag(&out, "color_primaries"), "bt2020");
+    assert_eq!(probe_tag(&out, "color_space"), "bt2020nc");
+    assert_eq!(probe_tag(&out, "pix_fmt"), "yuv420p10le");
+    // SDR white lands at 203 nits = PQ 0.5807; `luma10` reads the code expanded to full range (0.5807 * 1023 = 594). Left at 100 nits it is 520, at the SDR code ~940
+    let white = luma10(&out);
+    assert!((white - 594).abs() < 20, "SDR white should sit at the 203-nit PQ code, got {white}");
+
+    // the stream carries the mastering display metadata
+    let o = Proc::new(t.ffprobe).args(["-v", "error", "-select_streams", "v:0", "-show_frames", "-read_intervals", "%+#1", "-show_entries", "frame_side_data=side_data_type", "-of", "csv"]).arg(&out).output().unwrap();
+    assert!(String::from_utf8_lossy(&o.stdout).contains("Mastering display metadata"), "{}", String::from_utf8_lossy(&o.stdout));
+}

@@ -103,6 +103,7 @@ pub enum Command {
     /// Change speed (1 = normal) for the clip and its linked clips; the timeline duration follows (source span stays the same).
     SetClipSpeed { clip: Id, speed: Rational },
     SetClipReverse { clip: Id, reverse: bool },
+    SetClipSmooth { clip: Id, smooth: bool },
     /// Hold the source frame at `at` for the whole video clip; `None` returns to normal playback.
     SetClipFreeze { clip: Id, at: Option<Rational> },
     /// Blend two adjacent clips on a video track (`kind` is an xfade name; see `transitions::KINDS`).
@@ -202,6 +203,7 @@ impl Command {
             Command::ClearKeyframes { param, .. } => format!("Clear keyframes {param}"),
             Command::SetClipSpeed { .. } => "Clip speed".into(),
             Command::SetClipReverse { .. } => "Reverse clip".into(),
+            Command::SetClipSmooth { smooth, .. } => if *smooth { "Smooth slow motion on".into() } else { "Smooth slow motion off".into() },
             Command::SetClipFreeze { .. } => "Freeze frame".into(),
             Command::AddTransition { kind, .. } => format!("Add {kind} transition"),
             Command::RemoveTransition { .. } => "Remove transition".into(),
@@ -906,6 +908,24 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 ensure_unlocked(gt)?;
                 let mut c = gc.clone();
                 c.reverse = *reverse;
+                out.push(Patch::PutClip { seq: sid.clone(), track: gt.id.clone(), clip: c });
+            }
+            Ok(out)
+        }
+        Command::SetClipSmooth { clip, smooth } => {
+            if seq.find_clip(clip).is_some_and(|(_, c)| c.adjustment || c.kind != TrackKind::Video) {
+                return Err(Error::validation("only video footage can have smooth slow motion"));
+            }
+            let group = seq.linked_group(clip);
+            if group.is_empty() {
+                return Err(Error::NotFound(format!("clip {clip}")));
+            }
+            let mut out = vec![];
+            for gid in &group {
+                let (gt, gc) = seq.find_clip(gid).expect("member");
+                ensure_unlocked(gt)?;
+                let mut c = gc.clone();
+                c.smooth = *smooth;
                 out.push(Patch::PutClip { seq: sid.clone(), track: gt.id.clone(), clip: c });
             }
             Ok(out)

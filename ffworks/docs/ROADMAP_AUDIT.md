@@ -19,7 +19,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Demo mode: no audio; "hold" only toggle-tested; real playback needs eyeballing on Windows (sandbox webview cannot decode video).
 * GL transitions: ~75 more shaders not expressible (hand-porting possible); slow (1–2.5 min per 1 s transition at 1080p); no per-feature build routing.
 * frei0r: the few filters with text params; sources/mixers; keyframes; preview.
-* MLT-style luma-wipe transitions via `maskedmerge`; export preset library (HandBrake/Shutter Encoder ideas).
+* MLT-style luma-wipe transitions: 12 procedural soft/pattern wipes DONE, picture-based luma masks open; export preset library (HandBrake/Shutter Encoder ideas).
 * Housekeeping: STATUS header counts outdated; the old FFmpeg Studio compositor test was timing-flaky (fixed: each check now waits up to ~2 s for its colour, 6/6 runs green locally); older GUI scripts not all re-run after every change.
 
 ## D. Spec phases still open
@@ -31,4 +31,4 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Phase 10: local API: DONE (see STATUS.md). Plugin system (Extism/WASM): DONE (see STATUS.md and docs/PLUGINS.md).
 * DONE: unfinished exports are journalled and offered again after a crash or close.
 * DONE: export naming templates + never-overwrite versioning (dialog and CLI).
-* Cross-cutting: SQLite media library (DONE), smart rendering of intermediates (DONE; re-encoding only changed spans of the final file and resuming it after a crash are open), accessibility pass (names/dialog scan DONE, keyboard clip move/trim DONE, contrast audit + fixes DONE, dialog focus trap/return/Escape DONE, job progress announcements DONE, reduced motion + forced-colours rules DONE but forced-colours unverified in use; real screen-reader pass open), colour management (Rec.709 projects: DONE; LUT files DONE; HDR output/ICC open), preview/analysis through the job queue (DONE, see STATUS.md).
+* Cross-cutting: SQLite media library (DONE), smart rendering of intermediates (DONE; re-encoding only changed spans of the final file and resuming it after a crash are open), accessibility pass (names/dialog scan DONE, keyboard clip move/trim DONE, contrast audit + fixes DONE, dialog focus trap/return/Escape DONE, job progress announcements DONE, reduced motion + forced-colours rules DONE but forced-colours unverified in use; real screen-reader pass open), colour management (Rec.709 projects: DONE; LUT files DONE; HDR10 export preset DONE (SDR mapped to PQ); project HDR colour space and ICC open), preview/analysis through the job queue (DONE, see STATUS.md).

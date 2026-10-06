@@ -26,7 +26,7 @@ export interface ClipParamDef { id: string; name: string; min: number; max: numb
 export interface ClipProps { params: ClipParamDef[]; audioParams: ClipParamDef[]; blendModes: [string, string][]; interps: { id: Interp; name: string }[] }
 export interface Clip {
   id: string; media: string; name: string; kind: TrackKind; start: Rational; source_in: Rational; duration: Rational; link: string | null; gain_db: number; opacity: number; effects: EffectInstance[];
-  speed: Rational; reverse: boolean; freeze: Rational | null; transform: Transform; blend: string;
+  speed: Rational; reverse: boolean; smooth: boolean; freeze: Rational | null; transform: Transform; blend: string;
   /** Audio clips: balance -1..1 and linear fades in seconds (rational). */
   pan: number; fade_in: Rational; fade_out: Rational;
   /** Set on title clips (their media is the transparent title canvas). */
@@ -104,6 +104,7 @@ export type Command =
   | { type: "set_media_color"; media: string; color: ColorOverride | null }
   | { type: "set_clip_speed"; clip: string; speed: Rational }
   | { type: "set_clip_reverse"; clip: string; reverse: boolean }
+  | { type: "set_clip_smooth"; clip: string; smooth: boolean }
   | { type: "set_clip_freeze"; clip: string; at: Rational | null }
   | { type: "add_transition"; clip_a: string; clip_b: string; kind: string; duration: Rational }
   | { type: "remove_transition"; transition: string }
