@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { activeSequence } from "../state/sequences";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
-import type { AudioWorkflow, Clip, EffectDef, EffectPreset } from "../types";
+import type { AudioWorkflow, Clip, Command, EffectDef, EffectPreset } from "../types";
 import { CommitSlider } from "./CommitSlider";
 import { KeyframeField, type FieldSpec } from "./KeyframeField";
 import { useClipProps } from "./ClipPropsPanel";
@@ -89,15 +89,23 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
       </div>
       {clip.kind === "audio" && workflows.length > 0 && (
         <div className="field" aria-label="Audio workflows">
-          <label>Audio workflows (from the browser app: mastering, lo-fi, slowed + reverb…)</label>
+          <label>Audio workflows (from the browser app: tone, effects, pitch and speed, mastering looks…)</label>
           <div className="row">
             <select aria-label="Audio workflow" value={workflowPick} onChange={(e) => setWorkflowPick(e.target.value)}>
               <option value="">choose a workflow…</option>
-              {workflows.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {[...new Set(workflows.map((w) => w.category))].map((c) => (
+                <optgroup key={c} label={c}>{workflows.filter((w) => w.category === c).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</optgroup>
+              ))}
             </select>
-            <button disabled={!workflow} title="Add this workflow's filter chain to the clip as an effect (one undo step)" onClick={() => workflow && void dispatch({ type: "add_audio_chain", clip: clip.id, chain: workflow.chain })}>Apply</button>
+            <button disabled={!workflow} title="Add this workflow's filter chain and speed to the clip (one undo step)" onClick={() => {
+              if (!workflow) return;
+              const commands: Command[] = [];
+              if (workflow.chain) commands.push({ type: "add_audio_chain", clip: clip.id, chain: workflow.chain });
+              if (workflow.speed) commands.push({ type: "set_clip_speed", clip: clip.id, speed: `${Math.round(workflow.speed * 1000)}/1000` });
+              void dispatch({ type: "batch", label: workflow.name, commands });
+            }}>Apply</button>
           </div>
-          {workflow && <p className="muted pad">{workflow.description}</p>}
+          {workflow && <p className="muted pad">{workflow.description}{workflow.speed ? ` Also sets the clip speed to ${Math.round(workflow.speed * 100)}%.` : ""}</p>}
         </div>
       )}
       <div className="field" aria-label="Saved looks">

@@ -181,7 +181,7 @@ pub struct EffectInstance {
 /// network or control sockets, or changes the number of streams.
 pub const CHAIN_FILTERS: &[&str] = &[
     "equalizer", "volume", "lowpass", "highpass", "bandpass", "bandreject", "bass", "treble", "acompressor", "alimiter", "agate", "compand", "loudnorm", "dynaudnorm", "speechnorm", "aecho", "aphaser", "chorus", "flanger", "tremolo", "vibrato", "apulsator", "stereotools", "stereowiden", "extrastereo",
-    "crystalizer", "asoftclip", "acrusher", "afftdn", "anlmdn", "adeclick", "adeclip", "deesser", "adelay", "asetrate", "aresample", "atempo", "areverse", "afade", "aexciter", "anequalizer", "firequalizer", "silenceremove", "highshelf", "lowshelf", "allpass", "biquad",
+    "crystalizer", "asoftclip", "acrusher", "afftdn", "anlmdn", "adeclick", "adeclip", "deesser", "adelay", "asetrate", "aresample", "atempo", "areverse", "afade", "aexciter", "anequalizer", "firequalizer", "silenceremove", "highshelf", "lowshelf", "allpass", "biquad", "pan",
 ];
 
 /// Largest chain accepted (characters).

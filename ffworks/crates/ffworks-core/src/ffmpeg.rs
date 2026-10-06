@@ -536,6 +536,9 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                 chain.push(',');
                 chain.push_str(&fx.replace("@SR@", &sr.to_string()));
                 // pitch/tempo filters change the length and the rate: bring both back so the clip still fills exactly its place
+                if fx.starts_with("pan=") {
+                    chain.push_str(",aformat=sample_fmts=fltp:channel_layouts=stereo");
+                }
                 if fx.contains("asetrate") || fx.contains("atempo") {
                     let n = seg.duration.round_units(rate);
                     chain.push_str(&format!(",aresample={sr},apad=whole_len={n},atrim=end_sample={n},asetpts=PTS-STARTPTS"));

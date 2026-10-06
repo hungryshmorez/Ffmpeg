@@ -21,7 +21,7 @@
     await P().dispatch({ type: "place_clip", media: m, track: v1, start: "0", source_in: "0", duration: "4", with_audio: true }); await sleep(400);
     await select($$(".track.video .clip")[0]);
     const wsel = await waitFor(() => effPanel() && effPanel().querySelector("select[aria-label='Audio workflow']"));
-    step("the audio clip's Effects panel offers the 19 audio workflows", !!wsel && wsel.options.length === 20, wsel && wsel.options.length);
+    step("the audio clip's Effects panel offers the 44 audio workflows", !!wsel && wsel.options.length === 45, wsel && wsel.options.length);
     step("they carry the original names", [...wsel.options].some((o) => /Lo-Fi Tape Decay/.test(o.text)) && [...wsel.options].some((o) => /Slushwave/.test(o.text)));
     setSel(wsel, "am-lofi-tape"); await sleep(200);
     step("choosing one shows its description", /./.test(effPanel().querySelector("[aria-label='Audio workflows'] p")?.textContent ?? ""));

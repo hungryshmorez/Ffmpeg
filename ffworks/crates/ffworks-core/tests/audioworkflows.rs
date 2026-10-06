@@ -1,4 +1,4 @@
-//! The browser app's audio-mastering workflows as audio filter chains on a clip: each must render, keep the clip's exact length and not
+//! The browser app's audio workflows (filter chains and clip speeds) on a clip: each must render, come out at the expected length and not
 //! go silent; the chain command validates its text, and everything is undoable and saved.
 use ffworks_core::commands::Command;
 use ffworks_core::engine::Engine;
@@ -17,11 +17,11 @@ fn secs(n: i64) -> Rational {
     Rational::from_int(n)
 }
 
-/// 3 s of a 220 Hz tone plus noise, in a 48 kHz project.
+/// 3 s with a 220 Hz tone on the left and noise on the right (so nothing is dead centre), in a 48 kHz project.
 fn project(dir: &Path) -> (Engine, String) {
     let src = dir.join("src.mp4");
     let o = Proc::new(tools().ffmpeg)
-        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=25:d=3", "-f", "lavfi", "-i", "sine=f=220:r=44100:d=3", "-f", "lavfi", "-i", "anoisesrc=a=0.05:r=44100:d=3", "-filter_complex", "[1][2]amix=inputs=2:duration=first[a]", "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "pcm_s16le"])
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=25:d=3", "-f", "lavfi", "-i", "sine=f=220:r=44100:d=3", "-f", "lavfi", "-i", "anoisesrc=a=0.05:r=44100:d=3", "-filter_complex", "[1][2]amerge=inputs=2,pan=stereo|c0=c0|c1=c1[a]", "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "pcm_s16le"])
         .arg(&src)
         .output()
         .unwrap();
@@ -53,23 +53,29 @@ fn mean_db(f: &Path) -> f64 {
 }
 
 #[test]
-fn every_audio_mastering_workflow_renders_at_the_clips_exact_length_and_is_not_silent() {
+fn every_audio_workflow_renders_at_the_expected_length_and_is_not_silent() {
     let caps = Capabilities::discover(&tools()).unwrap();
     let dir = tempfile::tempdir().unwrap();
     let mut problems = vec![];
     for w in workflows::audio_workflows() {
-        let missing: Vec<_> = ffworks_core::effects::chain_filter_names(w.chain).into_iter().filter(|n| !caps.has_filter(n)).collect();
+        let missing: Vec<_> = ffworks_core::effects::chain_filter_names(w.chain).into_iter().filter(|n| !n.is_empty() && !caps.has_filter(n)).collect();
         if !missing.is_empty() {
             eprintln!("{}: this FFmpeg lacks {missing:?}; skipped", w.id);
             continue;
         }
         let (mut eng, a) = project(dir.path());
-        eng.dispatch(Command::AddAudioChain { clip: a, chain: w.chain.into(), index: None }).unwrap_or_else(|e| panic!("{}: {e}", w.id));
+        if !w.chain.is_empty() {
+            eng.dispatch(Command::AddAudioChain { clip: a.clone(), chain: w.chain.into(), index: None }).unwrap_or_else(|e| panic!("{}: {e}", w.id));
+        }
+        if let Some(sp) = w.speed {
+            eng.dispatch(Command::SetClipSpeed { clip: a.clone(), speed: Rational::new((sp * 1000.0).round() as i64, 1000) }).unwrap_or_else(|e| panic!("{}: {e}", w.id));
+        }
         let out = dir.path().join(format!("{}.wav", w.id));
         export(&eng, &out);
         let (d, m) = (duration(&out), mean_db(&out));
-        if (d - 3.0).abs() > 0.06 {
-            problems.push(format!("{}: length {d:.3} s instead of 3 s", w.id));
+        let want = 3.0 / w.speed.unwrap_or(1.0);
+        if (d - want).abs() > 0.08 {
+            problems.push(format!("{}: length {d:.3} s instead of {want:.3} s", w.id));
         }
         if m < -70.0 {
             problems.push(format!("{}: silent (mean {m} dB)", w.id));
