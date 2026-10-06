@@ -110,6 +110,19 @@ for x in w:
     c = chain(s)
     if not c: continue
     rows.append((x["id"], x["name"], x["category"], x["description"], c))
+# video-glitch-pipelines whose steps are plain filters, copied from workflows.js (their `args` carry the filter strings; the quotes only protect
+# them from the browser app's shell-less argv, FFWORKS passes argv arrays so they are dropped). Steps that were separate re-encodes are one chain
+# here. Left out: echo-ghost (3 inputs), lagfun-dynamic and 3way (noise/lagfun options that do not take expressions), vhs-scanlines (drawbox `t` is
+# thickness, not time), tblend-diff's scale (the project already sets the size), reverse-echo / speed-bass (native clip reverse/speed + audio chains),
+# iframe-strip (encoder settings).
+PIPELINES = {
+    "vgp-lagfun-massacre": "eq=saturation=1.3:contrast=1.1,hue=h=30,tblend=all_expr=A*(1-0.6)+B*0.6,rgbashift=rh=4:rv=4:gh=-3:gv=-3:bh=2:bv=-2,noise=alls=20:allf=t,tblend=all_expr=A*(1-0.5)+B*0.5",
+    "vgp-max-entropy": "tmix=frames=8:weights=1 2 3 4 5 4 3 2,tblend=all_mode=average:all_opacity=0.85,eq=saturation=2.0:contrast=1.25,rgbashift=rh=4:rv=2:bh=-4:bv=-2",
+    "vgp-tblend-diff": "tblend=all_mode=difference128,tblend=all_mode=difference128,tblend=all_mode=difference128",
+    "vgp-flip-chaos": "hflip=enable=eq(mod(floor(n/15),2),1),vflip=enable=eq(mod(floor(n/105),2),1)",
+}
+for x in w:
+    if x["id"] in PIPELINES: rows.append((x["id"], x["name"], x["category"], x["description"], PIPELINES[x["id"]]))
 out = os.path.join(root, "crates", "ffworks-core", "assets", "workflows", "video_workflows.tsv")
 open(out, "w").write("".join("\t".join(r).replace("\n", " ") + "\n" for r in rows))
 print(len(rows), "video workflows ->", out, file=sys.stderr)
