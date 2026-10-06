@@ -19,7 +19,7 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * Demo mode: no audio; "hold" only toggle-tested; real playback needs eyeballing on Windows (sandbox webview cannot decode video).
 * GL transitions: ~75 more shaders not expressible (hand-porting possible); slow (1–2.5 min per 1 s transition at 1080p); no per-feature build routing.
 * frei0r: the few filters with text params; sources/mixers; keyframes; preview.
-* MLT-style luma-wipe transitions: 12 procedural soft/pattern wipes DONE, picture-based luma masks open; export preset library (HandBrake/Shutter Encoder ideas).
+* MLT-style luma-wipe transitions: 12 procedural soft/pattern wipes DONE, picture-based luma masks DONE (still-image masks; no video/animated masks); export preset library (HandBrake/Shutter Encoder ideas).
 * Housekeeping: STATUS header counts outdated; the old FFmpeg Studio compositor test was timing-flaky (fixed: each check now waits up to ~2 s for its colour, 6/6 runs green locally); older GUI scripts not all re-run after every change.
 
 ## D. Spec phases still open

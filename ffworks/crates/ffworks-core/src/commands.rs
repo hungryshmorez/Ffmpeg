@@ -110,6 +110,8 @@ pub enum Command {
     AddTransition { clip_a: Id, clip_b: Id, kind: String, duration: Rational },
     RemoveTransition { transition: Id },
     SetTransition { transition: Id, kind: Option<String>, duration: Option<Rational> },
+    /// Attach (or with `media: None` remove) the mask picture of a luma wipe; attaching one makes the transition a luma wipe.
+    SetTransitionMask { transition: Id, media: Option<Id>, softness: Option<f64>, invert: Option<bool> },
     /// A title (text drawn on a transparent generated canvas) on a video track. Position/scale/opacity/blend/keyframes are the clip's own.
     AddTitle { track: Id, start: Rational, duration: Rational, text: String },
     /// Replace a title clip's text and styling.
@@ -208,6 +210,7 @@ impl Command {
             Command::AddTransition { kind, .. } => format!("Add {kind} transition"),
             Command::RemoveTransition { .. } => "Remove transition".into(),
             Command::SetTransition { .. } => "Edit transition".into(),
+            Command::SetTransitionMask { .. } => "Edit luma wipe".into(),
             Command::TakeSnapshot { name } => format!("Snapshot '{name}'"),
             Command::RestoreSnapshot { .. } => "Restore snapshot".into(),
             Command::DeleteSnapshot { .. } => "Delete snapshot".into(),
@@ -976,7 +979,7 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             ensure_unlocked(ta)?;
             // duplicates, adjacency, opacity and media handles are checked by project validation right after applying
-            Ok(vec![Patch::PutTransition { seq: sid, track: ta.id.clone(), transition: Transition { id: new_id("trn"), clip_a: clip_a.clone(), clip_b: clip_b.clone(), kind: kind.clone(), duration: transitions::snap_duration(*duration, fps) } }])
+            Ok(vec![Patch::PutTransition { seq: sid, track: ta.id.clone(), transition: Transition { id: new_id("trn"), clip_a: clip_a.clone(), clip_b: clip_b.clone(), kind: kind.clone(), duration: transitions::snap_duration(*duration, fps), mask: None, softness: transitions::default_softness(), invert: false } }])
         }
         Command::RemoveTransition { transition } => {
             let t = seq.tracks.iter().find(|t| t.transitions.iter().any(|x| &x.id == transition)).ok_or_else(|| Error::NotFound(format!("transition {transition}")))?;
@@ -993,6 +996,37 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             }
             if let Some(d) = duration {
                 x.duration = transitions::snap_duration(*d, fps);
+            }
+            Ok(vec![Patch::PutTransition { seq: sid, track: t.id.clone(), transition: x }])
+        }
+        Command::SetTransitionMask { transition, media, softness, invert } => {
+            let t = seq.tracks.iter().find(|t| t.transitions.iter().any(|x| &x.id == transition)).ok_or_else(|| Error::NotFound(format!("transition {transition}")))?;
+            ensure_unlocked(t)?;
+            let mut x = t.transitions.iter().find(|x| &x.id == transition).expect("found").clone();
+            match media {
+                Some(id) => {
+                    let m = p.media(id)?;
+                    if !m.info.still || !m.info.has_video() || m.is_generated() {
+                        return Err(Error::validation(format!("'{}' cannot be a luma mask: use a still image", m.name)));
+                    }
+                    x.mask = Some(id.clone());
+                    x.kind = transitions::LUMA.into();
+                }
+                None => {
+                    x.mask = None;
+                    if x.kind == transitions::LUMA {
+                        x.kind = "fade".into();
+                    }
+                }
+            }
+            if let Some(s) = softness {
+                if !s.is_finite() {
+                    return Err(Error::validation("softness must be a number"));
+                }
+                x.softness = s.clamp(0.01, 1.0);
+            }
+            if let Some(i) = invert {
+                x.invert = *i;
             }
             Ok(vec![Patch::PutTransition { seq: sid, track: t.id.clone(), transition: x }])
         }

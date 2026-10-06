@@ -442,14 +442,14 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                 Item::Tr(t) => {
                     require(&t.a.requires)?;
                     require(&t.b.requires)?;
-                    require(&["xfade".to_string()])?;
-                    let gl = crate::glx::expr(&t.kind);
+                    require(&[if t.luma.is_some() { "maskedmerge".to_string() } else { "xfade".to_string() }])?;
+                    let gl = if t.luma.is_some() { None } else { crate::glx::expr(&t.kind) };
                     if let (Some(caps), Some(_)) = (caps, gl) {
                         if !caps.xfade_custom {
                             return Err(Error::validation(format!("'{}' is a GL transition and needs an FFmpeg whose xfade supports custom expressions", t.kind)));
                         }
                     }
-                    if let Some(caps) = caps.filter(|_| gl.is_none()) {
+                    if let Some(caps) = caps.filter(|_| gl.is_none() && t.luma.is_none()) {
                         if !caps.xfade_transitions.is_empty() && !caps.xfade_transitions.iter().any(|(k, _)| *k == t.kind) {
                             return Err(Error::validation(format!("the installed FFmpeg does not support the '{}' transition (it needs a newer FFmpeg)", t.kind)));
                         }
@@ -457,6 +457,23 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     let (la, lb) = (take(t.a.input), take(t.b.input));
                     f.push(format!("{}[ta{n}]", vchain(&la, t.a.input, t.a.source_in, t.duration, None, &t.a.filters)));
                     f.push(format!("{}[tb{n}]", vchain(&lb, t.b.input, t.b.source_in, t.duration, None, &t.b.filters)));
+                    if let Some(l) = &t.luma {
+                        // The mask picture is brightened into a per-frame 0..255 weight: a pixel switches from A to B when the wipe's
+                        // progress passes its brightness (dark first, or bright first when inverted), over a soft edge of `softness`.
+                        require(&["geq".to_string()])?;
+                        let d = secs(t.duration);
+                        let s = l.softness.clamp(0.01, 1.0);
+                        let level = if l.invert { "(1-lum(X,Y)/255)" } else { "(lum(X,Y)/255)" };
+                        f.push(format!(
+                            "{}setpts=PTS-STARTPTS,fps={fps},trim=end={d},setpts=PTS-STARTPTS,scale={w}:{h},format=gray,geq=lum='255*clip((T/{d}*(1+{s})-{level})/{s},0,1)',format=gbrp[tm{n}]",
+                            take(l.input)
+                        ));
+                        // all three inputs are planar RGB: in YUV the mask's chroma planes would blend the colours 50/50
+                        f.push(format!("[ta{n}]format=gbrp[tag{n}];[tb{n}]format=gbrp[tbg{n}]"));
+                        f.push(format!("[tag{n}][tbg{n}][tm{n}]maskedmerge,setpts=PTS-STARTPTS+{}/TB,format=yuv420p[vs{n}]", secs(t.start)));
+                        f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0[base{}]", n + 1));
+                        continue;
+                    }
                     // a bundled GL transition is an `xfade` custom expression (values are escaped for the filter graph)
                     let which = match gl {
                         Some(e) => format!("custom:expr={}", crate::titles::escape_filter_value(e)),

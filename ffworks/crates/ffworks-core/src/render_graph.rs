@@ -117,8 +117,18 @@ pub struct VideoTransition {
     pub start: Rational,
     pub duration: Rational,
     pub kind: String,
+    /// The mask picture of a `luma` wipe.
+    pub luma: Option<LumaMask>,
     pub a: TransitionPart,
     pub b: TransitionPart,
+}
+
+/// A luma wipe's mask: its own input (one `-i` per use), the soft-edge width and the direction.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LumaMask {
+    pub input: usize,
+    pub softness: f64,
+    pub invert: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -261,11 +271,18 @@ pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
                 let (fa, ra, _) = effect_filters(project, a)?;
                 let (fb, rb, _) = effect_filters(project, b)?;
                 let (ia, ib) = (input_index(&mut g, &a.media, &format!("tr:{}:a", tr.id))?, input_index(&mut g, &b.media, &format!("tr:{}:b", tr.id))?);
+                let luma = if tr.kind == crate::transitions::LUMA {
+                    let mask = tr.mask.as_deref().ok_or_else(|| Error::validation("a luma wipe needs a mask picture"))?;
+                    Some(LumaMask { input: input_index(&mut g, mask, &format!("tr:{}:m", tr.id))?, softness: tr.softness, invert: tr.invert })
+                } else {
+                    None
+                };
                 g.video_transitions.push(VideoTransition {
                     layer,
                     start: a.end() - half,
                     duration: tr.duration,
                     kind: tr.kind.clone(),
+                    luma,
                     a: TransitionPart { input: ia, source_in: a.source_in + a.duration - half, filters: fa, requires: ra },
                     b: TransitionPart { input: ib, source_in: b.source_in - half, filters: fb, requires: rb },
                 });
@@ -368,6 +385,7 @@ pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
     let one_frame = Rational::from_int(1).div(g.fps);
     let mut need: Vec<(usize, Rational)> = g.video.iter().map(|v| (v.input, v.source_in + v.source_span().max(one_frame) + one_frame.mul_int(2))).collect();
     need.extend(g.video_transitions.iter().flat_map(|t| [(t.a.input, t.a.source_in + t.duration), (t.b.input, t.b.source_in + t.duration)]));
+    need.extend(g.video_transitions.iter().filter_map(|t| t.luma.as_ref().map(|l| (l.input, t.duration + one_frame))));
     for (i, n) in need {
         let cur = g.inputs[i].need;
         g.inputs[i].need = cur.max(n);

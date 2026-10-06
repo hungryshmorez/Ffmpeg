@@ -327,6 +327,9 @@ fn prune_inputs(g: &mut RenderGraph) {
     for t in &g.video_transitions {
         used[t.a.input] = true;
         used[t.b.input] = true;
+        if let Some(l) = &t.luma {
+            used[l.input] = true;
+        }
     }
     for t in &g.audio_transitions {
         used[t.a.input] = true;
@@ -352,6 +355,9 @@ fn prune_inputs(g: &mut RenderGraph) {
     for t in &mut g.video_transitions {
         t.a.input = map[t.a.input];
         t.b.input = map[t.b.input];
+        if let Some(l) = &mut t.luma {
+            l.input = map[l.input];
+        }
     }
     for t in &mut g.audio_transitions {
         t.a.input = map[t.a.input];

@@ -36,7 +36,7 @@ export interface Clip {
   /** Keyed by parameter id: `opacity`, `x`, `y`, `scale`, `rotation` or `fx:<effect id>:<param>`. */
   keyframes: Record<string, Keyframe[]>;
 }
-export interface Transition { id: string; clip_a: string; clip_b: string; kind: string; duration: Rational }
+export interface Transition { id: string; clip_a: string; clip_b: string; kind: string; duration: Rational; /** Luma wipe: media id of the still mask picture. */ mask?: string | null; softness?: number; invert?: boolean }
 export interface Track { id: string; name: string; kind: TrackKind; muted: boolean; locked: boolean; gain_db: number; pan: number; solo: boolean; clips: Clip[]; transitions: Transition[] }
 export interface Marker { id: string; time: Rational; name: string; color: string; note: string }
 export interface Sequence { id: string; name: string; tracks: Track[]; markers: Marker[]; /** The contents of a compound clip (absent when false). */ compound?: boolean }
@@ -109,6 +109,7 @@ export type Command =
   | { type: "add_transition"; clip_a: string; clip_b: string; kind: string; duration: Rational }
   | { type: "remove_transition"; transition: string }
   | { type: "set_transition"; transition: string; kind?: string | null; duration?: Rational | null }
+  | { type: "set_transition_mask"; transition: string; media: string | null; softness?: number | null; invert?: boolean | null }
   | { type: "remove_ranges"; clip: string; ranges: [Rational, Rational][] }
   | { type: "animate_from_expression"; clip: string; param: string; expr: string; source: string | null; clamp: boolean }
   | { type: "nest_clips"; clips: string[]; name?: string | null }
