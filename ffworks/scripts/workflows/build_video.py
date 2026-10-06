@@ -105,7 +105,7 @@ for x in w:
     enabled = {int(k.split("-")[1]) for k in s if k.startswith("enable-") and s[k] and k.split("-")[1].isdigit()}
     enabled -= {1}  # section 1 = container/codec choice
     if not enabled or not enabled <= SECTIONS or any(s.get(k) for k in SKIP_KEYS): continue
-    if x["category"] not in ("color-grading", "retro-analog", "artistic-stylize", "glitch", "video-glitch-pipelines"): continue
+    if x["category"] not in ("color-grading", "retro-analog", "artistic-stylize", "glitch", "video-glitch-pipelines", "video-editing"): continue
     if s.get("emboss") or s.get("sobel") and False: continue
     c = chain(s)
     if not c: continue

@@ -1,3 +1,5 @@
+flip-horizontal	Flip Horizontal (Mirror)	video-editing	Mirror the video horizontally.	hflip
+flip-vertical	Flip Vertical	video-editing	Flip the video vertically.	vflip
 blockbuster-orange-teal	Blockbuster Orange & Teal	color-grading	Hollywood-style warm highlights and cool shadows.	eq=brightness=-0.02:contrast=1.15:saturation=1.1:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,colorchannelmixer=rr=1.12:rg=-0.04:rb=-0.15:gr=0:gg=1:gb=0:br=0.08:bg=0:bb=0.88
 moody-dark-cinematic	Moody Dark Cinematic	color-grading	High-contrast, low-saturation, blue-shifted shadows.	eq=brightness=-0.08:contrast=1.2:saturation=0.85:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,colorchannelmixer=rr=0.85:rg=0:rb=0:gr=0:gg=1:gb=0.05:br=0:bg=0:bb=1.15
 warm-golden-hour	Warm Golden Hour	color-grading	Warm sunset glow with extra red and yellow.	eq=brightness=0.05:contrast=1:saturation=1.2:gamma=1:gamma_r=1.2:gamma_g=1:gamma_b=0.85

@@ -71,11 +71,11 @@ mod tests {
 
     #[test]
     fn every_video_workflow_is_a_valid_chain() {
-        assert_eq!(video_workflows().len(), 40);
+        assert_eq!(video_workflows().len(), 42);
         let mut ids: Vec<_> = video_workflows().iter().map(|w| w.id).collect();
         ids.sort_unstable();
         ids.dedup();
-        assert_eq!(ids.len(), 40, "unique ids");
+        assert_eq!(ids.len(), 42, "unique ids");
         for w in video_workflows() {
             crate::effects::check_video_chain(w.chain).unwrap_or_else(|e| panic!("{}: {e}", w.id));
         }

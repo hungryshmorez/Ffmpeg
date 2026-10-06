@@ -21,7 +21,7 @@
     await P().dispatch({ type: "place_clip", media: m, track: v1, start: "0", source_in: "0", duration: "2", with_audio: false }); await sleep(400);
     await select($$(".track.video .clip")[0]);
     const wsel = await waitFor(() => $("select[aria-label='Video workflow']"));
-    step("a video clip's Effects panel offers the 40 video workflows", !!wsel && wsel.options.length === 41, wsel && wsel.options.length);
+    step("a video clip's Effects panel offers the 42 video workflows", !!wsel && wsel.options.length === 43, wsel && wsel.options.length);
     step("they are grouped by the browser app's categories", ["color-grading", "retro-analog", "artistic-stylize", "glitch"].every((c) => [...wsel.querySelectorAll("optgroup")].some((g) => g.label === c)));
     setSel(wsel, "sepia-tone"); await sleep(200);
     [...$("[aria-label='Video workflows']").querySelectorAll("button")].find((b) => b.textContent === "Apply").click(); await sleep(500);
