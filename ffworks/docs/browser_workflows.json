@@ -1,0 +1,4674 @@
+[
+ {
+  "id": "quick-trim",
+  "name": "Quick Trim",
+  "category": "video-editing",
+  "description": "Trim video to a specific start and end time.",
+  "tags": [
+   "trim",
+   "cut",
+   "start",
+   "end"
+  ],
+  "icon": "✂️",
+  "settings": {
+   "enable-2": true,
+   "trim-start": "00:00:05.000",
+   "trim-end": "00:00:15.000"
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "convert-mp4-to-webm",
+  "name": "Convert MP4 → WebM",
+  "category": "video-editing",
+  "description": "Re-encode to WebM/VP9 for smaller files and broad compatibility.",
+  "tags": [
+   "convert",
+   "webm",
+   "vp9",
+   "format"
+  ],
+  "icon": "🎬",
+  "settings": {},
+  "outputFormat": "webm",
+  "codec": "libvpx-vp9",
+  "crf": 30,
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "convert-webm-to-mp4",
+  "name": "Convert WebM → MP4",
+  "category": "video-editing",
+  "description": "Re-encode to MP4/H.264 for maximum compatibility.",
+  "tags": [
+   "convert",
+   "mp4",
+   "h264",
+   "format"
+  ],
+  "icon": "🎬",
+  "settings": {},
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 23,
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "compress-aggressive",
+  "name": "Reduce File Size (Aggressive)",
+  "category": "video-editing",
+  "description": "Heavy compression — 720p, veryfast preset, low audio bitrate.",
+  "tags": [
+   "compress",
+   "shrink",
+   "small",
+   "aggressive"
+  ],
+  "icon": "📦",
+  "settings": {
+   "vcodec": "libx264",
+   "enc-preset": "veryfast",
+   "crf": 32,
+   "ab-rate": "96k",
+   "enable-3": true,
+   "scale-w": 1280,
+   "scale-h": 720,
+   "scale-algo": "lanczos"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 32,
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "compress-moderate",
+  "name": "Reduce File Size (Moderate)",
+  "category": "video-editing",
+  "description": "Balanced compression that keeps quality and resolution.",
+  "tags": [
+   "compress",
+   "shrink",
+   "balanced"
+  ],
+  "icon": "📦",
+  "settings": {
+   "vcodec": "libx264",
+   "enc-preset": "fast",
+   "crf": 28,
+   "ab-rate": "128k"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 28,
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "downscale-720p",
+  "name": "Downscale to 720p",
+  "category": "video-editing",
+  "description": "Resize to 1280×720 using lanczos scaling.",
+  "tags": [
+   "resize",
+   "720p",
+   "scale"
+  ],
+  "icon": "📐",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 1280,
+   "scale-h": 720,
+   "scale-algo": "lanczos"
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "downscale-480p",
+  "name": "Downscale to 480p",
+  "category": "video-editing",
+  "description": "Resize to 854×480 using lanczos scaling.",
+  "tags": [
+   "resize",
+   "480p",
+   "scale"
+  ],
+  "icon": "📐",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 854,
+   "scale-h": 480,
+   "scale-algo": "lanczos"
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "downscale-360p",
+  "name": "Downscale to 360p",
+  "category": "video-editing",
+  "description": "Resize to 640×360 using lanczos scaling.",
+  "tags": [
+   "resize",
+   "360p",
+   "scale"
+  ],
+  "icon": "📐",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 640,
+   "scale-h": 360,
+   "scale-algo": "lanczos"
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "fps-30",
+  "name": "Change Frame Rate to 30fps",
+  "category": "video-editing",
+  "description": "Force the output to 30 frames per second.",
+  "tags": [
+   "fps",
+   "30",
+   "framerate"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-14": true,
+   "out-fps": 30
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "fps-24",
+  "name": "Change Frame Rate to 24fps (Cinematic)",
+  "category": "video-editing",
+  "description": "The classic cinematic 24fps frame rate.",
+  "tags": [
+   "fps",
+   "24",
+   "cinematic",
+   "framerate"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-14": true,
+   "out-fps": 24
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "fps-60",
+  "name": "Change Frame Rate to 60fps",
+  "category": "video-editing",
+  "description": "High-frame-rate 60fps for smooth motion.",
+  "tags": [
+   "fps",
+   "60",
+   "smooth",
+   "framerate"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-14": true,
+   "out-fps": 60
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "extract-frame",
+  "name": "Extract Still Frame / Thumbnail",
+  "category": "video-editing",
+  "description": "Extract a single frame at the 2-second mark as a JPEG image.",
+  "tags": [
+   "frame",
+   "thumbnail",
+   "still",
+   "jpeg"
+  ],
+  "icon": "🖼️",
+  "settings": {
+   "enable-1": true,
+   "out-format": "jpg"
+  },
+  "outputFormat": "jpg",
+  "codec": "mjpeg",
+  "extractFrame": 2,
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "rotate-90-cw",
+  "name": "Rotate 90° Clockwise",
+  "category": "video-editing",
+  "description": "Rotate the video 90° clockwise.",
+  "tags": [
+   "rotate",
+   "90",
+   "clockwise"
+  ],
+  "icon": "↻",
+  "settings": {
+   "enable-5": true,
+   "rotate": "90cw"
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "rotate-90-ccw",
+  "name": "Rotate 90° Counter-Clockwise",
+  "category": "video-editing",
+  "description": "Rotate the video 90° counter-clockwise.",
+  "tags": [
+   "rotate",
+   "90",
+   "counter-clockwise"
+  ],
+  "icon": "↺",
+  "settings": {
+   "enable-5": true,
+   "rotate": "90ccw"
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "rotate-180",
+  "name": "Rotate 180°",
+  "category": "video-editing",
+  "description": "Flip the video upside down.",
+  "tags": [
+   "rotate",
+   "180",
+   "upside"
+  ],
+  "icon": "↕",
+  "settings": {
+   "enable-5": true,
+   "rotate": "180"
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "flip-horizontal",
+  "name": "Flip Horizontal (Mirror)",
+  "category": "video-editing",
+  "description": "Mirror the video horizontally.",
+  "tags": [
+   "flip",
+   "mirror",
+   "horizontal"
+  ],
+  "icon": "⇋",
+  "settings": {
+   "enable-5": true,
+   "hflip": true
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "flip-vertical",
+  "name": "Flip Vertical",
+  "category": "video-editing",
+  "description": "Flip the video vertically.",
+  "tags": [
+   "flip",
+   "vertical"
+  ],
+  "icon": "⇅",
+  "settings": {
+   "enable-5": true,
+   "vflip": true
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "mute-strip-audio",
+  "name": "Mute Video (Strip Audio)",
+  "category": "video-editing",
+  "description": "Remove the audio track entirely from the video.",
+  "tags": [
+   "mute",
+   "silent",
+   "strip",
+   "no-audio"
+  ],
+  "icon": "🔇",
+  "settings": {
+   "enable-12": true,
+   "strip-audio": true
+  },
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "max-quality-archive",
+  "name": "Max Quality Archive Export",
+  "category": "video-editing",
+  "description": "CRF 15, slow preset, 320k audio — the highest quality export.",
+  "tags": [
+   "quality",
+   "archive",
+   "master",
+   "best"
+  ],
+  "icon": "🏆",
+  "settings": {
+   "vcodec": "libx264",
+   "enc-preset": "slow",
+   "crf": 15,
+   "ab-rate": "320k",
+   "pix-fmt": "yuv420p"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 15,
+  "_src": "VIDEO_EDITING_WORKFLOWS"
+ },
+ {
+  "id": "slow-0_5x",
+  "name": "Slow Motion 0.5×",
+  "category": "speed-time",
+  "description": "Half speed — video and audio slowed together.",
+  "tags": [
+   "slow",
+   "slowmo",
+   "0.5x",
+   "half"
+  ],
+  "icon": "⏪",
+  "settings": {
+   "enable-6": true,
+   "speed": 0.5,
+   "speed-video": true,
+   "speed-audio": true
+  },
+  "_src": "SPEED_TIME_WORKFLOWS"
+ },
+ {
+  "id": "slow-0_25x",
+  "name": "Slow Motion 0.25×",
+  "category": "speed-time",
+  "description": "Quarter speed — extreme slow motion.",
+  "tags": [
+   "slow",
+   "slowmo",
+   "0.25x",
+   "quarter"
+  ],
+  "icon": "⏪",
+  "settings": {
+   "enable-6": true,
+   "speed": 0.25,
+   "speed-video": true,
+   "speed-audio": true
+  },
+  "_src": "SPEED_TIME_WORKFLOWS"
+ },
+ {
+  "id": "speed-2x",
+  "name": "Speed Up 2×",
+  "category": "speed-time",
+  "description": "Double speed — video and audio sped up together.",
+  "tags": [
+   "fast",
+   "2x",
+   "speedup"
+  ],
+  "icon": "⏩",
+  "settings": {
+   "enable-6": true,
+   "speed": 2,
+   "speed-video": true,
+   "speed-audio": true
+  },
+  "_src": "SPEED_TIME_WORKFLOWS"
+ },
+ {
+  "id": "speed-4x",
+  "name": "Speed Up 4× (Timelapse)",
+  "category": "speed-time",
+  "description": "4× speed — classic timelapse.",
+  "tags": [
+   "fast",
+   "4x",
+   "timelapse"
+  ],
+  "icon": "⏩",
+  "settings": {
+   "enable-6": true,
+   "speed": 4,
+   "speed-video": true,
+   "speed-audio": true
+  },
+  "_src": "SPEED_TIME_WORKFLOWS"
+ },
+ {
+  "id": "speed-8x",
+  "name": "Speed Up 8× (Fast Timelapse)",
+  "category": "speed-time",
+  "description": "8× speed — fast timelapse. Strips audio.",
+  "tags": [
+   "fast",
+   "8x",
+   "timelapse",
+   "strip-audio"
+  ],
+  "icon": "⏩",
+  "settings": {
+   "enable-6": true,
+   "speed": 8,
+   "speed-video": true,
+   "speed-audio": false,
+   "enable-12": true,
+   "strip-audio": true
+  },
+  "_src": "SPEED_TIME_WORKFLOWS"
+ },
+ {
+  "id": "reverse-video",
+  "name": "Reverse Video",
+  "category": "speed-time",
+  "description": "Play the video backwards. Both video and audio reversed.",
+  "tags": [
+   "reverse",
+   "backwards"
+  ],
+  "icon": "⏮",
+  "settings": {
+   "enable-6": true,
+   "rev-video": true,
+   "rev-audio": true
+  },
+  "_src": "SPEED_TIME_WORKFLOWS"
+ },
+ {
+  "id": "boomerang",
+  "name": "Boomerang Loop",
+  "category": "speed-time",
+  "description": "Creates a forward-then-reverse loop effect.",
+  "tags": [
+   "boomerang",
+   "loop",
+   "ping-pong"
+  ],
+  "icon": "🔁",
+  "settings": {
+   "enable-1": true,
+   "vcodec": "libx264",
+   "enc-preset": "fast",
+   "crf": 23,
+   "ab-rate": "128k"
+  },
+  "boomerang": true,
+  "_src": "SPEED_TIME_WORKFLOWS"
+ },
+ {
+  "id": "extract-mp3",
+  "name": "Extract Audio as MP3",
+  "category": "audio",
+  "description": "Rip the audio track to MP3 at 192kbps, 44.1kHz.",
+  "tags": [
+   "extract",
+   "audio",
+   "mp3",
+   "rip"
+  ],
+  "icon": "🎵",
+  "settings": {
+   "enable-18": true,
+   "extract-audio": true,
+   "audio-format": "mp3",
+   "audio-rate": 44100
+  },
+  "outputFormat": "mp3",
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "extract-wav",
+  "name": "Extract Audio as WAV (Lossless)",
+  "category": "audio",
+  "description": "Rip the audio track to uncompressed WAV at 48kHz.",
+  "tags": [
+   "extract",
+   "audio",
+   "wav",
+   "lossless"
+  ],
+  "icon": "🎵",
+  "settings": {
+   "enable-18": true,
+   "extract-audio": true,
+   "audio-format": "wav",
+   "audio-rate": 48000
+  },
+  "outputFormat": "wav",
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "extract-aac",
+  "name": "Extract Audio as AAC",
+  "category": "audio",
+  "description": "Rip the audio track to AAC at 256kbps.",
+  "tags": [
+   "extract",
+   "audio",
+   "aac",
+   "m4a"
+  ],
+  "icon": "🎵",
+  "settings": {
+   "enable-18": true,
+   "extract-audio": true,
+   "audio-format": "aac",
+   "audio-rate": 44100
+  },
+  "outputFormat": "aac",
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "normalize-audio",
+  "name": "Normalize Audio (Loudness Standard)",
+  "category": "audio",
+  "description": "Apply EBU R128 loudness normalization.",
+  "tags": [
+   "normalize",
+   "loudness",
+   "ebur128",
+   "loudnorm"
+  ],
+  "icon": "🔊",
+  "settings": {
+   "enable-12": true,
+   "loudnorm": true
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "podcast-processing",
+  "name": "Podcast Processing",
+  "category": "audio",
+  "description": "Highpass 80Hz, lowpass 15kHz, loudnorm, neutral volume — the podcast chain.",
+  "tags": [
+   "podcast",
+   "voice",
+   "speech",
+   "broadcast"
+  ],
+  "icon": "🎙️",
+  "settings": {
+   "enable-12": true,
+   "highpass": 80,
+   "lowpass": 15000,
+   "loudnorm": true,
+   "volume": 1
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "bass-boost",
+  "name": "Bass Boost",
+  "category": "audio",
+  "description": "+12dB on the bass band.",
+  "tags": [
+   "bass",
+   "boost",
+   "low-end"
+  ],
+  "icon": "🔊",
+  "settings": {
+   "enable-12": true,
+   "bass": 12
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "treble-boost",
+  "name": "Treble Boost",
+  "category": "audio",
+  "description": "+10dB on the treble band.",
+  "tags": [
+   "treble",
+   "boost",
+   "high-end"
+  ],
+  "icon": "🔊",
+  "settings": {
+   "enable-12": true,
+   "treble": 10
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "add-echo",
+  "name": "Add Echo Effect",
+  "category": "audio",
+  "description": "Cascade echo with 200ms delay and 0.4 decay.",
+  "tags": [
+   "echo",
+   "delay",
+   "reverb"
+  ],
+  "icon": "🔁",
+  "settings": {
+   "enable-12": true,
+   "aecho": true,
+   "aecho-delay": 200,
+   "aecho-decay": 0.4
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "add-flanger",
+  "name": "Add Flanger Effect",
+  "category": "audio",
+  "description": "Jet-plane flanger modulation.",
+  "tags": [
+   "flanger",
+   "modulation"
+  ],
+  "icon": "✈️",
+  "settings": {
+   "enable-12": true,
+   "flanger": true
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "tremolo-effect",
+  "name": "Tremolo Effect",
+  "category": "audio",
+  "description": "5Hz amplitude modulation at depth 0.7.",
+  "tags": [
+   "tremolo",
+   "modulation",
+   "amplitude"
+  ],
+  "icon": "🌊",
+  "settings": {
+   "enable-12": true,
+   "tremolo": true,
+   "tremolo-f": 5,
+   "tremolo-d": 0.7
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "vibrato-effect",
+  "name": "Vibrato Effect",
+  "category": "audio",
+  "description": "5Hz frequency modulation at depth 0.5.",
+  "tags": [
+   "vibrato",
+   "modulation",
+   "frequency"
+  ],
+  "icon": "🎵",
+  "settings": {
+   "enable-12": true,
+   "vibrato": true,
+   "vibrato-f": 5,
+   "vibrato-d": 0.5
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "audio-speed-1_5x",
+  "name": "Audio Speed Up 1.5×",
+  "category": "audio",
+  "description": "Speed up just the audio track to 1.5× without affecting video.",
+  "tags": [
+   "audio",
+   "speed",
+   "fast",
+   "1.5x"
+  ],
+  "icon": "⏩",
+  "settings": {
+   "enable-12": true,
+   "audio-speed": 1.5
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "audio-slow-0_75x",
+  "name": "Audio Slow Down 0.75×",
+  "category": "audio",
+  "description": "Slow down just the audio track to 0.75× without affecting video.",
+  "tags": [
+   "audio",
+   "slow",
+   "0.75x"
+  ],
+  "icon": "⏪",
+  "settings": {
+   "enable-12": true,
+   "audio-speed": 0.75
+  },
+  "_src": "AUDIO_WORKFLOWS"
+ },
+ {
+  "id": "blockbuster-orange-teal",
+  "name": "Blockbuster Orange & Teal",
+  "category": "color-grading",
+  "description": "Hollywood-style warm highlights and cool shadows.",
+  "tags": [
+   "orange",
+   "teal",
+   "blockbuster",
+   "cinematic"
+  ],
+  "icon": "🎨",
+  "settings": {
+   "enable-7": true,
+   "eq-contrast": 1.15,
+   "eq-saturation": 1.1,
+   "eq-brightness": -0.02,
+   "enable-8": true,
+   "ccm-rr": 1.12,
+   "ccm-rg": -0.04,
+   "ccm-rb": -0.15,
+   "ccm-gr": 0,
+   "ccm-gg": 1,
+   "ccm-gb": 0,
+   "ccm-br": 0.08,
+   "ccm-bg": 0,
+   "ccm-bb": 0.88
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "moody-dark-cinematic",
+  "name": "Moody Dark Cinematic",
+  "category": "color-grading",
+  "description": "High-contrast, low-saturation, blue-shifted shadows.",
+  "tags": [
+   "moody",
+   "dark",
+   "cinematic",
+   "blue"
+  ],
+  "icon": "🌑",
+  "settings": {
+   "enable-7": true,
+   "eq-contrast": 1.2,
+   "eq-brightness": -0.08,
+   "eq-saturation": 0.85,
+   "hue-h": 0,
+   "enable-8": true,
+   "ccm-rr": 0.85,
+   "ccm-rg": 0,
+   "ccm-rb": 0,
+   "ccm-gr": 0,
+   "ccm-gg": 1,
+   "ccm-gb": 0.05,
+   "ccm-br": 0,
+   "ccm-bg": 0,
+   "ccm-bb": 1.15
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "warm-golden-hour",
+  "name": "Warm Golden Hour",
+  "category": "color-grading",
+  "description": "Warm sunset glow with extra red and yellow.",
+  "tags": [
+   "warm",
+   "golden",
+   "sunset",
+   "gold"
+  ],
+  "icon": "🌅",
+  "settings": {
+   "enable-7": true,
+   "eq-brightness": 0.05,
+   "eq-saturation": 1.2,
+   "eq-gamma-r": 1.2,
+   "eq-gamma-b": 0.85
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "cool-moonlight",
+  "name": "Cool Moonlight",
+  "category": "color-grading",
+  "description": "Cool blue-dominant night-time palette.",
+  "tags": [
+   "cool",
+   "blue",
+   "moonlight",
+   "night"
+  ],
+  "icon": "🌙",
+  "settings": {
+   "enable-7": true,
+   "eq-brightness": -0.05,
+   "eq-saturation": 0.8,
+   "eq-gamma-b": 1.3,
+   "eq-gamma-r": 0.85,
+   "eq-contrast": 1.1
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "vhs-retro",
+  "name": "VHS Retro Look",
+  "category": "color-grading",
+  "description": "Vintage VHS with color bleed, scan lines, and film grain.",
+  "tags": [
+   "vhs",
+   "retro",
+   "vintage",
+   "analog",
+   "80s",
+   "90s"
+  ],
+  "icon": "📼",
+  "settings": {
+   "enable-7": true,
+   "eq-saturation": 1.2,
+   "eq-contrast": 0.95,
+   "enable-13": true,
+   "add-noise": true,
+   "noise-strength": 15,
+   "noise-type": "t+u",
+   "enable-19": true,
+   "g-geq-enable": true,
+   "g-geq-preset": "scanline",
+   "g-geq-spacing": 3,
+   "g-lagfun-enable": true,
+   "g-lagfun-decay": 0.92
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "vintage-film",
+  "name": "Vintage Film",
+  "category": "color-grading",
+  "description": "Faded, slightly desaturated film with a vignette.",
+  "tags": [
+   "vintage",
+   "film",
+   "faded",
+   "old"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-7": true,
+   "eq-saturation": 0.75,
+   "eq-contrast": 1.1,
+   "eq-brightness": -0.02,
+   "eq-gamma": 1.1,
+   "enable-16": true,
+   "vignette": true,
+   "vignette-angle": 0.628
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "sepia-tone",
+  "name": "Sepia Tone",
+  "category": "color-grading",
+  "description": "Classic brownish sepia via channel mixer.",
+  "tags": [
+   "sepia",
+   "brown",
+   "old",
+   "photograph"
+  ],
+  "icon": "🟫",
+  "settings": {
+   "enable-8": true,
+   "ccm-rr": 0.393,
+   "ccm-rg": 0.769,
+   "ccm-rb": 0.189,
+   "ccm-gr": 0.349,
+   "ccm-gg": 0.686,
+   "ccm-gb": 0.168,
+   "ccm-br": 0.272,
+   "ccm-bg": 0.534,
+   "ccm-bb": 0.131
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "high-contrast-bw",
+  "name": "High Contrast Black & White",
+  "category": "color-grading",
+  "description": "Saturation to zero, contrast pushed to 1.4.",
+  "tags": [
+   "bw",
+   "black",
+   "white",
+   "monochrome",
+   "contrast"
+  ],
+  "icon": "⚫",
+  "settings": {
+   "enable-7": true,
+   "eq-saturation": 0,
+   "eq-contrast": 1.4,
+   "eq-brightness": -0.03
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "desaturated-bleach-bypass",
+  "name": "Desaturated / Bleach Bypass",
+  "category": "color-grading",
+  "description": "Half-saturation, high-contrast bleach-bypass look.",
+  "tags": [
+   "bleach",
+   "bypass",
+   "desaturated",
+   "gritty"
+  ],
+  "icon": "🩶",
+  "settings": {
+   "enable-7": true,
+   "eq-saturation": 0.5,
+   "eq-contrast": 1.3,
+   "eq-brightness": -0.02
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "neon-cyberpunk",
+  "name": "Neon Cyberpunk",
+  "category": "color-grading",
+  "description": "Cranked saturation, hue shift, channel split, and lagfun trails.",
+  "tags": [
+   "cyberpunk",
+   "neon",
+   "futuristic",
+   "synthwave"
+  ],
+  "icon": "🌃",
+  "settings": {
+   "enable-7": true,
+   "eq-contrast": 1.3,
+   "eq-saturation": 1.5,
+   "eq-brightness": -0.05,
+   "hue-h": 20,
+   "hue-s": 1.5,
+   "enable-9": true,
+   "sharpen-amt": 1,
+   "enable-19": true,
+   "g-geq-enable": true,
+   "g-geq-preset": "chansplit",
+   "g-geq-offset": 8,
+   "g-lagfun-enable": true,
+   "g-lagfun-decay": 0.93
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "dream-ethereal",
+  "name": "Dream / Ethereal",
+  "category": "color-grading",
+  "description": "Soft glow, gentle blur, and a white fade-in.",
+  "tags": [
+   "dream",
+   "ethereal",
+   "soft",
+   "glow",
+   "fuzzy"
+  ],
+  "icon": "☁️",
+  "settings": {
+   "enable-7": true,
+   "eq-brightness": 0.08,
+   "eq-saturation": 0.85,
+   "eq-gamma": 0.9,
+   "enable-9": true,
+   "blur-type": "gblur",
+   "blur-strength": 3,
+   "enable-10": true,
+   "fade-in-dur": 1.5,
+   "fade-in-type": "white"
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "night-vision",
+  "name": "Night Vision",
+  "category": "color-grading",
+  "description": "Green-tinted low-light look with strong noise.",
+  "tags": [
+   "night",
+   "vision",
+   "green",
+   "military"
+  ],
+  "icon": "🟢",
+  "settings": {
+   "enable-8": true,
+   "ccm-rr": 0.1,
+   "ccm-rg": 0.1,
+   "ccm-rb": 0,
+   "ccm-gr": 0.2,
+   "ccm-gg": 1.5,
+   "ccm-gb": 0.2,
+   "ccm-br": 0,
+   "ccm-bg": 0.1,
+   "ccm-bb": 0.1,
+   "enable-13": true,
+   "add-noise": true,
+   "noise-strength": 20,
+   "noise-type": "t"
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "film-grain-vignette",
+  "name": "Film Grain + Vignette",
+  "category": "color-grading",
+  "description": "Heavy grain with a subtle vignette.",
+  "tags": [
+   "grain",
+   "vignette",
+   "film",
+   "texture"
+  ],
+  "icon": "🌫️",
+  "settings": {
+   "enable-13": true,
+   "grain-overlay": true,
+   "enable-16": true,
+   "vignette": true,
+   "vignette-angle": 0.6,
+   "enable-7": true,
+   "eq-saturation": 0.9,
+   "eq-contrast": 1.05
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "cross-process",
+  "name": "Cross Process",
+  "category": "color-grading",
+  "description": "Channel-mixed cross-processed look.",
+  "tags": [
+   "cross",
+   "process",
+   "analog",
+   "experimental"
+  ],
+  "icon": "🌀",
+  "settings": {
+   "enable-8": true,
+   "ccm-rr": 1,
+   "ccm-rg": 0.3,
+   "ccm-rb": -0.2,
+   "ccm-gr": -0.1,
+   "ccm-gg": 1,
+   "ccm-gb": 0.1,
+   "ccm-br": 0.2,
+   "ccm-bg": -0.2,
+   "ccm-bb": 1.2
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "high-key-bright",
+  "name": "High Key Bright",
+  "category": "color-grading",
+  "description": "Bright, low-contrast dreamy highlight look.",
+  "tags": [
+   "high-key",
+   "bright",
+   "dreamy"
+  ],
+  "icon": "☀️",
+  "settings": {
+   "enable-7": true,
+   "eq-contrast": 0.9,
+   "eq-brightness": 0.1,
+   "eq-saturation": 0.9,
+   "eq-gamma": 0.85
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "invert-negative",
+  "name": "Invert / Negative",
+  "category": "color-grading",
+  "description": "Invert all colors (film negative).",
+  "tags": [
+   "invert",
+   "negative",
+   "negate"
+  ],
+  "icon": "🔄",
+  "settings": {
+   "enable-7": true,
+   "negate": true
+  },
+  "_src": "COLOR_GRADING_WORKFLOWS"
+ },
+ {
+  "id": "datamosh-simulation",
+  "name": "Datamosh Simulation",
+  "category": "glitch",
+  "description": "lagfun + tmix + tblend difference — fake datamoshing.",
+  "tags": [
+   "datamosh",
+   "mash",
+   "frame",
+   "lagfun"
+  ],
+  "icon": "👾",
+  "settings": {
+   "enable-19": true,
+   "g-tmix-enable": true,
+   "g-tmix-frames": 8,
+   "g-lagfun-enable": true,
+   "g-lagfun-decay": 0.97,
+   "g-tblend-enable": true,
+   "g-tblend-mode": "difference"
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "rgb-channel-split",
+  "name": "RGB Channel Split",
+  "category": "glitch",
+  "description": "Split the R and B channels by 15 pixels.",
+  "tags": [
+   "rgb",
+   "channel",
+   "split",
+   "chromatic"
+  ],
+  "icon": "🌈",
+  "settings": {
+   "enable-19": true,
+   "g-geq-enable": true,
+   "g-geq-preset": "chansplit",
+   "g-geq-offset": 15
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "scanline-corruption",
+  "name": "Scanline Corruption",
+  "category": "glitch",
+  "description": "Inverted scanlines every 3 pixels.",
+  "tags": [
+   "scanline",
+   "corruption",
+   "pixel"
+  ],
+  "icon": "🟥",
+  "settings": {
+   "enable-19": true,
+   "g-geq-enable": true,
+   "g-geq-preset": "scanline",
+   "g-geq-spacing": 3,
+   "g-geq-intensity": 50
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "vhs-tracking-error",
+  "name": "VHS Tracking Error",
+  "category": "glitch",
+  "description": "Horizontal-shift glitch with VHS-style noise.",
+  "tags": [
+   "vhs",
+   "tracking",
+   "error",
+   "horizontal"
+  ],
+  "icon": "📺",
+  "settings": {
+   "enable-19": true,
+   "g-geq-enable": true,
+   "g-geq-preset": "hshift",
+   "g-geq-intensity": 40,
+   "enable-13": true,
+   "add-noise": true,
+   "noise-strength": 25,
+   "noise-type": "t+u"
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "frame-ghosting",
+  "name": "Frame Ghosting",
+  "category": "glitch",
+  "description": "tmix across 15 frames for heavy ghost trails.",
+  "tags": [
+   "ghost",
+   "trail",
+   "tmix",
+   "blur"
+  ],
+  "icon": "👻",
+  "settings": {
+   "enable-19": true,
+   "g-tmix-enable": true,
+   "g-tmix-frames": 15
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "warp-melt",
+  "name": "Warp / Melt",
+  "category": "glitch",
+  "description": "Sin/cos warp distortion across the frame.",
+  "tags": [
+   "warp",
+   "melt",
+   "distortion"
+  ],
+  "icon": "🫠",
+  "settings": {
+   "enable-19": true,
+   "g-geq-enable": true,
+   "g-geq-preset": "warp",
+   "g-geq-freq": 15,
+   "g-geq-amp": 20
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "edge-detect-wireframe",
+  "name": "Edge Detect Wireframe",
+  "category": "glitch",
+  "description": "Sobel-style wireframe edge detection.",
+  "tags": [
+   "edge",
+   "wireframe",
+   "sobel"
+  ],
+  "icon": "🔲",
+  "settings": {
+   "enable-16": true,
+   "edge-detect": true,
+   "edge-mode": "wires",
+   "edge-low": 0.1,
+   "edge-high": 0.3
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "posterize",
+  "name": "Posterize (Limited Colors)",
+  "category": "glitch",
+  "description": "Quantize each color channel to 3 bits — 8 levels per channel.",
+  "tags": [
+   "posterize",
+   "quantize",
+   "limited",
+   "colors"
+  ],
+  "icon": "🎨",
+  "settings": {
+   "enable-16": true,
+   "posterize": 3
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "color-corruption",
+  "name": "Color Corruption",
+  "category": "glitch",
+  "description": "Per-frame geq color corruption. Each frame re-evaluates the corruption expression using random(1+N), so the effect actually flickers and shifts per frame. This is a SLOW filter (FILTER_COST.geq = 100) and the cost guard will warn on long clips — recommended for clips under 30 seconds.",
+  "tags": [
+   "color",
+   "corruption",
+   "random",
+   "animated",
+   "per-frame",
+   "geq"
+  ],
+  "icon": "🎭",
+  "vf": "geq=r='if(between(r(X,Y),50,200),r(X,Y)+(random(1+N)*2-1)*40,r(X,Y))':g='if(between(g(X,Y),50,200),g(X,Y)+(random(1+N)*2-1)*40,g(X,Y))':b='if(between(b(X,Y),50,200),b(X,Y)+(random(1+N)*2-1)*40,b(X,Y))'",
+  "settings": {
+   "enable-19": true,
+   "g-cc-enable": true,
+   "g-cc-mode": "animated",
+   "g-cc-low": 50,
+   "g-cc-high": 200,
+   "g-cc-spread": 40
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "frame-amplify",
+  "name": "Frame Amplify (Motion Trails)",
+  "category": "glitch",
+  "description": "Amplify inter-frame motion differences.",
+  "tags": [
+   "amplify",
+   "motion",
+   "trail",
+   "radius"
+  ],
+  "icon": "📈",
+  "settings": {
+   "enable-19": true,
+   "g-amp-enable": true,
+   "g-amp-radius": 3,
+   "g-amp-factor": 8,
+   "g-amp-threshold": 10
+  },
+  "_src": "GLITCH_WORKFLOWS"
+ },
+ {
+  "id": "instagram-post",
+  "name": "Instagram Post (Square 1:1)",
+  "category": "social-media",
+  "description": "1080×1080 square for Instagram posts.",
+  "tags": [
+   "instagram",
+   "square",
+   "1:1",
+   "post"
+  ],
+  "icon": "📱",
+  "settings": {
+   "enable-4": true,
+   "crop-w": 1080,
+   "crop-h": 1080,
+   "crop-center": true,
+   "enable-14": true,
+   "out-fps": 30,
+   "ab-rate": "128k"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 23,
+  "_src": "SOCIAL_MEDIA_WORKFLOWS"
+ },
+ {
+  "id": "instagram-reel-tiktok",
+  "name": "Instagram Reel / TikTok (9:16)",
+  "category": "social-media",
+  "description": "1080×1920 vertical for Reels and TikTok.",
+  "tags": [
+   "instagram",
+   "reel",
+   "tiktok",
+   "vertical",
+   "9:16"
+  ],
+  "icon": "📱",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 1080,
+   "scale-h": 1920,
+   "enable-14": true,
+   "out-fps": 30,
+   "ab-rate": "128k"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 23,
+  "_src": "SOCIAL_MEDIA_WORKFLOWS"
+ },
+ {
+  "id": "youtube-short",
+  "name": "YouTube Short (9:16 Vertical)",
+  "category": "social-media",
+  "description": "1080×1920 vertical for YouTube Shorts with max quality.",
+  "tags": [
+   "youtube",
+   "short",
+   "shorts",
+   "9:16",
+   "vertical"
+  ],
+  "icon": "📱",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 1080,
+   "scale-h": 1920,
+   "enable-14": true,
+   "out-fps": 30,
+   "ab-rate": "192k"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 18,
+  "_src": "SOCIAL_MEDIA_WORKFLOWS"
+ },
+ {
+  "id": "twitter-x",
+  "name": "Twitter/X Video (16:9)",
+  "category": "social-media",
+  "description": "1280×720 for Twitter/X. Note: max 2:20 duration.",
+  "tags": [
+   "twitter",
+   "x",
+   "social",
+   "16:9"
+  ],
+  "icon": "🐦",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 1280,
+   "scale-h": 720,
+   "enable-14": true,
+   "out-fps": 30,
+   "ab-rate": "128k"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 25,
+  "_src": "SOCIAL_MEDIA_WORKFLOWS"
+ },
+ {
+  "id": "discord-embed",
+  "name": "Discord Embed (< 8MB)",
+  "category": "social-media",
+  "description": "Aggressive compression to fit Discord's 8MB upload limit.",
+  "tags": [
+   "discord",
+   "embed",
+   "compress",
+   "small"
+  ],
+  "icon": "💬",
+  "settings": {
+   "vcodec": "libx264",
+   "enc-preset": "veryfast",
+   "crf": 35,
+   "enable-3": true,
+   "scale-w": 854,
+   "scale-h": 480,
+   "scale-algo": "lanczos",
+   "ab-rate": "64k"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 35,
+  "_src": "SOCIAL_MEDIA_WORKFLOWS"
+ },
+ {
+  "id": "whatsapp-status",
+  "name": "WhatsApp Status",
+  "category": "social-media",
+  "description": "720p, 30 seconds max — fits WhatsApp status constraints.",
+  "tags": [
+   "whatsapp",
+   "status",
+   "720p"
+  ],
+  "icon": "📱",
+  "settings": {
+   "vcodec": "libx264",
+   "enc-preset": "fast",
+   "crf": 30,
+   "enable-3": true,
+   "scale-w": 1280,
+   "scale-h": 720,
+   "enable-2": true,
+   "trim-end": "00:00:30.000",
+   "ab-rate": "96k"
+  },
+  "outputFormat": "mp4",
+  "codec": "libx264",
+  "crf": 30,
+  "_src": "SOCIAL_MEDIA_WORKFLOWS"
+ },
+ {
+  "id": "gif-standard",
+  "name": "Video to GIF (Standard)",
+  "category": "gif",
+  "description": "480px wide, 15fps, palette-optimized.",
+  "tags": [
+   "gif",
+   "animated",
+   "loop",
+   "standard"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-17": true,
+   "gif-enable": true,
+   "gif-w": 480,
+   "gif-fps": 15,
+   "gif-palette": true,
+   "gif-loop": 0
+  },
+  "outputFormat": "gif",
+  "_src": "GIF_WORKFLOWS"
+ },
+ {
+  "id": "gif-high-quality",
+  "name": "Video to GIF (High Quality)",
+  "category": "gif",
+  "description": "640px wide, 24fps, palette-optimized.",
+  "tags": [
+   "gif",
+   "hq",
+   "high-quality",
+   "smooth"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-17": true,
+   "gif-enable": true,
+   "gif-w": 640,
+   "gif-fps": 24,
+   "gif-palette": true,
+   "gif-loop": 0
+  },
+  "outputFormat": "gif",
+  "_src": "GIF_WORKFLOWS"
+ },
+ {
+  "id": "gif-tiny",
+  "name": "Video to GIF (Tiny/Fast)",
+  "category": "gif",
+  "description": "320px wide, 10fps — tiny and fast.",
+  "tags": [
+   "gif",
+   "tiny",
+   "small",
+   "fast"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-17": true,
+   "gif-enable": true,
+   "gif-w": 320,
+   "gif-fps": 10,
+   "gif-palette": true,
+   "gif-loop": 0
+  },
+  "outputFormat": "gif",
+  "_src": "GIF_WORKFLOWS"
+ },
+ {
+  "id": "gif-reverse",
+  "name": "Reverse GIF",
+  "category": "gif",
+  "description": "Reverse the video first, then export as a GIF.",
+  "tags": [
+   "gif",
+   "reverse",
+   "backwards"
+  ],
+  "icon": "⏮",
+  "settings": {
+   "enable-6": true,
+   "rev-video": true,
+   "enable-17": true,
+   "gif-enable": true,
+   "gif-w": 480,
+   "gif-fps": 15,
+   "gif-palette": true,
+   "gif-loop": 0
+  },
+  "outputFormat": "gif",
+  "_src": "GIF_WORKFLOWS"
+ },
+ {
+  "id": "strip-metadata",
+  "name": "Strip All Metadata (Privacy)",
+  "category": "utility",
+  "description": "Removes all metadata from the output file.",
+  "tags": [
+   "metadata",
+   "privacy",
+   "strip",
+   "clean"
+  ],
+  "icon": "🧹",
+  "settings": {
+   "enable-22": true,
+   "strip-meta": true
+  },
+  "_src": "UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "add-watermark",
+  "name": "Add Copyright Watermark",
+  "category": "utility",
+  "description": "Stamp \"© Your Name 2026\" in the bottom-right corner.",
+  "tags": [
+   "watermark",
+   "text",
+   "copyright",
+   "stamp"
+  ],
+  "icon": "©️",
+  "settings": {
+   "enable-11": true,
+   "text-content": "© Your Name 2026",
+   "text-size": 18,
+   "text-color": "#ffffff",
+   "text-bg": "#000000",
+   "text-bg-opacity": 0.5,
+   "text-x-align": "right",
+   "text-y-align": "bottom",
+   "text-x-offset": 16,
+   "text-y-offset": 16
+  },
+  "_src": "UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "preview-10s",
+  "name": "Preview First 10 Seconds",
+  "category": "utility",
+  "description": "Trim to the first 10 seconds and stream-copy (no re-encode).",
+  "tags": [
+   "preview",
+   "trim",
+   "fast",
+   "copy"
+  ],
+  "icon": "⏯",
+  "settings": {
+   "enable-2": true,
+   "trim-start": "00:00:00.000",
+   "trim-end": "00:00:10.000",
+   "vcodec": "copy",
+   "acodec": "copy"
+  },
+  "_src": "UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "fade-in-out",
+  "name": "Fade In + Fade Out",
+  "category": "utility",
+  "description": "Black fade in (2s) and black fade out (2s) with matching audio fades.",
+  "tags": [
+   "fade",
+   "intro",
+   "outro",
+   "audio"
+  ],
+  "icon": "🌗",
+  "settings": {
+   "enable-10": true,
+   "fade-in-dur": 2,
+   "fade-in-type": "black",
+   "fade-out-dur": 2,
+   "fade-out-type": "black",
+   "afade-in": 1.5,
+   "afade-out": 2
+  },
+  "_src": "UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "letterbox",
+  "name": "Letterbox (Add Black Bars)",
+  "category": "utility",
+  "description": "Pad to 1920×1080 with black bars around the video.",
+  "tags": [
+   "letterbox",
+   "pad",
+   "bars",
+   "cinema"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-15": true,
+   "pad-w": 1920,
+   "pad-h": 1080,
+   "pad-color": "black",
+   "pad-center": true
+  },
+  "_src": "UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "am-bass-dubstep",
+  "name": "Bass-Boosted Dubstep Mastering",
+  "category": "audio-mastering",
+  "description": "Heavy sub-bass boost with surgical EQ — for dubstep, trap, and bass music.",
+  "tags": [
+   "bass",
+   "dubstep",
+   "trap",
+   "mastering",
+   "EQ"
+  ],
+  "icon": "🎛️",
+  "fullChain": "equalizer=f=60:t=q:w=1:g=6,equalizer=f=100:t=q:w=1.5:g=4,equalizer=f=40:t=q:w=2:g=8,acompressor=threshold=-18dB:ratio=3:attack=5:release=80:makeup=2,loudnorm=I=-14:TP=-1:LRA=11,volume=1.3",
+  "simplifiedChain": "equalizer=f=60:t=q:w=1:g=6,equalizer=f=100:t=q:w=1.5:g=4,equalizer=f=40:t=q:w=2:g=8,volume=1.3,lowpass=f=16000",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-country-trap",
+  "name": "Country Trap Mastering",
+  "category": "audio-mastering",
+  "description": "Warm low-end with scooped mids and crisp highs.",
+  "tags": [
+   "country",
+   "trap",
+   "mastering",
+   "warm"
+  ],
+  "icon": "🎛️",
+  "fullChain": "equalizer=f=80:t=q:w=1.2:g=4,equalizer=f=250:t=q:w=1:g=-2,equalizer=f=2500:t=q:w=1:g=3,acompressor=threshold=-16dB:ratio=2.5:attack=10:release=100:makeup=2,aphaser=in_gain=0.4:out_gain=0.74:delay=3:decay=0.4:speed=0.5,chorus=0.5:0.9:50|60:0.4|0.32:0.25|0.4:1|2,loudnorm=I=-14:TP=-1:LRA=11,volume=1.2",
+  "simplifiedChain": "equalizer=f=80:t=q:w=1.2:g=4,equalizer=f=250:t=q:w=1:g=-2,equalizer=f=2500:t=q:w=1:g=3,aecho=0.8:0.7:30|60:0.4|0.3,volume=1.2",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-slushwave",
+  "name": "Slushwave Recipe",
+  "category": "audio-mastering",
+  "description": "Pitched-down, lo-fi, washed-out vaporwave — the canonical slushwave sound.",
+  "tags": [
+   "slushwave",
+   "vaporwave",
+   "lofi",
+   "pitched",
+   "slow",
+   "dreamy"
+  ],
+  "icon": "🫧",
+  "fullChain": "asetrate=44100*0.85,aresample=44100,lowpass=f=8000,highpass=f=80,equalizer=f=400:t=q:w=1:g=2,chorus=0.7:0.9:55|60:0.4|0.32:0.25|0.4:2|1,aecho=0.8:0.9:300|600:0.4|0.3,aphaser=in_gain=0.4:out_gain=0.7:delay=2:decay=0.3:speed=0.5,volume=1.2",
+  "simplifiedChain": "asetrate=44100*0.85,aresample=44100,lowpass=f=8000,highpass=f=80,equalizer=f=400:t=q:w=1:g=2,aecho=0.8:0.9:300|600:0.4|0.3,volume=1.2",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-tidal-ghost",
+  "name": "Tidal Ghost Ultimate",
+  "category": "audio-mastering",
+  "description": "Pitched-down ghostly texture with phaser, flanger, deep echo, and mastering.",
+  "tags": [
+   "ghost",
+   "tidal",
+   "ethereal",
+   "phaser",
+   "flanger",
+   "haunted"
+  ],
+  "icon": "👻",
+  "fullChain": "asetrate=44100*0.85,aresample=44100,flanger=delay=3:depth=4:speed=0.4,aecho=0.8:0.9:500|1000|1500:0.5|0.4|0.3,aphaser=in_gain=0.4:out_gain=0.7:delay=3:decay=0.4:speed=0.5,acompressor=threshold=-20dB:ratio=3:attack=5:release=80:makeup=2,loudnorm=I=-14:TP=-1:LRA=11,volume=1.1",
+  "simplifiedChain": "asetrate=44100*0.85,aresample=44100,flanger=delay=3:depth=4:speed=0.4,aecho=0.8:0.9:500|1000|1500:0.5|0.4|0.3,volume=1.1",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-ultimate-cd",
+  "name": "Ultimate CD Mastering",
+  "category": "audio-mastering",
+  "description": "Clean, professional CD-quality mastering chain. Multi-band EQ, compression, limiting, normalization.",
+  "tags": [
+   "mastering",
+   "CD",
+   "professional",
+   "clean",
+   "broadcast"
+  ],
+  "icon": "💿",
+  "fullChain": "highpass=f=20,lowpass=f=20000,equalizer=f=40:t=q:w=0.5:g=3,equalizer=f=80:t=q:w=1:g=2,equalizer=f=250:t=q:w=1:g=-1,equalizer=f=2500:t=q:w=1:g=1,equalizer=f=8000:t=q:w=1:g=2,acompressor=threshold=-18dB:ratio=3:attack=5:release=80:makeup=2,alimiter=limit=0.95,loudnorm=I=-14:TP=-1:LRA=11",
+  "simplifiedChain": "highpass=f=20,lowpass=f=20000,equalizer=f=40:t=q:w=0.5:g=3,equalizer=f=80:t=q:w=1:g=2,equalizer=f=250:t=q:w=1:g=-1,equalizer=f=2500:t=q:w=1:g=1,equalizer=f=8000:t=q:w=1:g=2,loudnorm=I=-14:TP=-1:LRA=11,volume=1.3",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-cd-dual-comp",
+  "name": "CD Mastering (Dual Compression)",
+  "category": "audio-mastering",
+  "description": "Two-stage compression for punch and glue. Radio-ready loudness.",
+  "tags": [
+   "mastering",
+   "compression",
+   "radio",
+   "loud"
+  ],
+  "icon": "📻",
+  "fullChain": "acompressor=threshold=-18dB:ratio=3:attack=5:release=80:makeup=2,acompressor=threshold=-12dB:ratio=2:attack=10:release=120:makeup=1.5,alimiter=limit=0.95,loudnorm=I=-14:TP=-1:LRA=11",
+  "simplifiedChain": "loudnorm=I=-14:TP=-1:LRA=11,volume=1.3",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-slushwave-bass",
+  "name": "Slushwave Bass Preservation",
+  "category": "audio-mastering",
+  "description": "Slushwave with extra bass body. Heavier than the standard recipe.",
+  "tags": [
+   "slushwave",
+   "bass",
+   "heavy",
+   "warm"
+  ],
+  "icon": "🌊",
+  "fullChain": "asetrate=44100*0.85,aresample=44100,lowpass=f=8000,highpass=f=80,equalizer=f=300:t=q:w=1:g=4,equalizer=f=60:t=q:w=1:g=3,chorus=0.5:0.9:50|60:0.4|0.32:0.25|0.4:2|1,aecho=0.8:0.9:400|800:0.4|0.3,aphaser=in_gain=0.4:out_gain=0.7:delay=2:decay=0.3:speed=0.5,volume=1.2",
+  "simplifiedChain": "asetrate=44100*0.85,aresample=44100,lowpass=f=8000,highpass=f=80,equalizer=f=300:t=q:w=1:g=4,equalizer=f=60:t=q:w=1:g=3,aecho=0.8:0.9:400|800:0.4|0.3,volume=1.2",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-daycore-phonk",
+  "name": "Daycore Phonk Slush",
+  "category": "audio-mastering",
+  "description": "Deep-pitched phonk with crushed dynamics and dark atmosphere.",
+  "tags": [
+   "daycore",
+   "phonk",
+   "slush",
+   "dark",
+   "crushed",
+   "slow"
+  ],
+  "icon": "🥀",
+  "fullChain": "asetrate=44100*0.75,aresample=44100,lowpass=f=6000,highpass=f=100,equalizer=f=200:t=q:w=1:g=-2,equalizer=f=80:t=q:w=1:g=4,acompressor=threshold=-15dB:ratio=4:attack=2:release=50:makeup=3,chorus=0.6:0.9:60|70:0.4|0.32:0.25|0.4:2|1,aecho=0.8:0.9:400|800:0.4|0.3,volume=1.1",
+  "simplifiedChain": "asetrate=44100*0.75,aresample=44100,lowpass=f=6000,highpass=f=100,equalizer=f=80:t=q:w=1:g=4,aecho=0.8:0.9:400|800:0.4|0.3,volume=1.1",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-ambient-drone",
+  "name": "Ambient Drone v4",
+  "category": "audio-mastering",
+  "description": "Transform any audio into an ambient, droning soundscape.",
+  "tags": [
+   "ambient",
+   "drone",
+   "soundscape",
+   "meditation",
+   "echo"
+  ],
+  "icon": "🌌",
+  "fullChain": "lowpass=f=3000,highpass=f=50,aecho=0.8:0.9:500|1000|1500:0.5|0.4|0.3,equalizer=f=400:t=q:w=1:g=2,chorus=0.7:0.9:55|60:0.4|0.32:0.25|0.4:2|1,aphaser=in_gain=0.4:out_gain=0.7:delay=3:decay=0.4:speed=0.5,volume=1.3",
+  "simplifiedChain": "lowpass=f=3000,highpass=f=50,aecho=0.8:0.9:500|1000|1500:0.5|0.4|0.3,equalizer=f=400:t=q:w=1:g=2,volume=1.3",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-driftwave",
+  "name": "DriftWave Mastering",
+  "category": "audio-mastering",
+  "description": "Slightly pitched-down with warm compression and smooth limiting.",
+  "tags": [
+   "driftwave",
+   "mastering",
+   "warm",
+   "smooth"
+  ],
+  "icon": "🌊",
+  "fullChain": "asetrate=44100*0.9,aresample=44100,highpass=f=60,lowpass=f=10000,equalizer=f=100:t=q:w=1:g=2,equalizer=f=400:t=q:w=1:g=1,acompressor=threshold=-18dB:ratio=2.5:attack=10:release=120:makeup=2,alimiter=limit=0.95,loudnorm=I=-14:TP=-1:LRA=11,volume=1.2",
+  "simplifiedChain": "asetrate=44100*0.9,aresample=44100,highpass=f=60,lowpass=f=10000,equalizer=f=100:t=q:w=1:g=2,equalizer=f=400:t=q:w=1:g=1,volume=1.2",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-vhs-warp",
+  "name": "VHS Warp Audio",
+  "category": "audio-mastering",
+  "description": "Audio equivalent of a worn VHS tape. Warbled, echoed, compressed.",
+  "tags": [
+   "VHS",
+   "warp",
+   "analog",
+   "tape",
+   "retro",
+   "lo-fi"
+  ],
+  "icon": "📼",
+  "fullChain": "highpass=f=100,lowpass=f=8000,aecho=0.8:0.7:30|60|120:0.5|0.4|0.3,tremolo=f=0.5:d=0.7,acompressor=threshold=-15dB:ratio=4:attack=2:release=50:makeup=3,vibrato=f=4:d=0.5,volume=1.0",
+  "simplifiedChain": "highpass=f=100,lowpass=f=8000,aecho=0.8:0.7:30|60|120:0.5|0.4|0.3,tremolo=f=0.5:d=0.7,volume=1.0",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-cyber-grind",
+  "name": "Cyber Grind Bass",
+  "category": "audio-mastering",
+  "description": "Extreme sub-bass boost for industrial, cyber, and grindcore aesthetics.",
+  "tags": [
+   "cyber",
+   "grind",
+   "industrial",
+   "bass",
+   "extreme"
+  ],
+  "icon": "⚙️",
+  "fullChain": "highpass=f=30,lowpass=f=15000,equalizer=f=50:t=q:w=0.7:g=8,equalizer=f=80:t=q:w=1:g=10,acompressor=threshold=-20dB:ratio=4:attack=2:release=50:makeup=3,volume=1.5",
+  "simplifiedChain": "highpass=f=30,lowpass=f=15000,equalizer=f=50:t=q:w=0.7:g=8,equalizer=f=80:t=q:w=1:g=10,volume=1.5",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-ethereal-wash",
+  "name": "Ethereal Wash",
+  "category": "audio-mastering",
+  "description": "Dreamy, washed-out audio with cascading echoes and chorus.",
+  "tags": [
+   "ethereal",
+   "wash",
+   "dreamy",
+   "chorus",
+   "echo",
+   "celestial"
+  ],
+  "icon": "✨",
+  "fullChain": "aecho=0.8:0.9:200|400|600:0.4|0.3|0.2,highpass=f=80,lowpass=f=6000,equalizer=f=400:t=q:w=1:g=2,chorus=0.7:0.9:55|60:0.4|0.32:0.25|0.4:2|1,aphaser=in_gain=0.4:out_gain=0.7:delay=2:decay=0.3:speed=0.5,volume=1.2",
+  "simplifiedChain": "aecho=0.8:0.9:200|400|600:0.4|0.3|0.2,highpass=f=80,lowpass=f=6000,equalizer=f=400:t=q:w=1:g=2,volume=1.2",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-nightdrive",
+  "name": "Nightdrive Echo",
+  "category": "audio-mastering",
+  "description": "Late-night driving soundtrack vibe. Long echoes, warm mids, gentle high-end.",
+  "tags": [
+   "nightdrive",
+   "echo",
+   "warm",
+   "cruising",
+   "nocturnal"
+  ],
+  "icon": "🌃",
+  "fullChain": "aecho=0.8:0.7:100|200|400:0.5|0.4|0.3,highpass=f=100,lowpass=f=12000,equalizer=f=200:t=q:w=1:g=1,equalizer=f=1500:t=q:w=1:g=1,volume=1.0",
+  "simplifiedChain": "aecho=0.8:0.7:100|200|400:0.5|0.4|0.3,highpass=f=100,lowpass=f=12000,equalizer=f=200:t=q:w=1:g=1,volume=1.0",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-lofi-tape",
+  "name": "Lo-Fi Tape Decay",
+  "category": "audio-mastering",
+  "description": "Degraded, decaying tape sound. Muffled highs, warm lows, flutter and hiss.",
+  "tags": [
+   "lofi",
+   "tape",
+   "decay",
+   "degraded",
+   "hiss",
+   "warm"
+  ],
+  "icon": "🎞️",
+  "fullChain": "highpass=f=200,lowpass=f=7000,equalizer=f=100:t=q:w=2:g=-2,equalizer=f=400:t=q:w=1:g=2,vibrato=f=6:d=0.6,tremolo=f=0.7:d=0.5,volume=1.0",
+  "simplifiedChain": "highpass=f=200,lowpass=f=7000,equalizer=f=100:t=q:w=2:g=-2,equalizer=f=400:t=q:w=1:g=2,volume=1.0",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-digital-glitch",
+  "name": "Digital Glitch Wash",
+  "category": "audio-mastering",
+  "description": "Stuttering, phased, tremolo-washed audio with micro-echoes.",
+  "tags": [
+   "glitch",
+   "digital",
+   "wash",
+   "stutter",
+   "phaser",
+   "malfunction"
+  ],
+  "icon": "💾",
+  "fullChain": "highpass=f=150,lowpass=f=10000,aecho=0.7:0.6:15|30|60:0.5|0.4|0.3,tremolo=f=0.7:d=0.8,aphaser=in_gain=0.4:out_gain=0.7:delay=2:decay=0.3:speed=0.7,volume=1.0",
+  "simplifiedChain": "highpass=f=150,lowpass=f=10000,aecho=0.7:0.6:15|30|60:0.5|0.4|0.3,tremolo=f=0.7:d=0.8,volume=1.0",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-void-bass",
+  "name": "Void Bass Texture",
+  "category": "audio-mastering",
+  "description": "Sub-harmonic bass enhancement for dark, void-like textures. Pure low-end power.",
+  "tags": [
+   "void",
+   "bass",
+   "sub",
+   "dark",
+   "texture",
+   "power"
+  ],
+  "icon": "⚫",
+  "fullChain": "highpass=f=25,lowpass=f=20000,equalizer=f=40:t=q:w=0.5:g=6,equalizer=f=60:t=q:w=0.7:g=8,equalizer=f=100:t=q:w=1:g=4,acompressor=threshold=-15dB:ratio=3:attack=5:release=80:makeup=2,volume=1.4",
+  "simplifiedChain": "highpass=f=25,lowpass=f=20000,equalizer=f=40:t=q:w=0.5:g=6,equalizer=f=60:t=q:w=0.7:g=8,equalizer=f=100:t=q:w=1:g=4,volume=1.4",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-crystal-mesh",
+  "name": "Crystal Mesh Wash",
+  "category": "audio-mastering",
+  "description": "Shimmering, crystalline audio with layered echoes and chorus.",
+  "tags": [
+   "crystal",
+   "mesh",
+   "shimmer",
+   "bright",
+   "airy",
+   "chorus"
+  ],
+  "icon": "💎",
+  "fullChain": "aecho=0.8:0.8:150|300|450:0.35|0.3|0.25,highpass=f=120,lowpass=f=8000,equalizer=f=2000:t=q:w=1:g=2,chorus=0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1,volume=1.1",
+  "simplifiedChain": "aecho=0.8:0.8:150|300|450:0.35|0.3|0.25,highpass=f=120,lowpass=f=8000,equalizer=f=2000:t=q:w=1:g=2,volume=1.1",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "am-midnight-cascade",
+  "name": "Midnight Cascade",
+  "category": "audio-mastering",
+  "description": "Pitched-down with cascading flanger and warm compression. Dark and flowing.",
+  "tags": [
+   "midnight",
+   "cascade",
+   "flanger",
+   "dark",
+   "flowing",
+   "pitched"
+  ],
+  "icon": "🌑",
+  "fullChain": "asetrate=44100*0.88,aresample=44100,highpass=f=70,lowpass=f=9000,equalizer=f=100:t=q:w=1:g=2,flanger=delay=4:depth=5:speed=0.3,acompressor=threshold=-18dB:ratio=3:attack=5:release=80:makeup=2,volume=1.2",
+  "simplifiedChain": "asetrate=44100*0.88,aresample=44100,highpass=f=70,lowpass=f=9000,equalizer=f=100:t=q:w=1:g=2,flanger=delay=4:depth=5:speed=0.3,volume=1.2",
+  "_src": "AUDIO_MASTERING_WORKFLOWS"
+ },
+ {
+  "id": "vgp-lagfun-massacre",
+  "name": "LAGFUN MASSACRE MELTDOWN",
+  "category": "video-glitch-pipelines",
+  "description": "The complete 6-step visual destruction pipeline. Vaporwave color grade → lagfun ghost trails → RGB chromatic aberration → strobe cuts → rapid chop → final melt.",
+  "tags": [
+   "lagfun",
+   "massacre",
+   "meltdown",
+   "pipeline",
+   "vaporwave",
+   "chaos",
+   "datamosh"
+  ],
+  "icon": "💥",
+  "pipelineSteps": [
+   {
+    "name": "1. Vaporwave Color Grade",
+    "description": "Saturate and shift hue."
+   },
+   {
+    "name": "2. Lagfun Ghost Trails",
+    "description": "A*0.4 + B*0.6 pixel blend."
+   },
+   {
+    "name": "3. RGB Chromatic Aberration",
+    "description": "rgbashift with all three channels."
+   },
+   {
+    "name": "4. Noise & Grain",
+    "description": "Temporal uniform noise overlay."
+   },
+   {
+    "name": "5. Final Melt Blend",
+    "description": "A*0.5 + B*0.5 melt."
+   },
+   {
+    "name": "6. Encode Output",
+    "description": "Final encode to mp4."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-max-entropy",
+  "name": "Maximum Entropy Lagfun Massacre",
+  "category": "video-glitch-pipelines",
+  "description": "tmix frame stacking + tblend averaging + cranked saturation + RGB shift. Pure visual chaos.",
+  "tags": [
+   "entropy",
+   "lagfun",
+   "massacre",
+   "tmix",
+   "tblend",
+   "chaos"
+  ],
+  "icon": "🌀",
+  "pipelineSteps": [
+   {
+    "name": "1. Apply Stacked Filter",
+    "description": "tmix + tblend + eq + rgbashift."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-echo-ghost",
+  "name": "Echo Ghost Video",
+  "category": "video-glitch-pipelines",
+  "description": "Triple-blend lighten effect creating ethereal motion ghost trails.",
+  "tags": [
+   "echo",
+   "ghost",
+   "trails",
+   "lighten",
+   "blend",
+   "ethereal"
+  ],
+  "icon": "👻",
+  "pipelineSteps": [
+   {
+    "name": "1. Frame Copy A",
+    "description": "Offset copy of input."
+   },
+   {
+    "name": "2. Frame Copy B",
+    "description": "Further offset copy."
+   },
+   {
+    "name": "3. Blend Lighten",
+    "description": "Lighten blend the three."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-lagfun-dynamic",
+  "name": "Lagfun Dynamic Decay",
+  "category": "video-glitch-pipelines",
+  "description": "Lagfun with a sine-wave-modulated decay factor. Trails pulse in and out rhythmically.",
+  "tags": [
+   "lagfun",
+   "dynamic",
+   "decay",
+   "pulse",
+   "rhythmic"
+  ],
+  "icon": "🌊",
+  "pipelineSteps": [
+   {
+    "name": "1. Sine Modulated Lagfun",
+    "description": "lagfun decay oscillates."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-tblend-diff",
+  "name": "Stacked tblend Difference",
+  "category": "video-glitch-pipelines",
+  "description": "Triple-stacked tblend difference128 — extracts pure motion as neon wireframes.",
+  "tags": [
+   "tblend",
+   "difference",
+   "stacked",
+   "motion",
+   "wireframe",
+   "neon"
+  ],
+  "icon": "🟪",
+  "pipelineSteps": [
+   {
+    "name": "1. Triple Difference",
+    "description": "Three passes of difference128."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-flip-chaos",
+  "name": "Flip/Mirror Chaos",
+  "category": "video-glitch-pipelines",
+  "description": "Frame-count-based alternating horizontal and vertical flips. Disorienting kaleidoscopic chaos.",
+  "tags": [
+   "flip",
+   "mirror",
+   "chaos",
+   "kaleidoscope",
+   "alternating"
+  ],
+  "icon": "🔀",
+  "pipelineSteps": [
+   {
+    "name": "1. Alternating Flips",
+    "description": "hflip / vflip via frame number."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-reverse-echo",
+  "name": "Reverse Video + Audio Echo",
+  "category": "video-glitch-pipelines",
+  "description": "Reversed footage with layered audio echoes that play forward over the reversed visuals.",
+  "tags": [
+   "reverse",
+   "echo",
+   "uncanny",
+   "disorienting"
+  ],
+  "icon": "⏮",
+  "pipelineSteps": [
+   {
+    "name": "1. Reverse Video + Audio",
+    "description": "Reverse, then layered echo."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-speed-bass",
+  "name": "Speed Slowdown + Bass Boost",
+  "category": "video-glitch-pipelines",
+  "description": "75% speed with pitch-shifted bass enhancement. Screwed & chopped aesthetic.",
+  "tags": [
+   "slow",
+   "screwed",
+   "chopped",
+   "bass",
+   "pitched"
+  ],
+  "icon": "🎚️",
+  "pipelineSteps": [
+   {
+    "name": "1. Slow + Bass Boost",
+    "description": "setpts/0.75 + bass EQ."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-3way-alternating",
+  "name": "3-Way Alternating FX",
+  "category": "video-glitch-pipelines",
+  "description": "Cycles between 3 different effect treatments every 24 frames. Hue-shifted → noisy lagfun → color-boosted tblend.",
+  "tags": [
+   "alternating",
+   "cycling",
+   "multi-fx",
+   "complex"
+  ],
+  "icon": "🎭",
+  "pipelineSteps": [
+   {
+    "name": "1. Filter Cycle",
+    "description": "hue + noise + lagfun cycled."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-vhs-scanlines",
+  "name": "VHS Scan Lines",
+  "category": "video-glitch-pipelines",
+  "description": "Interlaced scan line effect with drawbox + scale combination.",
+  "tags": [
+   "VHS",
+   "scanlines",
+   "interlaced",
+   "retro",
+   "CRT"
+  ],
+  "icon": "📺",
+  "pipelineSteps": [
+   {
+    "name": "1. Scanlines + EQ",
+    "description": "drawbox + saturate."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vgp-iframe-strip",
+  "name": "I-Frame Strip (Datamosh Prep)",
+  "category": "video-glitch-pipelines",
+  "description": "Forces extreme keyframe distance for datamosh-style compression artifacts. Lower CRF = more artifacts.",
+  "tags": [
+   "datamosh",
+   "iframe",
+   "compression",
+   "artifact",
+   "smear"
+  ],
+  "icon": "📛",
+  "pipelineSteps": [
+   {
+    "name": "1. Extreme Keyint",
+    "description": "keyint=300, crf 35, low bitrate."
+   }
+  ],
+  "_src": "VIDEO_GLITCH_PIPELINES"
+ },
+ {
+  "id": "vocal-removal",
+  "name": "Vocal Removal (Karaoke)",
+  "category": "audio-repair-utility",
+  "description": "Center-channel cancellation. Removes (or attenuates) lead vocals from a stereo mix. Works best on tracks where vocals are panned center.",
+  "tags": [
+   "vocal",
+   "karaoke",
+   "remove",
+   "center",
+   "audio"
+  ],
+  "icon": "🎤",
+  "settings": {
+   "enable-27": true,
+   "channel-mode": "karaoke"
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "isolate-center",
+  "name": "Isolate Center (Vocals Only)",
+  "category": "audio-repair-utility",
+  "description": "Crude vocal isolation: average the L+R channels, then band-pass 200-8000 Hz to remove bass bleed and high hiss.",
+  "tags": [
+   "vocals",
+   "isolate",
+   "center",
+   "audio"
+  ],
+  "icon": "🎙️",
+  "settings": {
+   "enable-12": true,
+   "highpass": 200,
+   "lowpass": 8000
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "stereo-to-mono",
+  "name": "Stereo → Mono",
+  "category": "audio-repair-utility",
+  "description": "Collapse stereo to mono. Uses -ac 1 (auto-mix to single channel).",
+  "tags": [
+   "mono",
+   "stereo",
+   "channel",
+   "audio"
+  ],
+  "icon": "🔉",
+  "settings": {
+   "enable-1": true,
+   "acodec": "aac",
+   "ab-rate": "192k"
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "mono-to-stereo",
+  "name": "Mono → Stereo",
+  "category": "audio-repair-utility",
+  "description": "Duplicate the mono signal to both L and R channels.",
+  "tags": [
+   "mono",
+   "stereo",
+   "channel",
+   "audio"
+  ],
+  "icon": "🔊",
+  "settings": {
+   "enable-27": true,
+   "channel-mode": "mono2stereo"
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "swap-lr",
+  "name": "Swap Left / Right",
+  "category": "audio-repair-utility",
+  "description": "Swap the L and R audio channels.",
+  "tags": [
+   "swap",
+   "stereo",
+   "channel",
+   "audio"
+  ],
+  "icon": "↔",
+  "settings": {
+   "enable-27": true,
+   "channel-mode": "swap"
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "noise-gate",
+  "name": "Noise Gate (Remove Room Tone)",
+  "category": "audio-repair-utility",
+  "description": "Attenuate audio below -50 dB. Falls back to a high-pass filter if agate is not compiled into the wasm build.",
+  "tags": [
+   "gate",
+   "noise",
+   "room",
+   "silence",
+   "audio"
+  ],
+  "icon": "🤫",
+  "settings": {
+   "enable-28": true,
+   "gate-enable": true,
+   "gate-thresh": -50
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "de-esser",
+  "name": "De-Esser (Notch 6kHz)",
+  "category": "audio-repair-utility",
+  "description": "Apply a narrow EQ notch around 6kHz with -6dB gain to tame sibilant \"ess\" sounds.",
+  "tags": [
+   "deess",
+   "sibilance",
+   "eq",
+   "audio"
+  ],
+  "icon": "🧹",
+  "settings": {
+   "enable-28": true,
+   "deess-enable": true,
+   "deess-freq": 6000,
+   "deess-reduce": 6
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "telephone",
+  "name": "Telephone Effect",
+  "category": "audio-repair-utility",
+  "description": "Band-pass 400-3400 Hz to simulate a phone call, plus a gentle compressor.",
+  "tags": [
+   "telephone",
+   "phone",
+   "lofi",
+   "eq",
+   "audio"
+  ],
+  "icon": "☎️",
+  "settings": {
+   "enable-12": true,
+   "highpass": 400,
+   "lowpass": 3400,
+   "enable-28": true,
+   "comp-enable": true,
+   "comp-thresh": -20,
+   "comp-ratio": 6,
+   "comp-attack": 20,
+   "comp-release": 250
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "megaphone",
+  "name": "Megaphone / PA System",
+  "category": "audio-repair-utility",
+  "description": "Band-pass 500-4000 Hz with a hard compressor and +3.5 dB boost. Sounds like a megaphone.",
+  "tags": [
+   "megaphone",
+   "pa",
+   "lofi",
+   "eq",
+   "audio"
+  ],
+  "icon": "📢",
+  "settings": {
+   "enable-12": true,
+   "highpass": 500,
+   "lowpass": 4000,
+   "volume": 1.5,
+   "enable-28": true,
+   "comp-enable": true,
+   "comp-thresh": -15,
+   "comp-ratio": 8,
+   "comp-attack": 5,
+   "comp-release": 100
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "radio-am",
+  "name": "Radio / AM Broadcast",
+  "category": "audio-repair-utility",
+  "description": "Narrow band EQ 300-5000 Hz with a +1.6 dB boost. Sounds like AM radio.",
+  "tags": [
+   "radio",
+   "am",
+   "lofi",
+   "broadcast",
+   "eq",
+   "audio"
+  ],
+  "icon": "📻",
+  "settings": {
+   "enable-12": true,
+   "highpass": 300,
+   "lowpass": 5000,
+   "volume": 1.2
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "underwater",
+  "name": "Underwater",
+  "category": "audio-repair-utility",
+  "description": "Heavy low-pass + multi-tap echo + tremolo. Sounds like being submerged.",
+  "tags": [
+   "underwater",
+   "submerged",
+   "echo",
+   "tremolo",
+   "audio"
+  ],
+  "icon": "🌊",
+  "settings": {
+   "enable-12": true,
+   "lowpass": 800,
+   "aecho": true,
+   "aecho-delay": 100,
+   "aecho-decay": 0.4,
+   "tremolo": true,
+   "tremolo-f": 0.3,
+   "tremolo-d": 0.3
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "8d-audio",
+  "name": "8D Audio (Rotating Pan)",
+  "category": "audio-repair-utility",
+  "description": "Auto-pan the audio at 0.08 Hz using apulsator. Falls back to tremolo if apulsator is not compiled in.",
+  "tags": [
+   "8d",
+   "pan",
+   "rotating",
+   "audio"
+  ],
+  "icon": "🌀",
+  "settings": {
+   "enable-27": true,
+   "channel-mode": "8d",
+   "apulsator-hz": 0.08
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "pitch-up-5",
+  "name": "Pitch Up +5 Semitones (Chipmunk)",
+  "category": "audio-repair-utility",
+  "description": "Shift pitch up 5 semitones without changing tempo via asetrate + aresample + atempo.",
+  "tags": [
+   "pitch",
+   "chipmunk",
+   "semitone",
+   "audio"
+  ],
+  "icon": "🐿️",
+  "settings": {
+   "enable-26": true,
+   "pitch-semitones": 5
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "pitch-down-5",
+  "name": "Pitch Down −5 Semitones (Deep)",
+  "category": "audio-repair-utility",
+  "description": "Shift pitch down 5 semitones without changing tempo.",
+  "tags": [
+   "pitch",
+   "deep",
+   "semitone",
+   "audio"
+  ],
+  "icon": "🗿",
+  "settings": {
+   "enable-26": true,
+   "pitch-semitones": -5
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "nightcore",
+  "name": "Nightcore (+Pitch +Tempo)",
+  "category": "audio-repair-utility",
+  "description": "The classic nightcore treatment: shift up 1.25× and speed up 1.25× via the Section 26 pitch + tempo controls.",
+  "tags": [
+   "nightcore",
+   "pitch",
+   "tempo",
+   "audio"
+  ],
+  "icon": "🌙",
+  "settings": {
+   "enable-26": true,
+   "pitch-semitones": 4,
+   "tempo-only": 1.25
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "screwed-chopped",
+  "name": "Screwed & Chopped",
+  "category": "audio-repair-utility",
+  "description": "Slow the audio, add a +6 dB bass boost, and a long echo.",
+  "tags": [
+   "screwed",
+   "chopped",
+   "slow",
+   "echo",
+   "audio"
+  ],
+  "icon": "🎚️",
+  "settings": {
+   "enable-26": true,
+   "tempo-only": 0.8,
+   "enable-12": true,
+   "bass": 6,
+   "aecho": true,
+   "aecho-delay": 80,
+   "aecho-decay": 0.4
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "sample-rate-48k",
+  "name": "Sample Rate → 48 kHz",
+  "category": "audio-repair-utility",
+  "description": "Resample audio to 48 kHz (broadcast / video standard).",
+  "tags": [
+   "samplerate",
+   "resample",
+   "48k",
+   "audio"
+  ],
+  "icon": "🔢",
+  "settings": {
+   "enable-1": true,
+   "audio-rate": 48000,
+   "out-format": "wav"
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "sample-rate-441",
+  "name": "Sample Rate → 44.1 kHz",
+  "category": "audio-repair-utility",
+  "description": "Resample audio to 44.1 kHz (CD standard).",
+  "tags": [
+   "samplerate",
+   "resample",
+   "44.1k",
+   "audio"
+  ],
+  "icon": "💿",
+  "settings": {
+   "enable-1": true,
+   "audio-rate": 44100,
+   "out-format": "wav"
+  },
+  "_src": "AUDIO_REPAIR_UTILITY_WORKFLOWS"
+ },
+ {
+  "id": "waveform-line",
+  "name": "Waveform Video (Line)",
+  "category": "audio-visualization",
+  "description": "Turn audio into a music video. Cyan line waveform on black, 1280×720, 30 fps.",
+  "tags": [
+   "waveform",
+   "showwaves",
+   "line",
+   "visualizer",
+   "audio"
+  ],
+  "icon": "🌊",
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showwaves",
+   "viz-mode": "line",
+   "viz-w": 1280,
+   "viz-h": 720,
+   "viz-color": "#00d4ff",
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4"
+  },
+  "_src": "AUDIO_VISUALIZATION_WORKFLOWS"
+ },
+ {
+  "id": "waveform-scatter",
+  "name": "Waveform Video (Point Scatter)",
+  "category": "audio-visualization",
+  "description": "Peak-to-peak (p2p) waveform on black — a classic album-art look.",
+  "tags": [
+   "waveform",
+   "p2p",
+   "scatter",
+   "visualizer",
+   "audio"
+  ],
+  "icon": "✨",
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showwaves",
+   "viz-mode": "p2p",
+   "viz-w": 1280,
+   "viz-h": 720,
+   "viz-color": "#ff00aa",
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4"
+  },
+  "_src": "AUDIO_VISUALIZATION_WORKFLOWS"
+ },
+ {
+  "id": "spectrum-analyzer",
+  "name": "Spectrum Analyzer Video",
+  "category": "audio-visualization",
+  "description": "Log-scale spectrum with the \"fire\" colormap.",
+  "tags": [
+   "spectrum",
+   "showspectrum",
+   "fire",
+   "visualizer",
+   "audio"
+  ],
+  "icon": "🔥",
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showspectrum",
+   "viz-w": 1280,
+   "viz-h": 720,
+   "viz-colormap": "fire",
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4"
+  },
+  "_src": "AUDIO_VISUALIZATION_WORKFLOWS"
+ },
+ {
+  "id": "frequency-bars",
+  "name": "Frequency Bars",
+  "category": "audio-visualization",
+  "description": "Vertical bar visualizer using showfreqs. Like a hardware EQ.",
+  "tags": [
+   "bars",
+   "showfreqs",
+   "eq",
+   "visualizer",
+   "audio"
+  ],
+  "icon": "📊",
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showfreqs",
+   "viz-w": 1280,
+   "viz-h": 720,
+   "viz-color": "#00ff88",
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4"
+  },
+  "_src": "AUDIO_VISUALIZATION_WORKFLOWS"
+ },
+ {
+  "id": "cqt-spectrum",
+  "name": "CQT Music Spectrum",
+  "category": "audio-visualization",
+  "description": "Constant-Q transform spectrum. Higher resolution at low frequencies — better for music.",
+  "tags": [
+   "cqt",
+   "showcqt",
+   "music",
+   "visualizer",
+   "audio"
+  ],
+  "icon": "🎼",
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showcqt",
+   "viz-w": 1280,
+   "viz-h": 720,
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4"
+  },
+  "_src": "AUDIO_VISUALIZATION_WORKFLOWS"
+ },
+ {
+  "id": "audiogram",
+  "name": "Audiogram (Waveform over Image)",
+  "category": "audio-visualization",
+  "description": "Classic podcast/music promo. Requires 2 files in the bin (audio + image). Use the Visualizer agent or Batch Apply to assemble.",
+  "tags": [
+   "audiogram",
+   "podcast",
+   "waveform",
+   "cover",
+   "audio"
+  ],
+  "icon": "🖼️",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showwaves",
+   "viz-mode": "cline",
+   "viz-w": 1280,
+   "viz-h": 720,
+   "viz-color": "#00d4ff",
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4"
+  },
+  "_src": "AUDIO_VISUALIZATION_WORKFLOWS"
+ },
+ {
+  "id": "vinyl-spin-audiogram",
+  "name": "Vinyl Spin Audiogram",
+  "category": "audio-visualization",
+  "description": "Spinning vinyl-style cover with waveform pulse. Requires 2 files (audio + image). Combines rotate on the image with a centered waveform.",
+  "tags": [
+   "vinyl",
+   "spin",
+   "audiogram",
+   "rotate",
+   "audio"
+  ],
+  "icon": "💿",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showwaves",
+   "viz-mode": "cline",
+   "viz-w": 1280,
+   "viz-h": 720,
+   "viz-color": "#ffffff",
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4"
+  },
+  "_src": "AUDIO_VISUALIZATION_WORKFLOWS"
+ },
+ {
+  "id": "music-video-spectrum",
+  "name": "Full Music Video (Spectrum + Video)",
+  "category": "audio-visualization",
+  "description": "Overlay a translucent spectrum on the bottom of an existing video. Requires a video + an audio file in the bin (handled by the agent).",
+  "tags": [
+   "music-video",
+   "spectrum",
+   "overlay",
+   "video",
+   "audio"
+  ],
+  "icon": "🎬",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showspectrum",
+   "viz-w": 1280,
+   "viz-h": 360,
+   "viz-colormap": "rainbow",
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4"
+  },
+  "_src": "AUDIO_VISUALIZATION_WORKFLOWS"
+ },
+ {
+  "id": "concat-sequential",
+  "name": "Concatenate (Sequential Join)",
+  "category": "multi-file-composites",
+  "description": "Joins selected bin files in order. Uses the concat demuxer with -c copy when formats match; re-encodes otherwise.",
+  "tags": [
+   "concat",
+   "join",
+   "multi",
+   "composite"
+  ],
+  "icon": "⛓",
+  "requiresBinCount": 2,
+  "settings": {},
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "side-by-side",
+  "name": "Side-by-Side (Horizontal)",
+  "category": "multi-file-composites",
+  "description": "Stack two videos horizontally. Both are auto-scaled to the same height (720).",
+  "tags": [
+   "side",
+   "sidebyside",
+   "horizontal",
+   "hstack",
+   "multi"
+  ],
+  "icon": "⇋",
+  "requiresBinCount": 2,
+  "settings": {},
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "stacked-vertical",
+  "name": "Stacked (Vertical)",
+  "category": "multi-file-composites",
+  "description": "Stack two videos vertically. Both are auto-scaled to width 1280.",
+  "tags": [
+   "stack",
+   "vertical",
+   "vstack",
+   "multi"
+  ],
+  "icon": "⇅",
+  "requiresBinCount": 2,
+  "settings": {},
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "grid-2x2",
+  "name": "2×2 Grid (4 files)",
+  "category": "multi-file-composites",
+  "description": "Lay four videos out in a 2×2 grid using xstack.",
+  "tags": [
+   "grid",
+   "2x2",
+   "xstack",
+   "multi"
+  ],
+  "icon": "▦",
+  "requiresBinCount": 4,
+  "settings": {},
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "picture-in-picture",
+  "name": "Picture-in-Picture",
+  "category": "multi-file-composites",
+  "description": "Second video is scaled to 25% and overlaid in the bottom-right corner (20 px margin).",
+  "tags": [
+   "pip",
+   "overlay",
+   "picture-in-picture",
+   "multi"
+  ],
+  "icon": "◳",
+  "requiresBinCount": 2,
+  "settings": {},
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "add-soundtrack",
+  "name": "Add Soundtrack to Video",
+  "category": "multi-file-composites",
+  "description": "First file = video (visual). Second file = audio (soundtrack). Output: video from first + audio from second.",
+  "tags": [
+   "soundtrack",
+   "add-audio",
+   "video+audio",
+   "multi"
+  ],
+  "icon": "🎬+🔊",
+  "requiresBinCount": 2,
+  "settings": {},
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "replace-audio",
+  "name": "Replace Audio Track",
+  "category": "multi-file-composites",
+  "description": "Same as Add Soundtrack but explicit. Video from file 1, audio from file 2.",
+  "tags": [
+   "replace",
+   "audio",
+   "swap",
+   "multi"
+  ],
+  "icon": "🔁",
+  "requiresBinCount": 2,
+  "settings": {},
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "mix-2-audio",
+  "name": "Mix Two Audio Tracks",
+  "category": "multi-file-composites",
+  "description": "Mix two audio files together with amix=inputs=2:duration=longest:dropout_transition=2.",
+  "tags": [
+   "mix",
+   "audio",
+   "amix",
+   "multi"
+  ],
+  "icon": "🔀",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-12": true,
+   "volume": 1
+  },
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "image-watermark",
+  "name": "Image Watermark Overlay",
+  "category": "multi-file-composites",
+  "description": "Overlay an image from the bin on top of a video, top-right, 10% opacity.",
+  "tags": [
+   "watermark",
+   "image",
+   "overlay",
+   "logo",
+   "multi"
+  ],
+  "icon": "©️",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-1": true,
+   "out-format": "mp4",
+   "vcodec": "libx264",
+   "crf": 20,
+   "enc-preset": "fast"
+  },
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "crossfade",
+  "name": "Crossfade Two Clips",
+  "category": "multi-file-composites",
+  "description": "xfade transition between two clips. 1 second fade. Use the Compositor agent for full transition control.",
+  "tags": [
+   "xfade",
+   "transition",
+   "crossfade",
+   "multi"
+  ],
+  "icon": "⇌",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-1": true,
+   "out-format": "mp4",
+   "vcodec": "libx264",
+   "crf": 20,
+   "enc-preset": "fast"
+  },
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "green-screen",
+  "name": "Green Screen Composite",
+  "category": "multi-file-composites",
+  "description": "Key out a green (or any color) background from the first file, then overlay it on the second file.",
+  "tags": [
+   "green",
+   "screen",
+   "key",
+   "colorkey",
+   "multi"
+  ],
+  "icon": "🟩",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-20": true,
+   "chroma-enable": true,
+   "chroma-color": "0x00FF00",
+   "chroma-similarity": 0.3,
+   "chroma-blend": 0.1,
+   "enable-1": true,
+   "out-format": "mp4",
+   "vcodec": "libx264",
+   "crf": 20,
+   "enc-preset": "fast"
+  },
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "blend-2-videos",
+  "name": "Blend Two Videos",
+  "category": "multi-file-composites",
+  "description": "Blend two videos together. Default mode is \"addition\" with 50% opacity. Use the Compositor agent for the full blend-mode dropdown.",
+  "tags": [
+   "blend",
+   "mix",
+   "composite",
+   "multi"
+  ],
+  "icon": "🌀",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-1": true,
+   "out-format": "mp4",
+   "vcodec": "libx264",
+   "crf": 20,
+   "enc-preset": "fast"
+  },
+  "_src": "MULTI_FILE_COMPOSITES_WORKFLOWS"
+ },
+ {
+  "id": "full-crt",
+  "name": "Full CRT Monitor",
+  "category": "retro-analog",
+  "description": "CRT curvature + scanlines + chroma bleed + vignette + slight blur.",
+  "tags": [
+   "crt",
+   "monitor",
+   "retro",
+   "vintage",
+   "tube"
+  ],
+  "icon": "📺",
+  "settings": {
+   "enable-31": true,
+   "crt-enable": true,
+   "scan-enable": true,
+   "scan-spacing": 3,
+   "scan-opacity": 0.4,
+   "chromableed-enable": true,
+   "chromableed-h": 2,
+   "enable-9": true,
+   "blur-type": "box",
+   "blur-strength": 1,
+   "enable-16": true,
+   "vignette": true,
+   "vignette-angle": 0.5
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "vhs-tracking",
+  "name": "VHS Tracking Error",
+  "category": "retro-analog",
+  "description": "Random line displacement + noise + chroma bleed. Classic VHS glitch.",
+  "tags": [
+   "vhs",
+   "tracking",
+   "glitch",
+   "retro",
+   "tape"
+  ],
+  "icon": "📼",
+  "settings": {
+   "enable-31": true,
+   "tracking-enable": true,
+   "tracking-severity": 12,
+   "chromableed-enable": true,
+   "chromableed-h": 4,
+   "enable-13": true,
+   "add-noise": true,
+   "noise-strength": 8,
+   "noise-type": "t+u"
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "signal-dropout",
+  "name": "Signal Dropout",
+  "category": "retro-analog",
+  "description": "Random black frames + static bursts. Lost-signal aesthetic.",
+  "tags": [
+   "dropout",
+   "lost-signal",
+   "static",
+   "retro"
+  ],
+  "icon": "📡",
+  "settings": {
+   "enable-31": true,
+   "dropout-enable": true,
+   "dropout-freq": 0.04,
+   "enable-13": true,
+   "add-noise": true,
+   "noise-strength": 12,
+   "noise-type": "t+u"
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "interlaced-broadcast",
+  "name": "Interlaced Broadcast",
+  "category": "retro-analog",
+  "description": "Interlace then deinterlace, leaving comb artifacts. Looks like an old TV capture.",
+  "tags": [
+   "interlace",
+   "broadcast",
+   "comb",
+   "retro"
+  ],
+  "icon": "🧶",
+  "settings": {
+   "enable-31": true,
+   "interlace-enable": true
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "film-projector",
+  "name": "Film Projector",
+  "category": "retro-analog",
+  "description": "Grain + vertical jitter + vignette + warm grade + occasional white flash.",
+  "tags": [
+   "film",
+   "projector",
+   "cinema",
+   "warm",
+   "retro"
+  ],
+  "icon": "🎞",
+  "settings": {
+   "enable-13": true,
+   "grain-overlay": true,
+   "enable-7": true,
+   "eq-saturation": 0.85,
+   "eq-contrast": 1.05,
+   "eq-brightness": 0.03,
+   "enable-16": true,
+   "vignette": true,
+   "vignette-angle": 0.5
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "old-film-scratches",
+  "name": "Old Film Scratches",
+  "category": "retro-analog",
+  "description": "Grain + random vertical white lines. Damaged film look.",
+  "tags": [
+   "film",
+   "scratches",
+   "damage",
+   "retro",
+   "grain"
+  ],
+  "icon": "🎞️",
+  "settings": {
+   "enable-13": true,
+   "grain-overlay": true,
+   "enable-7": true,
+   "eq-contrast": 1.15
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "betamax-degrade",
+  "name": "Betamax Degrade",
+  "category": "retro-analog",
+  "description": "Heavy chroma bleed + low-res scale-down and back up + soft blur. The 80s home-movie look.",
+  "tags": [
+   "betamax",
+   "vhs",
+   "home-movie",
+   "retro",
+   "tape"
+  ],
+  "icon": "📼",
+  "settings": {
+   "enable-31": true,
+   "chromableed-enable": true,
+   "chromableed-h": 6,
+   "chromableed-v": 2,
+   "enable-9": true,
+   "blur-type": "gblur",
+   "blur-strength": 2,
+   "enable-3": true,
+   "scale-w": 480,
+   "scale-h": -1,
+   "scale-algo": "neighbor"
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "security-camera",
+  "name": "Security Camera",
+  "category": "retro-analog",
+  "description": "Desaturate + low fps + slight noise + 4:3 crop. Looks like CCTV footage.",
+  "tags": [
+   "cctv",
+   "security",
+   "surveillance",
+   "retro"
+  ],
+  "icon": "🎥",
+  "settings": {
+   "enable-7": true,
+   "eq-saturation": 0.3,
+   "enable-13": true,
+   "add-noise": true,
+   "noise-strength": 6,
+   "noise-type": "t",
+   "enable-14": true,
+   "out-fps": 12,
+   "enable-4": true,
+   "crop-center": true,
+   "crop-w": 640,
+   "crop-h": 480
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "thermal-vision",
+  "name": "Thermal Vision",
+  "category": "retro-analog",
+  "description": "Color-channel mix that biases the image toward a heat palette (warm reds and yellows).",
+  "tags": [
+   "thermal",
+   "heat",
+   "infrared",
+   "pseudocolor"
+  ],
+  "icon": "🌡",
+  "settings": {
+   "enable-8": true,
+   "ccm-rr": 1.2,
+   "ccm-rg": 0.4,
+   "ccm-rb": 0,
+   "ccm-gr": 0.8,
+   "ccm-gg": 0.4,
+   "ccm-gb": 0,
+   "ccm-br": 0.4,
+   "ccm-bg": 0,
+   "ccm-bb": 0,
+   "enable-7": true,
+   "eq-saturation": 1.4,
+   "eq-contrast": 1.1
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "night-vision-phosphor",
+  "name": "Night Vision (Green Phosphor)",
+  "category": "retro-analog",
+  "description": "Green-channel boost + grain + vignette + slight blur. Night-vision goggles look.",
+  "tags": [
+   "nightvision",
+   "green",
+   "phosphor",
+   "nv",
+   "goggles"
+  ],
+  "icon": "🟢",
+  "settings": {
+   "enable-8": true,
+   "ccm-rr": 0,
+   "ccm-rg": 0,
+   "ccm-rb": 0,
+   "ccm-gr": 0.2,
+   "ccm-gg": 1.4,
+   "ccm-gb": 0.2,
+   "ccm-br": 0,
+   "ccm-bg": 0.2,
+   "ccm-bb": 0,
+   "enable-13": true,
+   "grain-overlay": true,
+   "enable-16": true,
+   "vignette": true,
+   "vignette-angle": 0.7
+  },
+  "_src": "RETRO_ANALOG_WORKFLOWS"
+ },
+ {
+  "id": "cartoon-cel",
+  "name": "Cartoon / Cel Shade",
+  "category": "artistic-stylize",
+  "description": "Posterize + edge detect + composite edges over the flattened colors. The cel-shaded comic look.",
+  "tags": [
+   "cartoon",
+   "cel",
+   "comic",
+   "artistic",
+   "posterize"
+  ],
+  "icon": "🎨",
+  "settings": {
+   "enable-16": true,
+   "posterize": 3,
+   "edge-detect": true,
+   "edge-mode": "colormix",
+   "edge-low": 0.1,
+   "edge-high": 0.4,
+   "enable-7": true,
+   "eq-saturation": 1.4
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "oil-painting",
+  "name": "Oil Painting",
+  "category": "artistic-stylize",
+  "description": "Heavy box blur + unsharp + posterize. Imitates an oil-paint surface.",
+  "tags": [
+   "oil",
+   "painting",
+   "artistic",
+   "blur"
+  ],
+  "icon": "🖌",
+  "settings": {
+   "enable-9": true,
+   "blur-type": "box",
+   "blur-strength": 5,
+   "sharpen-amt": 1.5,
+   "enable-16": true,
+   "posterize": 5
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "ascii-art",
+  "name": "ASCII Art Video",
+  "category": "artistic-stylize",
+  "description": "Extreme downscale + posterize + upscale with nearest-neighbor. The ASCII aesthetic.",
+  "tags": [
+   "ascii",
+   "art",
+   "pixel",
+   "downscale"
+  ],
+  "icon": "🔤",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 160,
+   "scale-h": 90,
+   "scale-algo": "neighbor",
+   "enable-16": true,
+   "posterize": 4
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "halftone",
+  "name": "Halftone Print",
+  "category": "artistic-stylize",
+  "description": "Posterize + geq dot pattern. Mimics newspaper halftone printing.",
+  "tags": [
+   "halftone",
+   "print",
+   "newspaper",
+   "dot"
+  ],
+  "icon": "🗞",
+  "settings": {
+   "enable-16": true,
+   "posterize": 4,
+   "enable-7": true,
+   "eq-saturation": 0,
+   "eq-contrast": 1.4
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "pixel-art",
+  "name": "Pixel Art (Nearest Neighbor)",
+  "category": "artistic-stylize",
+  "description": "Scale to 128 wide with neighbor flags, then back up. Crisp pixel art.",
+  "tags": [
+   "pixel",
+   "art",
+   "8bit",
+   "16bit",
+   "neighbor"
+  ],
+  "icon": "👾",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 128,
+   "scale-h": -1,
+   "scale-algo": "neighbor"
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "duotone",
+  "name": "Duotone (Two-Color Map)",
+  "category": "artistic-stylize",
+  "description": "Map luminance onto two chosen colors via color-channel mixer. Black shadow → blue midtones → cyan highlight.",
+  "tags": [
+   "duotone",
+   "two-color",
+   "lut",
+   "artistic"
+  ],
+  "icon": "🟦",
+  "settings": {
+   "enable-8": true,
+   "ccm-rr": 0,
+   "ccm-rg": 0,
+   "ccm-rb": 0.2,
+   "ccm-gr": 0,
+   "ccm-gg": 0,
+   "ccm-gb": 0.6,
+   "ccm-br": 0,
+   "ccm-bg": 0,
+   "ccm-bb": 1
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "solarize",
+  "name": "Solarize",
+  "category": "artistic-stylize",
+  "description": "Invert the upper half of the tonal range. Classic photographic effect.",
+  "tags": [
+   "solarize",
+   "invert",
+   "artistic",
+   "curves"
+  ],
+  "icon": "☀️",
+  "settings": {
+   "enable-7": true,
+   "eq-contrast": 1.3,
+   "enable-1": true,
+   "vcodec": "libx264"
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "neon-edge",
+  "name": "Neon Edge Glow",
+  "category": "artistic-stylize",
+  "description": "Edge detect with colormix mode + saturation boost + gaussian-blur bloom. A glowing edge look.",
+  "tags": [
+   "neon",
+   "edge",
+   "glow",
+   "bloom",
+   "artistic"
+  ],
+  "icon": "💡",
+  "settings": {
+   "enable-16": true,
+   "edge-detect": true,
+   "edge-mode": "colormix",
+   "enable-7": true,
+   "eq-saturation": 1.6,
+   "eq-contrast": 1.2,
+   "enable-9": true,
+   "blur-type": "gblur",
+   "blur-strength": 3
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "chromatic-bloom",
+  "name": "Chromatic Bloom",
+  "category": "artistic-stylize",
+  "description": "Bright areas bleed color. Boost saturation + add a soft blur for a bloom look.",
+  "tags": [
+   "bloom",
+   "chromatic",
+   "bright",
+   "glow",
+   "artistic"
+  ],
+  "icon": "🌸",
+  "settings": {
+   "enable-7": true,
+   "eq-saturation": 1.5,
+   "eq-brightness": 0.05,
+   "enable-9": true,
+   "blur-type": "gblur",
+   "blur-strength": 4
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "kaleidoscope",
+  "name": "Kaleidoscope",
+  "category": "artistic-stylize",
+  "description": "Symmetric mirror effect. Crop a quadrant, hflip, and vstack/hstack the four reflections.",
+  "tags": [
+   "kaleidoscope",
+   "mirror",
+   "symmetric",
+   "artistic"
+  ],
+  "icon": "🔮",
+  "settings": {
+   "enable-3": true,
+   "scale-w": 640,
+   "scale-h": 640,
+   "scale-algo": "lanczos"
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "mirror-lr",
+  "name": "Mirror (Left → Right)",
+  "category": "artistic-stylize",
+  "description": "Split horizontally, hflip the right half, and hstack the two halves.",
+  "tags": [
+   "mirror",
+   "hflip",
+   "symmetric",
+   "artistic"
+  ],
+  "icon": "⇋",
+  "settings": {
+   "enable-5": true,
+   "hflip": true
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "droste-zoom",
+  "name": "Infinite Zoom (Droste)",
+  "category": "artistic-stylize",
+  "description": "A looping zoom-in via zoompan with an exponentially growing zoom expression.",
+  "tags": [
+   "droste",
+   "infinite",
+   "zoom",
+   "artistic"
+  ],
+  "icon": "♾",
+  "settings": {
+   "enable-30": true,
+   "kb-enable": true,
+   "kb-zstart": 1,
+   "kb-zend": 2.5,
+   "kb-dir": "center"
+  },
+  "_src": "ARTISTIC_STYLIZE_WORKFLOWS"
+ },
+ {
+  "id": "ken-burns-in",
+  "name": "Ken Burns Zoom In",
+  "category": "motion-speed",
+  "description": "Slow zoompan push from 1.0× to 1.3× over the source duration.",
+  "tags": [
+   "ken",
+   "burns",
+   "zoom",
+   "in",
+   "pan"
+  ],
+  "icon": "🔍",
+  "settings": {
+   "enable-30": true,
+   "kb-enable": true,
+   "kb-zstart": 1,
+   "kb-zend": 1.3,
+   "kb-dir": "center"
+  },
+  "_src": "MOTION_SPEED_WORKFLOWS"
+ },
+ {
+  "id": "ken-burns-out",
+  "name": "Ken Burns Zoom Out",
+  "category": "motion-speed",
+  "description": "Pull-back zoompan from 1.3× to 1.0× over the source duration.",
+  "tags": [
+   "ken",
+   "burns",
+   "zoom",
+   "out",
+   "pull"
+  ],
+  "icon": "🔎",
+  "settings": {
+   "enable-30": true,
+   "kb-enable": true,
+   "kb-zstart": 1.3,
+   "kb-zend": 1,
+   "kb-dir": "center"
+  },
+  "_src": "MOTION_SPEED_WORKFLOWS"
+ },
+ {
+  "id": "handheld-shake",
+  "name": "Handheld Camera Shake",
+  "category": "motion-speed",
+  "description": "Subtle sinusoidal crop offset. Looks like a hand-held camera.",
+  "tags": [
+   "shake",
+   "handheld",
+   "camera",
+   "motion"
+  ],
+  "icon": "🤳",
+  "settings": {
+   "enable-30": true,
+   "shake-enable": true,
+   "shake-intensity": 5,
+   "shake-speed": 6
+  },
+  "_src": "MOTION_SPEED_WORKFLOWS"
+ },
+ {
+  "id": "speed-ramp",
+  "name": "Speed Ramp (Slow → Fast)",
+  "category": "motion-speed",
+  "description": "Slow → fast. The classic YouTube-intro ramp. Use the Speed slider for the slow factor.",
+  "tags": [
+   "speed",
+   "ramp",
+   "slow",
+   "fast"
+  ],
+  "icon": "⏩",
+  "settings": {
+   "enable-6": true,
+   "speed": 0.5,
+   "speed-video": true,
+   "speed-audio": true,
+   "enable-1": true,
+   "vcodec": "libx264",
+   "enc-preset": "fast",
+   "crf": 20
+  },
+  "_src": "MOTION_SPEED_WORKFLOWS"
+ },
+ {
+  "id": "freeze-punch",
+  "name": "Freeze Frame Punch-In",
+  "category": "motion-speed",
+  "description": "Freeze a frame, hold 1.5s, zoom 1.2×. Use Section 30 Freeze controls for the timestamp.",
+  "tags": [
+   "freeze",
+   "punch",
+   "zoom",
+   "still"
+  ],
+  "icon": "❄",
+  "settings": {
+   "enable-30": true,
+   "freeze-enable": true,
+   "freeze-time": 1,
+   "freeze-hold": 1.5,
+   "kb-enable": true,
+   "kb-zstart": 1,
+   "kb-zend": 1.2
+  },
+  "_src": "MOTION_SPEED_WORKFLOWS"
+ },
+ {
+  "id": "stutter",
+  "name": "Stutter / Frame Hold",
+  "category": "motion-speed",
+  "description": "Frame-hold rhythm. Use the Workflows agent for the full stutter pattern; here we apply a moderate setpts=2.0 effect.",
+  "tags": [
+   "stutter",
+   "glitch",
+   "frame",
+   "hold"
+  ],
+  "icon": "⏸",
+  "settings": {
+   "enable-1": true,
+   "out-fps": 12,
+   "vcodec": "libx264",
+   "enc-preset": "fast",
+   "crf": 20
+  },
+  "_src": "MOTION_SPEED_WORKFLOWS"
+ },
+ {
+  "id": "loop-n",
+  "name": "Loop 3 Times",
+  "category": "motion-speed",
+  "description": "Loop the input 3 times. Uses -stream_loop 3.",
+  "tags": [
+   "loop",
+   "repeat",
+   "cycle"
+  ],
+  "icon": "🔁",
+  "settings": {
+   "enable-1": true,
+   "vcodec": "libx264",
+   "enc-preset": "fast",
+   "crf": 20,
+   "out-format": "mp4"
+  },
+  "_src": "MOTION_SPEED_WORKFLOWS"
+ },
+ {
+  "id": "ping-pong",
+  "name": "Ping-Pong Loop (Boomerang)",
+  "category": "motion-speed",
+  "description": "Forward + reverse concat. A boomerang loop.",
+  "tags": [
+   "boomerang",
+   "ping",
+   "pong",
+   "reverse",
+   "loop"
+  ],
+  "icon": "🏓",
+  "boomerang": true,
+  "settings": {
+   "enable-1": true,
+   "out-format": "mp4",
+   "vcodec": "libx264",
+   "crf": 20,
+   "enc-preset": "fast"
+  },
+  "_src": "MOTION_SPEED_WORKFLOWS"
+ },
+ {
+  "id": "podcast-audiogram-1x1",
+  "name": "Podcast Audiogram (1:1 Square)",
+  "category": "social-media",
+  "description": "1080×1080 square. Requires an audio file + a cover image in the bin (use the Visualizer agent). Uses the audiogram pattern.",
+  "tags": [
+   "podcast",
+   "audiogram",
+   "square",
+   "1080",
+   "social"
+  ],
+  "icon": "🎙️",
+  "requiresBinCount": 2,
+  "settings": {
+   "enable-29": true,
+   "viz-type": "showwaves",
+   "viz-mode": "cline",
+   "viz-w": 1080,
+   "viz-h": 1080,
+   "viz-color": "#ffffff",
+   "viz-fps": 30,
+   "enable-1": true,
+   "out-format": "mp4",
+   "vcodec": "libx264",
+   "enc-preset": "fast",
+   "crf": 20
+  },
+  "_src": "SOCIAL_MEDIA_V3_WORKFLOWS"
+ },
+ {
+  "id": "reels-blur-bg",
+  "name": "Blurred-Background Vertical (Reels / Shorts)",
+  "category": "social-media",
+  "description": "Landscape source → 9:16 vertical. The background is a blurred, scaled-up copy of the video, the original sits centered. The standard Reels/Shorts treatment.",
+  "tags": [
+   "reels",
+   "shorts",
+   "tiktok",
+   "vertical",
+   "9:16",
+   "blur",
+   "background"
+  ],
+  "icon": "📱",
+  "settings": {
+   "enable-1": true,
+   "out-format": "mp4",
+   "vcodec": "libx264",
+   "enc-preset": "fast",
+   "crf": 20,
+   "enable-3": true,
+   "scale-w": 1080,
+   "scale-h": 1920,
+   "scale-algo": "lanczos",
+   "enable-9": true,
+   "blur-type": "gblur",
+   "blur-strength": 25
+  },
+  "_src": "SOCIAL_MEDIA_V3_WORKFLOWS"
+ },
+ {
+  "id": "true-datamosh-smear",
+  "name": "TRUE Datamosh — Smear",
+  "category": "video-glitch-pipelines",
+  "description": "Real bitstream datamoshing. Deletes the I-frames so orphaned motion vectors smear the old scene along the new one. This is NOT a tblend approximation — it is the actual effect.",
+  "tags": [
+   "datamosh",
+   "bitstream",
+   "iframe",
+   "smear",
+   "true",
+   "glitch"
+  ],
+  "icon": "🌀",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "true-datamosh-bloom",
+  "name": "TRUE Datamosh — Bloom",
+  "category": "video-glitch-pipelines",
+  "description": "Duplicates P-frames so their motion vectors are applied repeatedly, pushing the image outward. The classic datamosh \"bloom\".",
+  "tags": [
+   "datamosh",
+   "bitstream",
+   "pframe",
+   "bloom",
+   "true"
+  ],
+  "icon": "💥",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "true-datamosh-both",
+  "name": "TRUE Datamosh — Total Destruction",
+  "category": "video-glitch-pipelines",
+  "description": "I-frame removal AND P-frame duplication. Maximum bitstream corruption.",
+  "tags": [
+   "datamosh",
+   "bitstream",
+   "chaos",
+   "destruction",
+   "true"
+  ],
+  "icon": "☠️",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "databend",
+  "name": "Databend",
+  "category": "video-glitch-pipelines",
+  "description": "Real databending — corrupt the raw bytes of the encoded stream and decode through the damage with error concealment on. Genuine byte-level glitch, not a filter.",
+  "tags": [
+   "databend",
+   "corrupt",
+   "bytes",
+   "glitch",
+   "true"
+  ],
+  "icon": "🧨",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "pixel-sort-masked",
+  "name": "Pixel Sort — Masked",
+  "category": "video-glitch-pipelines",
+  "description": "Sorts only the pixels whose brightness falls inside a mid-tone band, leaving shadows and highlights intact — the selective look, not the whole-frame smear. A real per-frame sort applied to every frame.",
+  "tags": [
+   "pixelsort",
+   "sort",
+   "glitch",
+   "mask",
+   "band"
+  ],
+  "icon": "🌈",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "pixel-sort-diagonal",
+  "name": "Pixel Sort — Diagonal",
+  "category": "video-glitch-pipelines",
+  "description": "The masked sort, run along a 45° axis so the streaks fall on the diagonal instead of the scanline. Rotate → sort the band → rotate back.",
+  "tags": [
+   "pixelsort",
+   "sort",
+   "glitch",
+   "diagonal",
+   "angle"
+  ],
+  "icon": "📐",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "lens-vintage-wide",
+  "name": "Lens — Vintage Wide",
+  "category": "retro-analog",
+  "description": "A named-lens profile: radial barrel/pincushion distortion plus real chromatic aberration that grows toward the edges — the physical fingerprint of a vintage wide lens. Not a filter preset; an actual per-pixel radial remap.",
+  "tags": [
+   "lens",
+   "distortion",
+   "chromatic",
+   "aberration",
+   "barrel",
+   "vintage-wide"
+  ],
+  "icon": "🔎",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "lens-cctv",
+  "name": "Lens — Cctv",
+  "category": "retro-analog",
+  "description": "A named-lens profile: radial barrel/pincushion distortion plus real chromatic aberration that grows toward the edges — the physical fingerprint of a cctv lens. Not a filter preset; an actual per-pixel radial remap.",
+  "tags": [
+   "lens",
+   "distortion",
+   "chromatic",
+   "aberration",
+   "barrel",
+   "cctv"
+  ],
+  "icon": "🔎",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "lens-anamorphic",
+  "name": "Lens — Anamorphic",
+  "category": "retro-analog",
+  "description": "A named-lens profile: radial barrel/pincushion distortion plus real chromatic aberration that grows toward the edges — the physical fingerprint of a anamorphic lens. Not a filter preset; an actual per-pixel radial remap.",
+  "tags": [
+   "lens",
+   "distortion",
+   "chromatic",
+   "aberration",
+   "barrel",
+   "anamorphic"
+  ],
+  "icon": "🔎",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "lens-tele-pincushion",
+  "name": "Lens — Tele Pincushion",
+  "category": "retro-analog",
+  "description": "A named-lens profile: radial barrel/pincushion distortion plus real chromatic aberration that grows toward the edges — the physical fingerprint of a tele pincushion lens. Not a filter preset; an actual per-pixel radial remap.",
+  "tags": [
+   "lens",
+   "distortion",
+   "chromatic",
+   "aberration",
+   "barrel",
+   "tele-pincushion"
+  ],
+  "icon": "🔎",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "curve-film-contrast",
+  "name": "Curve — Film Contrast",
+  "category": "color-grading",
+  "description": "A gentle S-curve on the master tone curve — lifts the shadows a touch and rolls off the highlights for a filmic contrast, the classic first move in a grade. Piecewise curve through real control points, applied per frame.",
+  "tags": [
+   "curves",
+   "contrast",
+   "s-curve",
+   "film",
+   "tone",
+   "grade"
+  ],
+  "icon": "📈",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "curve-faded-matte",
+  "name": "Curve — Faded Matte",
+  "category": "color-grading",
+  "description": "Raises the black point and pulls the whites down — the “lifted blacks” matte look, done on the tone curve rather than a wash overlay.",
+  "tags": [
+   "curves",
+   "matte",
+   "faded",
+   "lifted-blacks",
+   "tone",
+   "grade"
+  ],
+  "icon": "🎞️",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "secondary-sky",
+  "name": "Secondary — Punch the Sky",
+  "category": "color-grading",
+  "description": "A colour-selective grade that keys just the blue of the sky and deepens it — more saturation, a touch darker — without touching skin or foliage. A real HSL secondary, not a global push.",
+  "tags": [
+   "secondary",
+   "hsl",
+   "qualifier",
+   "sky",
+   "blue",
+   "grade"
+  ],
+  "icon": "🌤️",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "secondary-skin",
+  "name": "Secondary — Warm the Skin",
+  "category": "color-grading",
+  "description": "Keys the orange skin-tone band and warms it slightly while leaving the rest of the frame alone — the classic skin secondary.",
+  "tags": [
+   "secondary",
+   "hsl",
+   "qualifier",
+   "skin",
+   "orange",
+   "grade"
+  ],
+  "icon": "🧑",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "power-window-spotlight",
+  "name": "Power Window — Spotlight",
+  "category": "color-grading",
+  "description": "Grade just part of the frame — a feathered elliptical window in the centre with a brightness/contrast lift, so the subject pops and the surround sits back. The colourist’s spotlight, per-region and edge-blended.",
+  "tags": [
+   "power-window",
+   "mask",
+   "vignette",
+   "spotlight",
+   "secondary",
+   "grade"
+  ],
+  "icon": "🔦",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "power-window-darken-edges",
+  "name": "Power Window — Darken Surround",
+  "category": "color-grading",
+  "description": "The inverse window — leaves the centre alone and pulls the edges down, a soft graded vignette that isn’t just a black overlay.",
+  "tags": [
+   "power-window",
+   "vignette",
+   "mask",
+   "invert",
+   "darken",
+   "grade"
+  ],
+  "icon": "🌑",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "deflicker",
+  "name": "Deflicker (timelapse)",
+  "category": "motion-speed",
+  "description": "Evens out the exposure flicker that plagues aperture-priority timelapses — tracks a smoothed running brightness and scales each frame onto it, killing the fast jitter while keeping the slow day→night change.",
+  "tags": [
+   "deflicker",
+   "timelapse",
+   "flicker",
+   "exposure",
+   "stabilise"
+  ],
+  "icon": "💡",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "jello-sim",
+  "name": "Rolling Shutter (jello)",
+  "category": "retro-analog",
+  "description": "Simulates the CMOS rolling-shutter wobble — each row is captured a hair later, so the frame skews and wobbles like handheld phone video during fast motion. A per-row time-skew model, not a filter.",
+  "tags": [
+   "rolling-shutter",
+   "jello",
+   "wobble",
+   "cmos",
+   "skew",
+   "phone"
+  ],
+  "icon": "🍮",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "jello-correct",
+  "name": "De-jello (correct skew)",
+  "category": "motion-speed",
+  "description": "The inverse — counter-shears each row to straighten a rolling-shutter skew, taking the lean out of fast-pan footage.",
+  "tags": [
+   "rolling-shutter",
+   "correct",
+   "de-skew",
+   "stabilise",
+   "straighten"
+  ],
+  "icon": "📐",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "speed-blur-4x",
+  "name": "Timelapse 4× (motion blur)",
+  "category": "motion-speed",
+  "description": "Speeds the clip up 4× the right way — instead of dropping frames (which strobes), it BLENDS the frames it skips, so motion smears smoothly like a long exposure. The timelapse look without the stutter.",
+  "tags": [
+   "timelapse",
+   "speed",
+   "motion-blur",
+   "blend",
+   "long-exposure"
+  ],
+  "icon": "💨",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "film-grain",
+  "name": "Film Grain",
+  "category": "retro-analog",
+  "description": "Real plate-based film grain — silver-halide clumps with actual spatial structure, luma-weighted so it lives in the mids and fades in the blacks and highlights. The plate shifts each frame like a physical negative. Not per-pixel digital noise.",
+  "tags": [
+   "grain",
+   "film",
+   "analog",
+   "plate",
+   "texture",
+   "35mm"
+  ],
+  "icon": "🎞️",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "halation-bloom",
+  "name": "Halation & Bloom",
+  "category": "artistic-stylize",
+  "description": "A physical light-bleed pass — the brightest highlights are thresholded, blurred, tinted red, and screened back so they bloom and bleed into their surroundings the way real film halates around blown-out light. Not procedural noise.",
+  "tags": [
+   "halation",
+   "bloom",
+   "glow",
+   "film",
+   "highlight",
+   "light"
+  ],
+  "icon": "🌟",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "feedback-tunnel",
+  "name": "Feedback Tunnel",
+  "category": "video-glitch-pipelines",
+  "description": "The infinite video-feedback tunnel. Each frame re-draws the last one zoomed and rotated a touch, fading as it goes, so any detail spirals outward forever. Runs offline over the whole clip.",
+  "tags": [
+   "feedback",
+   "tunnel",
+   "zoom",
+   "rotate",
+   "trippy",
+   "psychedelic"
+  ],
+  "icon": "🌀",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "feedback-vortex",
+  "name": "Feedback Vortex",
+  "category": "video-glitch-pipelines",
+  "description": "The tunnel wound tighter — stronger zoom, faster spin, longer trails. Everything gets pulled into the swirl.",
+  "tags": [
+   "feedback",
+   "vortex",
+   "spiral",
+   "zoom",
+   "rotate",
+   "trippy"
+  ],
+  "icon": "🌪️",
+  "slow": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "color-match",
+  "name": "Match Colour to a Reference",
+  "category": "color-grading",
+  "description": "Upload a still from a film you like. Generates a 3D LUT that transforms your footage into its colour palette. Pure statistics — no model.",
+  "tags": [
+   "lut",
+   "color",
+   "match",
+   "reference",
+   "grade",
+   "film"
+  ],
+  "icon": "🎨",
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "hw-transcode",
+  "name": "⚡ Hardware Transcode",
+  "category": "video-editing",
+  "description": "Re-encode on the GPU via WebCodecs — the same silicon Chrome uses to play YouTube. 10–50× faster than WebAssembly.",
+  "tags": [
+   "hardware",
+   "webcodecs",
+   "fast",
+   "gpu",
+   "transcode"
+  ],
+  "icon": "⚡",
+  "fast": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "hw-glitch",
+  "name": "⚡ Hardware Glitch (GPU shader)",
+  "category": "video-glitch-pipelines",
+  "description": "Decode on hardware → run a TRIP CAM shader on the GPU → encode on hardware. The pixels never touch the CPU.",
+  "tags": [
+   "hardware",
+   "webcodecs",
+   "shader",
+   "gpu",
+   "glitch",
+   "fast"
+  ],
+  "icon": "⚡",
+  "fast": true,
+  "_src": "WORKFLOWS_V4"
+ },
+ {
+  "id": "mosh-classic-smear",
+  "name": "Motion Mosh — Classic Smear",
+  "category": "video-glitch-pipelines",
+  "description": "The real thing. Motion vectors from each new frame, applied to the old picture. The scene drags itself into the next one.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "smear",
+   "classic"
+  ],
+  "icon": "🌀",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-total-liquefaction",
+  "name": "Motion Mosh — Total Liquefaction",
+  "category": "video-glitch-pipelines",
+  "description": "Small blocks, long search, nothing ever refreshes. The image never recovers.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "extreme",
+   "liquid",
+   "chaos"
+  ],
+  "icon": "🫠",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-pulse",
+  "name": "Motion Mosh — Pulse",
+  "category": "video-glitch-pipelines",
+  "description": "Moshes for 24 frames, then lets a clean frame back in. Breathes. Good over a beat.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "rhythmic",
+   "pulse",
+   "beat"
+  ],
+  "icon": "💓",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-bloom",
+  "name": "Motion Mosh — Bloom",
+  "category": "video-glitch-pipelines",
+  "description": "Big blocks, hard vectors. The picture pushes outward and blooms.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "bloom",
+   "push",
+   "expand"
+  ],
+  "icon": "💥",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-compression-death",
+  "name": "Motion Mosh — Compression Death",
+  "category": "video-glitch-pipelines",
+  "description": "Motion mosh PLUS a real JPEG re-encode every frame at quality 0.2. Genuine DCT blocking, because it is genuine DCT blocking.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "jpeg",
+   "compression",
+   "artifacts",
+   "blocky"
+  ],
+  "icon": "🧱",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-ghost-trails",
+  "name": "Motion Mosh — Ghost Trails",
+  "category": "video-glitch-pipelines",
+  "description": "Gentle vectors, very long persistence. Motion leaves a trail instead of tearing the frame apart.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "ghost",
+   "trails",
+   "subtle"
+  ],
+  "icon": "👻",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-scene-cut-only",
+  "name": "Motion Mosh — Scene-Cut Only",
+  "category": "video-glitch-pipelines",
+  "description": "Clean most of the time — then detonates on every scene change. Cuts are where moshing looks best, because that is exactly where the codec would have inserted a keyframe and we refuse to.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "scene",
+   "cut",
+   "transition",
+   "smart"
+  ],
+  "icon": "✂️",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-horizontal-smear",
+  "name": "Motion Mosh — Horizontal Smear",
+  "category": "video-glitch-pipelines",
+  "description": "Directional mosh — the vertical component of every motion vector is killed, so the whole image drags sideways. The classic horizontal datamosh streak.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "directional",
+   "horizontal",
+   "smear",
+   "classic"
+  ],
+  "icon": "↔️",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-vertical-drip",
+  "name": "Motion Mosh — Vertical Drip",
+  "category": "video-glitch-pipelines",
+  "description": "Directional mosh biased to the vertical axis — motion bleeds up and down like the picture is melting off the screen.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "directional",
+   "vertical",
+   "drip"
+  ],
+  "icon": "↕️",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-masked-mosh",
+  "name": "Motion Mosh — Masked Mosh",
+  "category": "video-glitch-pipelines",
+  "description": "Only the moving parts tear — everything still stays sharp. Motion-magnitude masking keeps the background clean while the subject smears.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "mask",
+   "motion",
+   "selective"
+  ],
+  "icon": "🎭",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-amplified-chaos",
+  "name": "Motion Mosh — Amplified Chaos",
+  "category": "video-glitch-pipelines",
+  "description": "A non-linear amplification curve pushes every motion vector toward the max — even gentle motion detonates into a full smear.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "amplify",
+   "curve",
+   "extreme"
+  ],
+  "icon": "💢",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "mosh-bloom-push",
+  "name": "Motion Mosh — Bloom Push",
+  "category": "video-glitch-pipelines",
+  "description": "Applies each frame’s displacement four times over, pushing the picture outward and blooming with every pass.",
+  "tags": [
+   "datamosh",
+   "motion",
+   "realtime",
+   "true",
+   "bloom",
+   "repeat",
+   "push",
+   "expand"
+  ],
+  "icon": "🌸",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "flow-liquid",
+  "name": "Flow Warp — Liquid",
+  "category": "video-glitch-pipelines",
+  "description": "Uses each frame’s own optical flow as a displacement map — the picture warps like liquid exactly where the scene moves, and stays sharp where it’s still. Not a datamosh tear; a smooth bilinear warp.",
+  "tags": [
+   "flow",
+   "displacement",
+   "warp",
+   "optical",
+   "liquid",
+   "smooth"
+  ],
+  "icon": "💧",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "flow-heat-haze",
+  "name": "Flow Warp — Heat Haze",
+  "category": "video-glitch-pipelines",
+  "description": "A gentler flow warp — subtle shimmer that ripples the moving parts like heat off tarmac.",
+  "tags": [
+   "flow",
+   "displacement",
+   "warp",
+   "optical",
+   "haze",
+   "shimmer",
+   "subtle"
+  ],
+  "icon": "🔥",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "flow-riptide",
+  "name": "Flow Warp — Riptide",
+  "category": "video-glitch-pipelines",
+  "description": "Small blocks, long search, heavy scale — the whole frame is dragged into the current. Everything that moves smears violently.",
+  "tags": [
+   "flow",
+   "displacement",
+   "warp",
+   "optical",
+   "extreme",
+   "drag",
+   "current"
+  ],
+  "icon": "🌊",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "vector-overlay",
+  "name": "Motion Vectors — Overlay",
+  "category": "video-glitch-pipelines",
+  "description": "Draws the estimated motion field as green arrows over a dimmed version of the frame — the codec’s-eye view of your footage. The overlay is on by default; genuinely useful for dialling a mosh in, and a striking look on its own.",
+  "tags": [
+   "motion",
+   "vectors",
+   "overlay",
+   "debug",
+   "flow",
+   "arrows"
+  ],
+  "icon": "🧭",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "stabilise",
+  "name": "Stabilise",
+  "category": "motion-speed",
+  "description": "Steadies shaky footage using the same motion estimation as the mosh — the median of each frame’s field IS the camera’s motion, so it integrates the camera path, smooths it, and counter-shifts each frame. The intended pan survives; the shake goes.",
+  "tags": [
+   "stabilise",
+   "stabilize",
+   "steady",
+   "smooth",
+   "motion",
+   "shake"
+  ],
+  "icon": "🎯",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "flow-slomo",
+  "name": "Slow-Mo (optical flow)",
+  "category": "motion-speed",
+  "description": "Real slow motion — synthesises the in-between frames by warping along the motion field, so movement lands at its true intermediate position instead of juddering on duplicated frames. 2× smoother slow-mo from any clip.",
+  "tags": [
+   "slowmo",
+   "slow-motion",
+   "interpolation",
+   "optical-flow",
+   "retime",
+   "smooth"
+  ],
+  "icon": "🐢",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "blend-slomo",
+  "name": "Slow-Mo (frame blend)",
+  "category": "motion-speed",
+  "description": "The other retime method — cross-dissolves neighbouring frames instead of warping along the motion. Cheaper and softer than optical-flow slow-mo (moving objects ghost rather than land sharp); the classic frame-mix look. Pair with “Slow-Mo (optical flow)” and pick per shot.",
+  "tags": [
+   "slowmo",
+   "frame-blend",
+   "retime",
+   "dissolve",
+   "toggle"
+  ],
+  "icon": "🐌",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ },
+ {
+  "id": "auto-reframe",
+  "name": "Auto-Reframe → Vertical",
+  "category": "motion-speed",
+  "description": "Turns a horizontal clip into a 9:16 vertical one that FOLLOWS the action — it tracks the centre of motion (the subject) and pans the crop to keep it in frame, instead of a dumb centre crop that loses whatever’s moving.",
+  "tags": [
+   "reframe",
+   "vertical",
+   "9:16",
+   "track",
+   "subject",
+   "social"
+  ],
+  "icon": "📱",
+  "slow": true,
+  "_src": "WORKFLOWS_V5"
+ }
+]

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { activeSequence } from "../state/sequences";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
-import type { Clip, EffectDef, EffectPreset } from "../types";
+import type { AudioWorkflow, Clip, EffectDef, EffectPreset } from "../types";
 import { CommitSlider } from "./CommitSlider";
 import { KeyframeField, type FieldSpec } from "./KeyframeField";
 import { useClipProps } from "./ClipPropsPanel";
@@ -46,7 +46,7 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
   useEffect(() => { void api.getEffectPresets().then(setPresets).catch(() => {}); }, []);
   const mine$ = Object.entries(presets).filter(([, p]) => p.kind === kind);
   const savePreset = async () => {
-    const effects = clip.effects.filter((e) => e.effect !== "graph").map((e) => ({ effect: e.effect, params: { ...e.params } }));
+    const effects = clip.effects.filter((e) => e.effect !== "graph" && e.effect !== "afilterchain").map((e) => ({ effect: e.effect, params: { ...e.params } }));
     try { setPresets(await api.saveEffectPreset(presetName.trim(), { kind, effects })); setPresetPick(presetName.trim()); setPresetName(""); toast("info", `Saved look "${presetName.trim()}"`); } catch (e) { toast("error", String(e)); }
   };
   const applyPreset = () => {
@@ -55,6 +55,10 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
     const commands = p.effects.map((e) => ({ type: "add_effect" as const, clip: clip.id, effect: e.effect, params: { ...e.params } }));
     void dispatch({ type: "batch", label: `Apply look "${presetPick}"`, commands });
   };
+  const [workflows, setWorkflows] = useState<AudioWorkflow[]>([]);
+  const [workflowPick, setWorkflowPick] = useState("");
+  useEffect(() => { if (clip.kind === "audio") void api.listAudioWorkflows().then(setWorkflows).catch(() => {}); }, [clip.kind]);
+  const workflow = workflows.find((w) => w.id === workflowPick);
   const byId = (id: string) => defs.find((d) => d.id === id);
   const mine = defs.filter((d) => d.kind === clip.kind);
   const groups = [...new Set(mine.map((d) => d.category))];
@@ -83,11 +87,24 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           <button disabled={!sameKind || extraIds.length === 0} title="Add the copied effects to this clip and every clip added with Shift/Ctrl+click (one undo step)" onClick={() => paste(allClips.filter((c) => c.id === clip.id || extraIds.includes(c.id)))}>Paste to selected</button>
         </div>
       </div>
+      {clip.kind === "audio" && workflows.length > 0 && (
+        <div className="field" aria-label="Audio workflows">
+          <label>Audio workflows (from the browser app: mastering, lo-fi, slowed + reverb…)</label>
+          <div className="row">
+            <select aria-label="Audio workflow" value={workflowPick} onChange={(e) => setWorkflowPick(e.target.value)}>
+              <option value="">choose a workflow…</option>
+              {workflows.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            <button disabled={!workflow} title="Add this workflow's filter chain to the clip as an effect (one undo step)" onClick={() => workflow && void dispatch({ type: "add_audio_chain", clip: clip.id, chain: workflow.chain })}>Apply</button>
+          </div>
+          {workflow && <p className="muted pad">{workflow.description}</p>}
+        </div>
+      )}
       <div className="field" aria-label="Saved looks">
         <label>Saved looks</label>
         <div className="row">
           <input aria-label="Look name" placeholder="name this stack" value={presetName} onChange={(e) => setPresetName(e.target.value)} />
-          <button disabled={!presetName.trim() || clip.effects.filter((e) => e.effect !== "graph").length === 0} title="Save this clip's effect stack under that name" onClick={() => void savePreset()}>Save</button>
+          <button disabled={!presetName.trim() || clip.effects.filter((e) => e.effect !== "graph" && e.effect !== "afilterchain").length === 0} title="Save this clip's effect stack under that name" onClick={() => void savePreset()}>Save</button>
         </div>
         {mine$.length > 0 && (
           <div className="row">
@@ -127,6 +144,7 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
                 <span className="muted"> {fx.graph ? `${fx.graph.nodes.length - 2} filter(s)` : ""}</span>
               </div>
             )}
+            {fx.effect === "afilterchain" && <ChainText key={fx.text ?? ""} text={fx.text ?? ""} onCommit={(t) => void dispatch({ type: "set_effect_text", clip: clip.id, effect_id: fx.id, text: t })} />}
             {fx.effect === "lut" && (
               <div className="field row">
                 <button onClick={() => void (async () => {
@@ -159,6 +177,20 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** The text of an audio filter chain effect: edited freely, checked by the engine (unknown filters and odd characters are refused with a message). */
+function ChainText({ text, onCommit }: { text: string; onCommit: (t: string) => void }) {
+  const [v, setV] = useState(text);
+  return (
+    <div className="field">
+      <textarea aria-label="Audio filter chain" rows={4} spellCheck={false} value={v} onChange={(e) => setV(e.target.value)} />
+      <div className="row">
+        <button disabled={v.trim() === text.trim() || !v.trim()} onClick={() => onCommit(v)}>Apply text</button>
+        <span className="muted grow">FFmpeg audio filters separated by commas; @SR@ is the project sample rate.</span>
+      </div>
     </div>
   );
 }

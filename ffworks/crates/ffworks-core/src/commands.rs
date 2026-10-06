@@ -69,6 +69,10 @@ pub enum Command {
     SetEffectPicture { clip: Id, effect_id: Id, media: Option<Id> },
     /// The lookup-table file a `lut` effect applies, or none.
     SetEffectFile { clip: Id, effect_id: Id, path: Option<String> },
+    /// Add an audio filter chain effect (`effects::check_audio_chain`) to an audio clip.
+    AddAudioChain { clip: Id, chain: String, index: Option<usize> },
+    /// Change the text of an audio filter chain effect.
+    SetEffectText { clip: Id, effect_id: Id, text: String },
     MoveEffect { clip: Id, effect_id: Id, index: usize },
     SetClipOpacity { clip: Id, opacity: f64 },
     /// Set a static clip parameter (`x`, `y`, `scale`, `rotation`, `opacity`) or `fx:<effect id>:<param>`. Refused while the parameter is animated.
@@ -182,6 +186,8 @@ impl Command {
             Command::SetEffectGraph { .. } => "Edit filter graph".into(),
             Command::SetEffectPicture { .. } => "Set mask picture".into(),
             Command::SetEffectFile { .. } => "Set LUT file".into(),
+            Command::AddAudioChain { .. } => "Add audio filter chain".into(),
+            Command::SetEffectText { .. } => "Edit audio filter chain".into(),
             Command::MoveEffect { .. } => "Reorder effect".into(),
             Command::SetClipOpacity { .. } => "Clip opacity".into(),
             Command::SetClipParam { param, .. } => format!("Set {param}"),
@@ -540,6 +546,32 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
                 }
             }
             Ok(out)
+        }
+        Command::AddAudioChain { clip, chain, index } => {
+            let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+            ensure_unlocked(t)?;
+            if c.kind != TrackKind::Audio || c.adjustment {
+                return Err(Error::validation("an audio filter chain applies to audio clips; select the audio clip"));
+            }
+            effects::check_audio_chain(chain)?;
+            let mut c2 = c.clone();
+            let mut inst = EffectInstance::new(new_id("fx"), "afilterchain", &BTreeMap::new())?;
+            inst.text = Some(chain.trim().to_string());
+            let at = index.unwrap_or(c2.effects.len()).min(c2.effects.len());
+            c2.effects.insert(at, inst);
+            Ok(vec![Patch::PutClip { seq: sid.clone(), track: t.id.clone(), clip: c2 }])
+        }
+        Command::SetEffectText { clip, effect_id, text } => {
+            let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+            ensure_unlocked(t)?;
+            let mut c2 = c.clone();
+            let fx = c2.effects.iter_mut().find(|e| &e.id == effect_id).ok_or_else(|| Error::NotFound(format!("effect {effect_id}")))?;
+            if fx.effect != "afilterchain" {
+                return Err(Error::validation("only an audio filter chain effect has text"));
+            }
+            effects::check_audio_chain(text)?;
+            fx.text = Some(text.trim().to_string());
+            Ok(vec![Patch::PutClip { seq: sid.clone(), track: t.id.clone(), clip: c2 }])
         }
         Command::AddEffect { .. } | Command::RemoveEffect { .. } | Command::SetEffectParam { .. } | Command::SetEffectEnabled { .. } | Command::SetEffectGraph { .. } | Command::SetEffectPicture { .. } | Command::SetEffectFile { .. } | Command::MoveEffect { .. } | Command::SetClipOpacity { .. } | Command::SetClipParam { .. } | Command::SetClipBlend { .. } | Command::SetClipFades { .. } | Command::SetKeyframe { .. } | Command::SetKeyframes { .. } | Command::RemoveKeyframe { .. } | Command::ClearKeyframes { .. } => {
             let clip_id = match cmd {

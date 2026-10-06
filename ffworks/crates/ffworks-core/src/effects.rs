@@ -79,6 +79,7 @@ fn builtin_registry() -> Vec<EffectDef> {
         au("lowpass", "Low-pass filter", "EQ", &["lowpass"], vec![p("freq", "Cutoff", 1000.0, 20000.0, 12000.0, 50.0, "Hz")]),
         au("compressor", "Compressor", "Dynamics", &["acompressor"], vec![p("threshold", "Threshold", -60.0, 0.0, -18.0, 0.5, "dB"), p("ratio", "Ratio", 1.0, 20.0, 4.0, 0.1, ":1"), p("attack", "Attack", 1.0, 200.0, 20.0, 1.0, "ms"), p("release", "Release", 20.0, 1000.0, 250.0, 5.0, "ms"), p("makeup", "Make-up gain", 0.0, 24.0, 0.0, 0.5, "dB")]),
         au("limiter", "Limiter", "Dynamics", &["alimiter"], vec![p("ceiling", "Ceiling", -24.0, 0.0, -1.0, 0.5, "dB")]),
+        au("afilterchain", "Audio filter chain (advanced)", "Advanced", &[], vec![]),
         au("echo", "Echo", "Time", &["aecho"], vec![p("delay", "Delay", 20.0, 2000.0, 300.0, 10.0, "ms"), p("decay", "Decay", 0.0, 0.9, 0.4, 0.05, "")]),
         au("denoise", "Noise reduction (FFT)", "Restoration", &["afftdn"], vec![p("amount", "Reduction", 0.0, 40.0, 12.0, 0.5, "dB")]),
         au("normalizer", "Dynamic normalizer", "Dynamics", &["dynaudnorm"], vec![]),
@@ -171,6 +172,69 @@ pub struct EffectInstance {
     /// Only for `lut`: the lookup-table file (`.cube`, `.3dl`, `.dat`, `.m3d`, `.csp`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// Only for `afilterchain`: the FFmpeg audio filter chain (see `check_audio_chain`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
+/// Audio filters an `afilterchain` may use: tone, dynamics, modulation and time/pitch filters. Nothing that reads or writes files, opens
+/// network or control sockets, or changes the number of streams.
+pub const CHAIN_FILTERS: &[&str] = &[
+    "equalizer", "volume", "lowpass", "highpass", "bandpass", "bandreject", "bass", "treble", "acompressor", "alimiter", "agate", "compand", "loudnorm", "dynaudnorm", "speechnorm", "aecho", "aphaser", "chorus", "flanger", "tremolo", "vibrato", "apulsator", "stereotools", "stereowiden", "extrastereo",
+    "crystalizer", "asoftclip", "acrusher", "afftdn", "anlmdn", "adeclick", "adeclip", "deesser", "adelay", "asetrate", "aresample", "atempo", "areverse", "afade", "aexciter", "anequalizer", "firequalizer", "silenceremove", "highshelf", "lowshelf", "allpass", "biquad",
+];
+
+/// Largest chain accepted (characters).
+pub const CHAIN_MAX_CHARS: usize = 2000;
+
+/// Split a chain at its top-level commas (commas inside parentheses belong to expressions).
+fn chain_parts(text: &str) -> Vec<&str> {
+    let (mut depth, mut start, mut out) = (0i32, 0, vec![]);
+    for (i, c) in text.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(&text[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&text[start..]);
+    out
+}
+
+/// The filter names used by a chain, in order.
+pub fn chain_filter_names(text: &str) -> Vec<String> {
+    chain_parts(text).iter().map(|p| p.trim().split('=').next().unwrap_or("").trim().to_string()).collect()
+}
+
+/// A chain goes into the filter graph as text, so it is restricted to known audio filters and a plain character set: no quotes, labels,
+/// brackets, semicolons, backslashes or newlines. `@SR@` stands for the project's sample rate.
+pub fn check_audio_chain(text: &str) -> Result<()> {
+    if text.chars().count() > CHAIN_MAX_CHARS {
+        return Err(Error::validation(format!("the filter chain is longer than {CHAIN_MAX_CHARS} characters")));
+    }
+    if let Some(c) = text.chars().find(|c| !(c.is_ascii_alphanumeric() || "_=:,.-+*/()| @".contains(*c))) {
+        return Err(Error::validation(format!("the filter chain contains '{c}'; only letters, digits and _ = : , . - + * / ( ) | @ are allowed")));
+    }
+    let mut depth = 0i32;
+    for c in text.chars() {
+        depth += i32::from(c == '(') - i32::from(c == ')');
+        if depth < 0 {
+            return Err(Error::validation("the filter chain has an unmatched ')'"));
+        }
+    }
+    if depth != 0 {
+        return Err(Error::validation("the filter chain has an unmatched '('"));
+    }
+    for n in chain_filter_names(text) {
+        if !CHAIN_FILTERS.contains(&n.as_str()) {
+            return Err(Error::validation(if n.is_empty() { "the filter chain has an empty step".to_string() } else { format!("'{n}' is not an audio filter this chain allows (allowed: {})", CHAIN_FILTERS.join(", ")) }));
+        }
+    }
+    Ok(())
 }
 
 /// File types FFmpeg's `lut3d` reads.
@@ -197,7 +261,7 @@ impl EffectInstance {
             params.insert(k.clone(), *v);
         }
         let graph = (effect == GRAPH_EFFECT).then(crate::filtergraph::FilterGraph::passthrough);
-        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph, picture: None, file: None })
+        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph, picture: None, file: None, text: None })
     }
 }
 
@@ -368,6 +432,13 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
             }
             crate::bake::mark(&sort)
         }
+        "afilterchain" => match inst.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+            None => return Ok(None),
+            Some(t) => {
+                check_audio_chain(t)?;
+                t.to_string()
+            }
+        },
         "lut" => {
             // nothing happens until a file is chosen; a chosen file that has gone missing is an error, not a silent no-op
             let Some(f) = inst.file.as_deref() else { return Ok(None) };
@@ -456,7 +527,7 @@ mod tests {
         for d in registry() {
             let e = EffectInstance::new("x".into(), d.id, &BTreeMap::new()).unwrap();
             // crop, eq and volume at their defaults are deliberate no-ops
-            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume", "lut"].contains(&d.id), "{}", d.id);
+            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume", "lut", "afilterchain"].contains(&d.id), "{}", d.id);
         }
     }
 

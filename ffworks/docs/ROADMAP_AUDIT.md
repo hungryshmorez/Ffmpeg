@@ -32,3 +32,6 @@ Effects: 24 + 3 more, frei0r colour/position params · detection (silence/black/
 * DONE: unfinished exports are journalled and offered again after a crash or close.
 * DONE: export naming templates + never-overwrite versioning (dialog and CLI).
 * Cross-cutting: SQLite media library (DONE), smart rendering of intermediates (DONE; re-encoding only changed spans of the final file and resuming it after a crash are open), accessibility pass (names/dialog scan DONE, keyboard clip move/trim DONE, contrast audit + fixes DONE, dialog focus trap/return/Escape DONE, job progress announcements DONE, reduced motion + forced-colours rules DONE but forced-colours unverified in use; real screen-reader pass open), colour management (Rec.709 projects: DONE; LUT files DONE; HDR10 export preset DONE (SDR mapped to PQ); project HDR colour space and ICC open), preview/analysis through the job queue (DONE, see STATUS.md).
+
+## E. Browser-app workflows
+* 227 unique workflows in the browser app; **19 ported** (audio mastering, as audio filter chains), **208 not ported** and not yet individually audited. See `docs/WORKFLOW_PARITY.md` (generated list with status) and `docs/browser_workflows.json`. Next: read the browser app's control-panel mapping (`app.js`) category by category, port what FFWORKS lacks, mark what it already covers.

@@ -62,6 +62,7 @@ pub mod subtitles;
 pub mod naming;
 pub mod reactive;
 pub mod time;
+pub mod workflows;
 pub mod titles;
 pub mod transitions;
 

@@ -534,7 +534,12 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
             }
             for fx in &seg.filters {
                 chain.push(',');
-                chain.push_str(fx);
+                chain.push_str(&fx.replace("@SR@", &sr.to_string()));
+                // pitch/tempo filters change the length and the rate: bring both back so the clip still fills exactly its place
+                if fx.contains("asetrate") || fx.contains("atempo") {
+                    let n = seg.duration.round_units(rate);
+                    chain.push_str(&format!(",aresample={sr},apad=whole_len={n},atrim=end_sample={n},asetpts=PTS-STARTPTS"));
+                }
             }
             for p in [seg.pan, seg.track_pan] {
                 if let Some(b) = balance_filter(p) {
