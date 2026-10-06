@@ -10,7 +10,9 @@ Columns: id, name, category, description, chain.
 import json, os, sys
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 w = json.load(open(os.path.join(root, "docs", "browser_workflows.json")))
-SECTIONS = {5, 7, 8, 9, 13, 16, 19}
+SECTIONS = {5, 7, 8, 9, 13, 16, 19, 31}
+# Sections 30 (zoom, shake: size changes / need the source length) and the interlace option of 31 (changes the frame rate) are not expressible here.
+SKIP_KEYS = {"interlace-enable"}
 NEUTRAL = {"vcodec", "acodec"}  # encode choices of the browser app's own pipeline, not part of the look
 
 def n(x):
@@ -77,6 +79,23 @@ def chain(s):
                 vf.append(f"lutyuv=y=if(between(val,{lo},{hi}),val+random(1)*{sp},val):u=val:v=val")
             else:
                 vf.append(f"noise=alls={max(5, min(80, sp))}:allf=t+u")
+    if s.get("enable-31"):
+        g = lambda k, d: s.get(k, d)
+        if s.get("crt-enable"): vf.append("lenscorrection=k1=0.15:k2=0.15")
+        if s.get("scan-enable"):
+            sp = int(g("scan-spacing", 3)) or 3
+            op = float(g("scan-opacity", 0.5)) or 0.5
+            vf.append(f"geq=lum_expr=lum(X,Y)*(1-{op:.2f}*mod(Y,{sp})/{sp}):cb_expr=cb(X,Y):cr_expr=cr(X,Y)")
+        if s.get("chromableed-enable"):
+            h = int(g("chromableed-h", 3)) or 3
+            v = int(g("chromableed-v", 0))
+            vf.append(f"chromashift=cbh={h}:cbv={v}:crh={h}:crv={v}")
+        if s.get("tracking-enable"):
+            sev = int(g("tracking-severity", 10)) or 10
+            vf.append(f"geq=lum_expr=lum(mod(X+{sev}*random(1)*gt(mod(Y,40),36),W),Y):cb_expr=cb(X,Y):cr_expr=cr(X,Y)")
+        if s.get("dropout-enable"):
+            f = float(g("dropout-freq", 0.02)) or 0.02
+            vf.append(f"geq=lum_expr=if(lt(random(1),{n(f)}),0,lum(X,Y)):cb_expr=cb(X,Y):cr_expr=cr(X,Y)")
     return ",".join(vf)
 
 rows = []
@@ -85,7 +104,7 @@ for x in w:
     if not s or "fullChain" in x: continue
     enabled = {int(k.split("-")[1]) for k in s if k.startswith("enable-") and s[k] and k.split("-")[1].isdigit()}
     enabled -= {1}  # section 1 = container/codec choice
-    if not enabled or not enabled <= SECTIONS: continue
+    if not enabled or not enabled <= SECTIONS or any(s.get(k) for k in SKIP_KEYS): continue
     if x["category"] not in ("color-grading", "retro-analog", "artistic-stylize", "glitch", "video-glitch-pipelines"): continue
     if s.get("emboss") or s.get("sobel") and False: continue
     c = chain(s)
