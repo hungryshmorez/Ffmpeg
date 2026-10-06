@@ -30,6 +30,11 @@ pub fn package(project: &Project, dir: &Path, project_file_name: &str) -> Result
     if !missing.is_empty() {
         return Err(Error::validation(format!("cannot package: these media files are missing (relink them first): {}", missing.join(", "))));
     }
+    let lut_files = || project.sequences.iter().flat_map(|q| q.tracks.iter()).flat_map(|t| t.clips.iter()).flat_map(|c| c.effects.iter()).filter_map(|e| e.file.clone());
+    let missing_luts: Vec<String> = lut_files().filter(|f| !Path::new(f).is_file()).collect();
+    if !missing_luts.is_empty() {
+        return Err(Error::validation(format!("cannot package: these lookup table files are missing: {}", missing_luts.join(", "))));
+    }
     let (mut files, mut bytes) = (0usize, 0u64);
     for m in copy.media.iter_mut().filter(|m| !m.is_generated()) {
         if crate::imgseq::is_pattern(&m.path) {
@@ -60,6 +65,24 @@ pub fn package(project: &Project, dir: &Path, project_file_name: &str) -> Result
             files += 1;
             m.path = to.to_string_lossy().into_owned();
         }
+    }
+    // lookup tables go beside the media, and the packaged project points at the copies
+    let lut_dir = dir.join("luts");
+    let mut copied: std::collections::HashMap<String, String> = Default::default();
+    for fx in copy.sequences.iter_mut().flat_map(|q| q.tracks.iter_mut()).flat_map(|t| t.clips.iter_mut()).flat_map(|c| c.effects.iter_mut()) {
+        let Some(from) = fx.file.clone() else { continue };
+        if let Some(done) = copied.get(&from) {
+            fx.file = Some(done.clone());
+            continue;
+        }
+        std::fs::create_dir_all(&lut_dir).map_err(|e| Error::io(&lut_dir, e))?;
+        let name = unique_name(&lut_dir, Path::new(&from).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "lut.cube".into()).as_str());
+        let to = lut_dir.join(&name);
+        bytes += std::fs::copy(&from, &to).map_err(|e| Error::io(&to, e))?;
+        files += 1;
+        let to = to.to_string_lossy().into_owned();
+        copied.insert(from, to.clone());
+        fx.file = Some(to);
     }
     let file = dir.join(format!("{project_file_name}.{}", crate::brand::PROJECT_EXTENSION));
     let json = serde_json::to_string_pretty(&copy)?;

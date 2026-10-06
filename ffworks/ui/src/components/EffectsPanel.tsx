@@ -1,7 +1,9 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
+import { activeSequence } from "../state/sequences";
 import { api } from "../api";
 import { useProject, useUi } from "../state/stores";
-import type { Clip, EffectDef, EffectPreset } from "../types";
+import type { AudioWorkflow, VideoWorkflow, Clip, Command, EffectDef, EffectPreset } from "../types";
 import { CommitSlider } from "./CommitSlider";
 import { KeyframeField, type FieldSpec } from "./KeyframeField";
 import { useClipProps } from "./ClipPropsPanel";
@@ -35,8 +37,8 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
     void dispatch({ type: "batch", label: `Paste ${clip$.effects.length - skipped} effects onto ${targets.length} clip(s)`, commands: all });
   };
   const extraIds = useUi((s) => s.extra);
-  const allClips = view?.project.sequences[0]?.tracks.flatMap((t) => t.clips) ?? [];
-  const trackClips = view?.project.sequences[0]?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
+  const allClips = (view ? activeSequence(view.project) : undefined)?.tracks.flatMap((t) => t.clips) ?? [];
+  const trackClips = (view ? activeSequence(view.project) : undefined)?.tracks.find((t) => t.clips.some((c) => c.id === clip.id))?.clips ?? [clip];
   const kind = clip.kind === "audio" ? "audio" : "video";
   const [presets, setPresets] = useState<Record<string, EffectPreset>>({});
   const [presetName, setPresetName] = useState("");
@@ -44,7 +46,7 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
   useEffect(() => { void api.getEffectPresets().then(setPresets).catch(() => {}); }, []);
   const mine$ = Object.entries(presets).filter(([, p]) => p.kind === kind);
   const savePreset = async () => {
-    const effects = clip.effects.filter((e) => e.effect !== "graph").map((e) => ({ effect: e.effect, params: { ...e.params } }));
+    const effects = clip.effects.filter((e) => e.effect !== "graph" && e.effect !== "afilterchain" && e.effect !== "vfilterchain").map((e) => ({ effect: e.effect, params: { ...e.params } }));
     try { setPresets(await api.saveEffectPreset(presetName.trim(), { kind, effects })); setPresetPick(presetName.trim()); setPresetName(""); toast("info", `Saved look "${presetName.trim()}"`); } catch (e) { toast("error", String(e)); }
   };
   const applyPreset = () => {
@@ -53,6 +55,14 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
     const commands = p.effects.map((e) => ({ type: "add_effect" as const, clip: clip.id, effect: e.effect, params: { ...e.params } }));
     void dispatch({ type: "batch", label: `Apply look "${presetPick}"`, commands });
   };
+  const [workflows, setWorkflows] = useState<AudioWorkflow[]>([]);
+  const [workflowPick, setWorkflowPick] = useState("");
+  useEffect(() => { if (clip.kind === "audio") void api.listAudioWorkflows().then(setWorkflows).catch(() => {}); }, [clip.kind]);
+  const workflow = workflows.find((w) => w.id === workflowPick);
+  const [vworkflows, setVworkflows] = useState<VideoWorkflow[]>([]);
+  const [vworkflowPick, setVworkflowPick] = useState("");
+  useEffect(() => { if (clip.kind === "video") void api.listVideoWorkflows().then(setVworkflows).catch(() => {}); }, [clip.kind]);
+  const vworkflow = vworkflows.find((w) => w.id === vworkflowPick);
   const byId = (id: string) => defs.find((d) => d.id === id);
   const mine = defs.filter((d) => d.kind === clip.kind);
   const groups = [...new Set(mine.map((d) => d.category))];
@@ -81,11 +91,47 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           <button disabled={!sameKind || extraIds.length === 0} title="Add the copied effects to this clip and every clip added with Shift/Ctrl+click (one undo step)" onClick={() => paste(allClips.filter((c) => c.id === clip.id || extraIds.includes(c.id)))}>Paste to selected</button>
         </div>
       </div>
+      {clip.kind === "video" && vworkflows.length > 0 && (
+        <div className="field" aria-label="Video workflows">
+          <label>Video workflows (from the browser app: colour grades, retro, stylize, glitch)</label>
+          <div className="row">
+            <select aria-label="Video workflow" value={vworkflowPick} onChange={(e) => setVworkflowPick(e.target.value)}>
+              <option value="">choose a workflow…</option>
+              {[...new Set(vworkflows.map((w) => w.category))].map((c) => (
+                <optgroup key={c} label={c}>{vworkflows.filter((w) => w.category === c).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</optgroup>
+              ))}
+            </select>
+            <button disabled={!vworkflow} title="Add this workflow's filter chain to the clip as an effect (one undo step)" onClick={() => vworkflow && void dispatch({ type: "add_video_chain", clip: clip.id, chain: vworkflow.chain })}>Apply</button>
+          </div>
+          {vworkflow && <p className="muted pad">{vworkflow.description}</p>}
+        </div>
+      )}
+      {clip.kind === "audio" && workflows.length > 0 && (
+        <div className="field" aria-label="Audio workflows">
+          <label>Audio workflows (from the browser app: tone, effects, pitch and speed, mastering looks…)</label>
+          <div className="row">
+            <select aria-label="Audio workflow" value={workflowPick} onChange={(e) => setWorkflowPick(e.target.value)}>
+              <option value="">choose a workflow…</option>
+              {[...new Set(workflows.map((w) => w.category))].map((c) => (
+                <optgroup key={c} label={c}>{workflows.filter((w) => w.category === c).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</optgroup>
+              ))}
+            </select>
+            <button disabled={!workflow} title="Add this workflow's filter chain and speed to the clip (one undo step)" onClick={() => {
+              if (!workflow) return;
+              const commands: Command[] = [];
+              if (workflow.chain) commands.push({ type: "add_audio_chain", clip: clip.id, chain: workflow.chain });
+              if (workflow.speed) commands.push({ type: "set_clip_speed", clip: clip.id, speed: `${Math.round(workflow.speed * 1000)}/1000` });
+              void dispatch({ type: "batch", label: workflow.name, commands });
+            }}>Apply</button>
+          </div>
+          {workflow && <p className="muted pad">{workflow.description}{workflow.speed ? ` Also sets the clip speed to ${Math.round(workflow.speed * 100)}%.` : ""}</p>}
+        </div>
+      )}
       <div className="field" aria-label="Saved looks">
         <label>Saved looks</label>
         <div className="row">
           <input aria-label="Look name" placeholder="name this stack" value={presetName} onChange={(e) => setPresetName(e.target.value)} />
-          <button disabled={!presetName.trim() || clip.effects.filter((e) => e.effect !== "graph").length === 0} title="Save this clip's effect stack under that name" onClick={() => void savePreset()}>Save</button>
+          <button disabled={!presetName.trim() || clip.effects.filter((e) => e.effect !== "graph" && e.effect !== "afilterchain" && e.effect !== "vfilterchain").length === 0} title="Save this clip's effect stack under that name" onClick={() => void savePreset()}>Save</button>
         </div>
         {mine$.length > 0 && (
           <div className="row">
@@ -98,7 +144,14 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           </div>
         )}
       </div>
-      {clip.kind === "video" && <div className="field"><button onClick={() => useUi.getState().setVariationsClip(clip.id)} title="See a sheet of random looks for this clip and pick one">Look variations…</button></div>}
+      {clip.kind === "video" && (
+        <div className="field row">
+          <button onClick={() => useUi.getState().setVariationsClip(clip.id)} title="See a sheet of random looks for this clip and pick one">Look variations…</button>
+          <button onClick={() => useUi.getState().setMoshClip(clip.id)} title="Rewrite the motion inside this clip's compressed video (needs FFglitch) and put the result on a new track">Datamosh lab…</button>
+          <button onClick={() => useUi.getState().setCorruptClip(clip.id)} title="Damage this clip's compressed video on purpose (flipped bits, dropped packets) and put the wreck on a new track">Corruption lab…</button>
+          <button onClick={() => useUi.getState().setFramesClip(clip.id)} title="Datamosh by rearranging the clip's compressed frames (remove keyframes, bloom, shuffle, splice another clip) and put the result on a new track">Frame lab…</button>
+        </div>
+      )}
       <RandomBar kind="effects" roll={(pool, count, seed) => api.randomEffects(clip.id, count, pool, seed)} />
       {clip.effects.length === 0 && <p className="muted pad">No effects.</p>}
       {clip.effects.map((fx, i) => {
@@ -118,6 +171,28 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
                 <span className="muted"> {fx.graph ? `${fx.graph.nodes.length - 2} filter(s)` : ""}</span>
               </div>
             )}
+            {(fx.effect === "afilterchain" || fx.effect === "vfilterchain") && <ChainText key={fx.text ?? ""} kind={fx.effect === "afilterchain" ? "audio" : "video"} text={fx.text ?? ""} onCommit={(t) => void dispatch({ type: "set_effect_text", clip: clip.id, effect_id: fx.id, text: t })} />}
+            {fx.effect === "lut" && (
+              <div className="field row">
+                <button onClick={() => void (async () => {
+                  const f = await open({ title: "Colour lookup table", filters: [{ name: "LUT", extensions: ["cube", "3dl", "dat", "m3d", "csp"] }] });
+                  if (typeof f === "string") void dispatch({ type: "set_effect_file", clip: clip.id, effect_id: fx.id, path: f });
+                })()}>Choose a LUT file…</button>
+                <span className="muted grow">{fx.file ? `LUT: ${fx.file.split(/[\\/]/).pop()}` : "no file chosen: the picture is unchanged"}</span>
+                {fx.file && <button className="small" aria-label="Remove the LUT file" onClick={() => void dispatch({ type: "set_effect_file", clip: clip.id, effect_id: fx.id, path: null })}>✕</button>}
+              </div>
+            )}
+            {fx.effect === "pixel_sort" && Math.round(fx.params.mask ?? 0) === 3 && (
+              <div className="field row">
+                <label>Mask picture
+                  <select aria-label="Mask picture" value={fx.picture ?? ""} onChange={(e) => void dispatch({ type: "set_effect_picture", clip: clip.id, effect_id: fx.id, media: e.target.value || null })}>
+                    <option value="">Choose a picture…</option>
+                    {(view?.project.media ?? []).filter((m) => !m.generator && m.info.video.length > 0).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </label>
+                <span className="muted">white sorts, black stays, grays fade the sort in; stretched to the frame</span>
+              </div>
+            )}
             {def?.params.map((p) => {
               const value = fx.params[p.id] ?? p.default;
               if (p.animatable && clipProps) {
@@ -129,6 +204,20 @@ export function EffectsPanel({ clip }: { clip: Clip }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** The text of an audio filter chain effect: edited freely, checked by the engine (unknown filters and odd characters are refused with a message). */
+function ChainText({ text, kind, onCommit }: { text: string; kind: "audio" | "video"; onCommit: (t: string) => void }) {
+  const [v, setV] = useState(text);
+  return (
+    <div className="field">
+      <textarea aria-label={kind === "audio" ? "Audio filter chain" : "Video filter chain"} rows={4} spellCheck={false} value={v} onChange={(e) => setV(e.target.value)} />
+      <div className="row">
+        <button disabled={v.trim() === text.trim() || !v.trim()} onClick={() => onCommit(v)}>Apply text</button>
+        <span className="muted grow">{kind === "audio" ? "FFmpeg audio filters separated by commas; @SR@ is the project sample rate." : "FFmpeg video filters separated by commas."}</span>
+      </div>
     </div>
   );
 }

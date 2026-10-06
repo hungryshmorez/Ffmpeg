@@ -62,6 +62,9 @@ export function ClipPropsPanel({ clip }: { clip: Clip }) {
         <label className="check"><input type="checkbox" aria-label="Reverse" checked={clip.reverse} disabled={frozen} onChange={(e) => void dispatch({ type: "set_clip_reverse", clip: clip.id, reverse: e.target.checked })} /> Reverse (video is buffered in memory while rendering)</label>
       </div>
       <div className="field compact">
+        <label className="check"><input type="checkbox" aria-label="Smooth slow motion" checked={clip.smooth} disabled={frozen || toSec(clip.speed) >= 1} onChange={(e) => void dispatch({ type: "set_clip_smooth", clip: clip.id, smooth: e.target.checked })} /> Smooth slow motion (optical flow; only below 100%, slow to render)</label>
+      </div>
+      <div className="field compact">
         {frozen ? (
           <div className="row"><span className="muted grow">Frozen at source {toSec(clip.freeze!).toFixed(2)} s</span><button onClick={() => void dispatch({ type: "set_clip_freeze", clip: clip.id, at: null })}>Unfreeze</button></div>
         ) : (

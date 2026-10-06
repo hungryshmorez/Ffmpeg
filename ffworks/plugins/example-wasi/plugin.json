@@ -1,0 +1,12 @@
+{
+  "name": "Example WASI plugin",
+  "version": "1.0.0",
+  "description": "Reads marks.txt (one time in seconds per line) from the folder you give it as /data and writes the same marks back as markers; writes marker-count.txt next to it.",
+  "wasm": "plugin.wasm",
+  "wasi": true,
+  "permissions": { "edit": true, "analysis": false, "network": [], "files": ["/data"] },
+  "actions": [
+    { "id": "marks", "label": "Markers from marks.txt", "export": "marks" },
+    { "id": "escape", "label": "(test) tries to read outside its folder", "export": "escape" }
+  ]
+}

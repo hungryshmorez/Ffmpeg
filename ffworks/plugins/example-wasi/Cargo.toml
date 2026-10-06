@@ -1,0 +1,21 @@
+# Example FFWORKS plugin that needs the WASI system interface and a folder of the user's. Built for wasm32-wasip1 by ./build.sh.
+[package]
+name = "ffworks-example-wasi-plugin"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+extism-pdk = "1.4"
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1

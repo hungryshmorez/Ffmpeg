@@ -5,7 +5,7 @@ import { fpsOf, formatBytes, timecode, toSec } from "../time";
 import { useAnalysis } from "../state/analysis";
 import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
 import { useProxies } from "../state/proxies";
-import type { MediaAsset } from "../types";
+import type { ColorOverride, MediaAsset } from "../types";
 
 export async function importViaDialog() {
   const picked = await open({ multiple: true, title: "Import media", filters: [{ name: "Media", extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v", "mp3", "wav", "flac", "aac", "ogg", "m4a", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"] }, { name: "All files", extensions: ["*"] }] });
@@ -214,10 +214,43 @@ function Metadata({ m }: { m: MediaAsset }) {
   if (a) rows.push(["Audio", `${a.codec} ${a.sample_rate} Hz, ${a.channels} ch${a.channel_layout ? ` (${a.channel_layout})` : ""}`]);
   for (const [k, val] of m.info.tags.slice(0, 6)) rows.push([`tag: ${k}`, val]);
   return (
-    <dl className="metadata" aria-label="Media metadata">
-      {rows.map(([k, val]) => (
-        <div key={k}><dt>{k}</dt><dd>{val}</dd></div>
-      ))}
-    </dl>
+    <>
+      <dl className="metadata" aria-label="Media metadata">
+        {rows.map(([k, val]) => (
+          <div key={k}><dt>{k}</dt><dd>{val}</dd></div>
+        ))}
+      </dl>
+      {v && !m.generator && !m.info.still && <SourceColours m={m} />}
+    </>
+  );
+}
+
+const SOURCE_COLOURS: [ColorOverride | "", string][] = [
+  ["", "Trust the file's tags"],
+  ["rec709", "Rec.709 (leave alone)"],
+  ["bt601_ntsc", "BT.601 NTSC (SD, 525 lines)"],
+  ["bt601_pal", "BT.601 PAL (SD, 625 lines)"],
+  ["bt2020", "BT.2020 (wide gamut, SDR)"],
+  ["pq", "HDR10 (PQ)"],
+  ["hlg", "HDR HLG"],
+];
+
+/** For footage whose colour tags are missing or wrong: say what it really is, and the render converts it to Rec.709. */
+function SourceColours({ m }: { m: MediaAsset }) {
+  const setView = useProject((s) => s.setView);
+  const toast = useProject((s) => s.toast);
+  const change = async (value: string) => {
+    try {
+      setView(await api.dispatch({ type: "set_media_color", media: m.id, color: value === "" ? null : (value as ColorOverride) }));
+    } catch (e) {
+      toast("error", String(e));
+    }
+  };
+  return (
+    <div className="field row" title="Use this when a clip's colours look wrong: for example an old SD capture or a phone clip that lost its HDR tags. It changes how the clip is converted to Rec.709, never the file.">
+      <label>Source colours <select aria-label="Source colours" value={m.color_override ?? ""} onChange={(e) => void change(e.target.value)}>
+        {SOURCE_COLOURS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+      </select></label>
+    </div>
   );
 }

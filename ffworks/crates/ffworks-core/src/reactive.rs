@@ -142,8 +142,101 @@ pub fn pulse_keys(beats: &[f64], low: f64, high: f64, decay: f64, fps: Fps, clip
     Ok(pts.into_iter().map(|(t, v, interp)| Keyframe { t: Rational::new((t * fpsf).round() as i64 * fps.den(), fps.num()), v, interp }).collect())
 }
 
+/// Shapes an LFO can have: (id, label).
+pub const LFO_SHAPES: &[(&str, &str)] = &[("sine", "Sine"), ("triangle", "Triangle"), ("saw", "Saw (rises, then drops)"), ("square", "Square"), ("random", "Random (smooth)")];
+
+/// Fastest LFO: each half cycle needs at least two frames.
+fn max_lfo_rate(fps: Fps) -> f64 {
+    fps.as_f64() / 4.0
+}
+
+/// splitmix64 hash to 0..1, so a random LFO is the same on every machine.
+pub(crate) fn unit_hash(seed: u64, k: i64) -> f64 {
+    let mut z = seed.wrapping_add((k as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)).wrapping_add(0x9E37_79B9_7F4A_7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    ((z ^ (z >> 31)) >> 11) as f64 / (1u64 << 53) as f64
+}
+
+/// Keyframes for a low-frequency oscillator over a clip of `clip_dur` seconds: `shape` at `rate` Hz between `low` and
+/// `high`, starting `phase` (0..1) of a cycle in (0 starts at `low`, 0.5 at `high` for sine/triangle/square). Sine uses
+/// eased segments between its peaks (two keys per cycle, within 2% of a true sine), square holds, saw rises and drops,
+/// random glides between a new random value each cycle (`seed`). Errors when the curve would need more than [`MAX_KEYS`] keys.
+#[allow(clippy::too_many_arguments)]
+pub fn lfo_keys(shape: &str, rate: f64, low: f64, high: f64, phase: f64, seed: u64, fps: Fps, clip_dur: f64) -> Result<Vec<Keyframe>> {
+    if !LFO_SHAPES.iter().any(|(id, _)| *id == shape) {
+        return Err(Error::validation(format!("unknown LFO shape '{shape}' (sine, triangle, saw, square, random)")));
+    }
+    let top = max_lfo_rate(fps);
+    if !rate.is_finite() || rate <= 0.0 || rate > top {
+        return Err(Error::validation(format!("LFO rate must be above 0 and at most {top} Hz at this frame rate")));
+    }
+    if !(0.0..1.0).contains(&phase) {
+        return Err(Error::validation("LFO phase must be 0 up to (not including) 1 of a cycle"));
+    }
+    if !low.is_finite() || !high.is_finite() || !clip_dur.is_finite() || clip_dur <= 0.0 {
+        return Err(Error::validation("LFO needs finite values and a clip with some length"));
+    }
+    let fpsf = fps.as_f64();
+    let frame = 1.0 / fpsf;
+    let snap = |t: f64| (t * fpsf).round() / fpsf;
+    let val = |u: f64| low + (high - low) * u;
+    // 0..1 position in the wave at cycle position c (any real number)
+    let wave = |c: f64| -> f64 {
+        let (k, f) = (c.floor(), c - c.floor());
+        match shape {
+            "sine" => 0.5 - 0.5 * (std::f64::consts::TAU * f).cos(),
+            "triangle" => 1.0 - (2.0 * f - 1.0).abs(),
+            "saw" => f,
+            "square" => f64::from(f >= 0.5),
+            _ => {
+                // random: glide from this cycle's value to the next one's
+                let (a, b) = (unit_hash(seed, k as i64), unit_hash(seed, k as i64 + 1));
+                a + (b - a) * 0.5 * (1.0 - (std::f64::consts::PI * f).cos())
+            }
+        }
+    };
+    let (step, interp) = match shape {
+        "sine" => (0.5, Interp::EaseInOut),
+        "triangle" => (0.5, Interp::Linear),
+        "square" => (0.5, Interp::Hold),
+        "saw" => (1.0, Interp::Linear),
+        _ => (1.0, Interp::EaseInOut),
+    };
+    let estimate = (clip_dur * rate / step).ceil() as usize + 3;
+    if estimate * if shape == "saw" { 2 } else { 1 } > MAX_KEYS {
+        return Err(Error::validation(format!("{rate} Hz over {clip_dur:.1} s needs about {estimate} keyframes; the limit is {MAX_KEYS}. Lower the rate or split the clip")));
+    }
+    let mut pts: Vec<(f64, f64, Interp)> = vec![(0.0, val(wave(phase)), interp)];
+    // keys at every `step` of the cycle that falls inside the clip
+    let mut j = (phase / step).floor() as i64 + 1;
+    loop {
+        let c = j as f64 * step;
+        let t = snap((c - phase) / rate);
+        if t > clip_dur + 1e-9 {
+            break;
+        }
+        if shape == "saw" {
+            // rise to just short of the top, hold it, then the next cycle's key drops back to the bottom
+            let top_t = snap(t - frame);
+            if top_t > pts.last().map(|p| p.0).unwrap_or(0.0) {
+                pts.push((top_t, val(wave(c - frame * rate)), Interp::Hold));
+            }
+            pts.push((t, val(wave(c)), interp));
+        } else {
+            pts.push((t, val(wave(c)), interp));
+        }
+        j += 1;
+    }
+    if pts.last().is_some_and(|p| p.0 < snap(clip_dur) - 1e-9) {
+        pts.push((snap(clip_dur), val(wave(clip_dur * rate + phase)), Interp::Linear));
+    }
+    pts.dedup_by(|b, a| b.0 <= a.0 + 1e-9);
+    Ok(pts.into_iter().map(|(t, v, interp)| Keyframe { t: Rational::new((t * fpsf).round() as i64 * fps.den(), fps.num()), v: (v * 1e4).round() / 1e4, interp }).collect())
+}
+
 /// Ramer–Douglas–Peucker: the fewest points whose straight lines stay within `tol` of every point.
-fn thin(pts: &[(f64, f64)], tol: f64) -> Vec<(f64, f64)> {
+pub(crate) fn thin(pts: &[(f64, f64)], tol: f64) -> Vec<(f64, f64)> {
     if pts.len() <= 2 {
         return pts.to_vec();
     }
@@ -228,6 +321,55 @@ mod tests {
         assert!(pulse_keys(&[], 0.0, 1.0, 0.3, fps(), 4.0).is_err());
         let many: Vec<f64> = (0..400).map(|i| i as f64 * 0.25).collect();
         assert!(pulse_keys(&many, 0.0, 1.0, 0.1, fps(), 100.0).is_err());
+    }
+
+    #[test]
+    fn a_sine_lfo_follows_a_sine_with_two_keys_per_cycle() {
+        // 40 fps puts every half cycle on a whole frame, so only the shape of the curve is measured
+        let k = lfo_keys("sine", 1.0, 0.0, 1.0, 0.0, 0, Rational::from_int(40), 4.0).unwrap();
+        let at = |t: f64| crate::keyframes::eval(&k, t).unwrap();
+        assert_eq!(at(0.0), 0.0);
+        for t in [0.1, 0.25, 0.4, 0.5, 0.75, 1.0, 1.3, 2.5, 3.2] {
+            let want = 0.5 - 0.5 * (std::f64::consts::TAU * t).cos();
+            assert!((at(t) - want).abs() < 0.03, "t={t}: {} vs {want}", at(t));
+        }
+        assert!(k.len() <= 12, "{}", k.len());
+        assert!(k.windows(2).all(|w| w[0].t < w[1].t));
+    }
+
+    #[test]
+    fn phase_range_and_direction_are_honoured() {
+        let k = lfo_keys("sine", 1.0, 2.0, 6.0, 0.5, 0, Rational::from_int(40), 2.0).unwrap();
+        assert!((crate::keyframes::eval(&k, 0.0).unwrap() - 6.0).abs() < 1e-3, "phase 0.5 starts at the top");
+        assert!((crate::keyframes::eval(&k, 0.5).unwrap() - 2.0).abs() < 0.05, "and reaches the bottom half a cycle later");
+        let t = lfo_keys("triangle", 2.0, 0.0, 10.0, 0.0, 0, Rational::from_int(40), 2.0).unwrap();
+        let tv = |x: f64| crate::keyframes::eval(&t, x).unwrap();
+        assert!((tv(0.125) - 5.0).abs() < 0.2 && (tv(0.25) - 10.0).abs() < 1e-6 && (tv(0.5) - 0.0).abs() < 1e-6, "{} {} {}", tv(0.125), tv(0.25), tv(0.5));
+    }
+
+    #[test]
+    fn square_holds_saw_rises_then_drops_and_random_is_seeded() {
+        let sq = lfo_keys("square", 1.0, 1.0, 3.0, 0.0, 0, fps(), 4.0).unwrap();
+        let sv = |x: f64| crate::keyframes::eval(&sq, x).unwrap();
+        assert_eq!((sv(0.25), sv(0.75), sv(1.25), sv(1.75)), (1.0, 3.0, 1.0, 3.0));
+        let sw = lfo_keys("saw", 1.0, 0.0, 1.0, 0.0, 0, fps(), 3.0).unwrap();
+        let wv = |x: f64| crate::keyframes::eval(&sw, x).unwrap();
+        assert!((wv(0.5) - 0.5).abs() < 0.05 && wv(0.96) > 0.9 && wv(1.04) < 0.15, "{} {} {}", wv(0.5), wv(0.96), wv(1.04));
+        let r1 = lfo_keys("random", 1.0, 0.0, 10.0, 0.0, 7, fps(), 6.0).unwrap();
+        assert_eq!(r1, lfo_keys("random", 1.0, 0.0, 10.0, 0.0, 7, fps(), 6.0).unwrap());
+        assert_ne!(r1, lfo_keys("random", 1.0, 0.0, 10.0, 0.0, 8, fps(), 6.0).unwrap());
+        assert!(r1.iter().all(|k| (0.0..=10.0).contains(&k.v)));
+    }
+
+    #[test]
+    fn impossible_lfos_are_refused_with_the_reason() {
+        let bad = |shape: &str, rate: f64, phase: f64, dur: f64| lfo_keys(shape, rate, 0.0, 1.0, phase, 0, fps(), dur).unwrap_err().to_string();
+        assert!(bad("wobble", 1.0, 0.0, 2.0).contains("unknown LFO shape"));
+        assert!(bad("sine", 0.0, 0.0, 2.0).contains("rate"));
+        assert!(bad("sine", 30.0, 0.0, 2.0).contains("at most"));
+        assert!(bad("sine", 1.0, 1.0, 2.0).contains("phase"));
+        assert!(bad("sine", 5.0, 0.0, 60.0).contains("keyframes"));
+        assert!(bad("sine", 1.0, 0.0, 0.0).contains("length"));
     }
 
     #[test]

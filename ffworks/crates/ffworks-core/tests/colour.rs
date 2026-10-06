@@ -1,0 +1,344 @@
+//! Colour management: footage tagged BT.601 / BT.2020 / HDR is converted to the project's Rec.709, and exports are tagged
+//! Rec.709. Real FFmpeg renders; pictures are measured, and a control shows the error the conversion removes.
+use ffworks_core::commands::Command;
+use ffworks_core::engine::Engine;
+use ffworks_core::ffmpeg::{compile_project, ExportSettings, RenderOptions};
+use ffworks_core::jobs::{run_job, CancelToken};
+use ffworks_core::process::{Capabilities, Tools};
+use ffworks_core::project::ProjectSettings;
+use ffworks_core::Rational;
+use std::path::{Path, PathBuf};
+use std::process::Command as Proc;
+
+fn tools() -> Tools {
+    Tools::discover(None, None)
+}
+fn secs(n: i64) -> Rational {
+    Rational::from_int(n)
+}
+
+/// A 2 s clip of one RGB colour, encoded with `matrix` and labelled with the three tags (`-` leaves a tag unset).
+fn footage(dir: &Path, name: &str, rgb: &str, matrix: &str, tags: (&str, &str, &str)) -> PathBuf {
+    let p = dir.join(name);
+    let mut cmd = Proc::new(tools().ffmpeg);
+    cmd.args(["-v", "error", "-y", "-f", "lavfi", "-i"])
+        .arg(format!("color=c={rgb}:s=160x120:r=25:d=2"))
+        .args(["-vf", &format!("format=rgb24,scale=out_color_matrix={matrix}:out_range=tv,format=yuv420p{}", params(tags)), "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p"]);
+    for (opt, v) in [("-colorspace", tags.0), ("-color_trc", tags.1), ("-color_primaries", tags.2)] {
+        if v != "-" && v != "unknown" {
+            cmd.args([opt, v]);
+        }
+    }
+    let out = cmd.arg(&p).output().unwrap();
+    assert!(out.status.success(), "fixture: {}", String::from_utf8_lossy(&out.stderr));
+    p
+}
+
+/// `setparams` that puts the tags on the frames themselves (newer FFmpeg encodes those, not the -color_* options).
+fn params(tags: (&str, &str, &str)) -> String {
+    let parts: Vec<String> = [("colorspace", tags.0), ("color_trc", tags.1), ("color_primaries", tags.2)].iter().filter(|(_, v)| *v != "-").map(|(k, v)| format!("{k}={v}")).collect();
+    if parts.is_empty() { String::new() } else { format!(",setparams={}", parts.join(":")) }
+}
+
+fn one_clip(src: &Path) -> Engine {
+    let mut eng = Engine::new("c", ProjectSettings { width: 160, height: 120, fps: secs(25), sample_rate: 48000 }, tools());
+    let m = eng.import_media(src).unwrap();
+    let v = eng.project.active().unwrap().tracks[0].id.clone();
+    eng.dispatch(Command::PlaceClip { media: m, track: v, start: secs(0), source_in: None, duration: None, with_audio: false, audio_track: None }).unwrap();
+    eng
+}
+
+fn job(eng: &Engine, out: &Path) -> ffworks_core::ffmpeg::FfmpegJob {
+    let t = tools();
+    let caps = Capabilities::discover(&t).unwrap();
+    let mut job = compile_project(&eng.project, &RenderOptions { output: out.to_path_buf(), settings: ExportSettings::find("h264_mp4").unwrap(), range: None, scale_div: 1 }, Some(&caps)).unwrap_or_else(|e| panic!("compile: {e}"));
+    job.program = t.ffmpeg.clone();
+    job
+}
+
+fn export(eng: &Engine, out: &Path) -> ffworks_core::ffmpeg::FfmpegJob {
+    let j = job(eng, out);
+    run_job(&tools(), &j, "c", "export", &CancelToken::new(), &out.parent().unwrap().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("export failed: {e}"));
+    j
+}
+
+/// Centre pixel of the first frame, decoded as Rec.709 limited range (what the export claims to be), whatever its tags say.
+fn rgb709(video: &Path) -> (i32, i32, i32) {
+    let out = Proc::new(tools().ffmpeg)
+        .args(["-v", "error", "-i"])
+        .arg(video)
+        .args(["-frames:v", "1", "-vf", "scale=in_color_matrix=bt709:in_range=tv:out_range=pc,format=rgb24,crop=2:2:80:60,scale=1:1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+        .output()
+        .unwrap();
+    assert_eq!(out.stdout.len(), 3);
+    (out.stdout[0] as i32, out.stdout[1] as i32, out.stdout[2] as i32)
+}
+
+fn error(got: (i32, i32, i32), want: (i32, i32, i32)) -> i32 {
+    (got.0 - want.0).abs().max((got.1 - want.1).abs()).max((got.2 - want.2).abs())
+}
+
+fn probe_tag(video: &Path, field: &str) -> String {
+    let out = Proc::new("ffprobe").args(["-v", "error", "-select_streams", "v:0", "-show_entries", &format!("stream={field}"), "-of", "csv=p=0"]).arg(video).output().unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+#[test]
+fn bt601_footage_keeps_its_colours_and_the_same_footage_labelled_wrongly_does_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let want = (0, 255, 0);
+    let sd = footage(dir.path(), "sd.mp4", "lime", "bt601", ("smpte170m", "smpte170m", "smpte170m"));
+    let eng = one_clip(&sd);
+    let good = dir.path().join("good.mp4");
+    let j = export(&eng, &good);
+    assert!(j.filter_graph.contains("colorspace=all=bt709:iall=bt601-6-525"), "{}", j.filter_graph);
+    let e = error(rgb709(&good), want);
+    assert!(e < 12, "converted: {:?} is {e} off {want:?}", rgb709(&good));
+
+    // control: the identical pixels claiming to be Rec.709 are not converted, and come out visibly wrong
+    let lie = footage(dir.path(), "lie.mp4", "lime", "bt601", ("bt709", "bt709", "bt709"));
+    let eng = one_clip(&lie);
+    let bad = dir.path().join("bad.mp4");
+    let j = export(&eng, &bad);
+    assert!(!j.filter_graph.contains("colorspace=all="), "a Rec.709 file is left alone");
+    assert!(error(rgb709(&bad), want) > 25, "the control must show the error: {:?}", rgb709(&bad));
+}
+
+#[test]
+fn bt2020_sdr_footage_is_converted_too() {
+    let dir = tempfile::tempdir().unwrap();
+    // a saturated blue-ish colour, where the BT.2020 primaries differ most from Rec.709
+    let wide = footage(dir.path(), "w.mp4", "0x2060ff", "bt2020", ("bt2020nc", "bt709", "bt2020"));
+    let eng = one_clip(&wide);
+    let out = dir.path().join("o.mp4");
+    let j = export(&eng, &out);
+    assert!(j.filter_graph.contains("iall=bt2020"), "{}", j.filter_graph);
+    // the same pixels claiming to be Rec.709 are not converted
+    let lie = footage(dir.path(), "lie.mp4", "0x2060ff", "bt2020", ("bt709", "bt709", "bt709"));
+    let bad = dir.path().join("bad.mp4");
+    let j2 = export(&one_clip(&lie), &bad);
+    assert!(!j2.filter_graph.contains("colorspace=all="));
+    let (a, b) = (rgb709(&out), rgb709(&bad));
+    assert!(error(a, b) >= 4, "the conversion must change the picture: converted {a:?}, unconverted {b:?}");
+    // and it stays a sane colour: still clearly blue
+    assert!(a.2 > 200 && a.0 < 90, "still blue: {a:?}");
+}
+
+#[test]
+fn every_export_is_tagged_rec709() {
+    let dir = tempfile::tempdir().unwrap();
+    let plain = footage(dir.path(), "p.mp4", "red", "bt709", ("-", "-", "-"));
+    let eng = one_clip(&plain);
+    let out = dir.path().join("o.mp4");
+    let j = export(&eng, &out);
+    assert!(!j.filter_graph.contains("colorspace=all=") && !j.filter_graph.contains("zscale"), "untagged footage is untouched");
+    for (field, want) in [("color_space", "bt709"), ("color_transfer", "bt709"), ("color_primaries", "bt709")] {
+        assert_eq!(probe_tag(&out, field), want, "{field}");
+    }
+}
+
+#[test]
+fn hdr_footage_is_tone_mapped_to_sdr_instead_of_looking_washed_out() {
+    let t = tools();
+    let caps = Capabilities::discover(&t).unwrap();
+    if !caps.has_filter("zscale") || !caps.has_filter("tonemap") {
+        eprintln!("SKIPPED: this FFmpeg has no zscale/tonemap");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    // PQ code of a bright, saturated-free grey: encode a grey that PQ-decodes to about HDR reference white
+    let p = dir.path().join("hdr.mp4");
+    let out = Proc::new(&t.ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=0x949494:s=160x120:r=25:d=2", "-vf", "format=yuv420p10le,setparams=colorspace=bt2020nc:color_primaries=bt2020:color_trc=smpte2084", "-c:v", "libx265", "-crf", "10", "-pix_fmt", "yuv420p10le", "-colorspace", "bt2020nc", "-color_primaries", "bt2020", "-color_trc", "smpte2084"])
+        .arg(&p)
+        .output()
+        .unwrap();
+    if !out.status.success() {
+        eprintln!("SKIPPED: no libx265 to make the HDR fixture: {}", String::from_utf8_lossy(&out.stderr));
+        return;
+    }
+    assert_eq!(probe_tag(&p, "color_transfer"), "smpte2084", "the fixture really is PQ");
+    let eng = one_clip(&p);
+    let o = dir.path().join("o.mp4");
+    let j = export(&eng, &o);
+    assert!(j.filter_graph.contains("tonemap=tonemap=hable"), "{}", j.filter_graph);
+    assert_eq!(probe_tag(&o, "color_transfer"), "bt709");
+    let (r, g, b) = rgb709(&o);
+    // a neutral grey stays neutral, and is a sensible SDR level (not black, not clipped)
+    assert!((r - g).abs() < 12 && (g - b).abs() < 12, "grey stays grey: {r},{g},{b}");
+    assert!((60..250).contains(&g), "a plausible SDR level: {g}");
+}
+
+#[test]
+fn a_project_with_no_tagged_footage_compiles_exactly_as_before() {
+    let dir = tempfile::tempdir().unwrap();
+    let plain = footage(dir.path(), "p.mp4", "blue", "bt709", ("-", "-", "-"));
+    let eng = one_clip(&plain);
+    let j = job(&eng, &dir.path().join("o.mp4"));
+    assert!(!j.filter_graph.contains("colorspace=all=") && !j.filter_graph.contains("zscale") && !j.filter_graph.contains("tonemap"));
+}
+
+fn media_id(eng: &Engine) -> String {
+    eng.project.media[0].id.clone()
+}
+
+#[test]
+fn an_override_fixes_footage_whose_tags_are_missing_and_undo_puts_the_tags_back() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let dir = tempfile::tempdir().unwrap();
+    let want = (0, 255, 0);
+    // BT.601 pixels with no tags at all: nothing in the file says they need converting
+    let src = footage(dir.path(), "sd.mp4", "lime", "bt601", ("unknown", "unknown", "unknown"));
+    assert!(!probe_tag(&src, "color_space").contains("170m") && !probe_tag(&src, "color_space").contains("470bg"), "the fixture really carries no BT.601 tag: {}", probe_tag(&src, "color_space"));
+    let mut eng = one_clip(&src);
+    let before = dir.path().join("before.mp4");
+    export(&eng, &before);
+    let wrong = error(rgb709(&before), want);
+    assert!(wrong > 25, "untagged BT.601 comes out wrong without help: {:?}", rgb709(&before));
+
+    let m = media_id(&eng);
+    eng.dispatch(Command::SetMediaColor { media: m.clone(), color: Some(ColorOverride::Bt601Ntsc) }).unwrap();
+    let after = dir.path().join("after.mp4");
+    let j = export(&eng, &after);
+    assert!(j.filter_graph.contains("colorspace=all=bt709:iall=bt601-6-525"), "{}", j.filter_graph);
+    let e = error(rgb709(&after), want);
+    assert!(e < 12, "with the override: {:?} is {e} off {want:?}", rgb709(&after));
+
+    // it is part of the project file
+    let back: ffworks_core::project::Project = serde_json::from_str(&serde_json::to_string(&eng.project).unwrap()).unwrap();
+    assert_eq!(back.media[0].color_override, Some(ColorOverride::Bt601Ntsc));
+
+    eng.undo().unwrap();
+    assert_eq!(eng.project.media[0].color_override, None);
+    assert!(!job(&eng, &dir.path().join("u.mp4")).filter_graph.contains("colorspace=all="), "undo goes back to trusting the tags");
+}
+
+#[test]
+fn an_override_wins_over_wrong_tags_and_rec709_means_leave_it_alone() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let dir = tempfile::tempdir().unwrap();
+    // pixels really are Rec.709 but the file claims BT.601: the tags would convert and spoil them
+    let src = footage(dir.path(), "liar.mp4", "lime", "bt709", ("smpte170m", "smpte170m", "smpte170m"));
+    let mut eng = one_clip(&src);
+    assert!(job(&eng, &dir.path().join("a.mp4")).filter_graph.contains("colorspace=all="), "the tags alone would convert");
+    eng.dispatch(Command::SetMediaColor { media: media_id(&eng), color: Some(ColorOverride::Rec709) }).unwrap();
+    let out = dir.path().join("o.mp4");
+    let j = export(&eng, &out);
+    assert!(!j.filter_graph.contains("colorspace=all="), "{}", j.filter_graph);
+    let e = error(rgb709(&out), (0, 255, 0));
+    assert!(e < 12, "left alone it is right: {:?}", rgb709(&out));
+}
+
+#[test]
+fn an_hdr_override_tone_maps_footage_that_lost_its_hdr_tags() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let t = tools();
+    let caps = Capabilities::discover(&t).unwrap();
+    if !caps.has_filter("zscale") || !caps.has_filter("tonemap") {
+        eprintln!("SKIPPED: this FFmpeg has no zscale/tonemap");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("hdr_untagged.mp4");
+    // PQ-coded grey with every colour tag left off
+    let out = Proc::new(&t.ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=0x949494:s=160x120:r=25:d=2", "-vf", "format=yuv420p10le", "-c:v", "libx265", "-crf", "10", "-pix_fmt", "yuv420p10le"])
+        .arg(&p)
+        .output()
+        .unwrap();
+    if !out.status.success() {
+        eprintln!("SKIPPED: no libx265 to make the HDR fixture: {}", String::from_utf8_lossy(&out.stderr));
+        return;
+    }
+    let mut eng = one_clip(&p);
+    assert!(!job(&eng, &dir.path().join("a.mp4")).filter_graph.contains("tonemap"), "no tags, no tone mapping");
+    eng.dispatch(Command::SetMediaColor { media: media_id(&eng), color: Some(ColorOverride::Pq) }).unwrap();
+    let o = dir.path().join("o.mp4");
+    let j = export(&eng, &o);
+    assert!(j.filter_graph.contains("color_trc=smpte2084") && j.filter_graph.contains("tonemap=tonemap=hable"), "{}", j.filter_graph);
+    let (r, g, b) = rgb709(&o);
+    assert!((r - g).abs() < 12 && (g - b).abs() < 12, "grey stays grey: {r},{g},{b}");
+    assert!((60..250).contains(&g), "a plausible SDR level: {g}");
+}
+
+#[test]
+fn only_real_video_footage_takes_a_colour_override() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let dir = tempfile::tempdir().unwrap();
+    let mut eng = Engine::new("c", ProjectSettings { width: 160, height: 120, fps: secs(25), sample_rate: 48000 }, tools());
+    let asset = ffworks_core::generators::solid_asset("#ff0000", &eng.project.settings).unwrap();
+    let solid = asset.id.clone();
+    eng.dispatch(Command::ImportMedia { asset }).unwrap();
+    let e = eng.dispatch(Command::SetMediaColor { media: solid, color: Some(ColorOverride::Pq) }).unwrap_err().to_string();
+    assert!(e.contains("only video footage"), "{e}");
+    let png = dir.path().join("s.png");
+    let o = Proc::new(tools().ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64", "-frames:v", "1"]).arg(&png).output().unwrap();
+    assert!(o.status.success());
+    let still = eng.import_media(&png).unwrap();
+    assert!(eng.dispatch(Command::SetMediaColor { media: still, color: Some(ColorOverride::Bt2020) }).is_err());
+    assert!(eng.dispatch(Command::SetMediaColor { media: "nope".into(), color: None }).is_err());
+}
+
+#[test]
+fn a_proxy_of_footage_with_a_colour_override_shows_the_corrected_colours() {
+    use ffworks_core::colormgmt::ColorOverride;
+    let dir = tempfile::tempdir().unwrap();
+    let want = (0, 255, 0);
+    let src = footage(dir.path(), "sd.mp4", "lime", "bt601", ("unknown", "unknown", "unknown"));
+    let mut eng = one_clip(&src);
+    let cache = dir.path().join("cache");
+    let make = |eng: &Engine, name: &str| -> PathBuf {
+        let m = &eng.project.media[0];
+        let out = ffworks_core::proxy::proxy_path(&cache, m);
+        let mut j = ffworks_core::proxy::build_job(m, &out, None).unwrap();
+        j.program = tools().ffmpeg.clone();
+        run_job(&tools(), &j, "c", name, &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("proxy failed: {e}"));
+        out
+    };
+    let plain = make(&eng, "proxy:plain");
+    assert!(error(rgb709(&plain), want) > 25, "no override: the proxy shows the raw wrong colours {:?}", rgb709(&plain));
+
+    eng.dispatch(Command::SetMediaColor { media: media_id(&eng), color: Some(ColorOverride::Bt601Ntsc) }).unwrap();
+    let fixed = make(&eng, "proxy:fixed");
+    assert_ne!(plain, fixed, "a changed override must not reuse the old proxy file");
+    let e = error(rgb709(&fixed), want);
+    assert!(e < 12, "with the override the proxy is right: {:?} is {e} off", rgb709(&fixed));
+    assert_eq!(probe_tag(&fixed, "color_space"), "bt709");
+}
+
+/// Luma of the centre pixel of the first frame as a 10-bit code value.
+fn luma10(video: &Path) -> i32 {
+    let o = Proc::new(tools().ffmpeg).args(["-v", "error", "-i"]).arg(video).args(["-frames:v", "1", "-vf", "scale=1:1:flags=area,format=gray10le", "-f", "rawvideo", "-"]).output().unwrap();
+    assert_eq!(o.stdout.len(), 2, "{}", String::from_utf8_lossy(&o.stderr));
+    i32::from(o.stdout[0]) | (i32::from(o.stdout[1]) << 8)
+}
+
+#[test]
+fn the_hdr10_preset_maps_sdr_to_pq_bt2020_and_tags_the_stream() {
+    let caps = Capabilities::discover(&tools()).unwrap();
+    if !caps.has_encoder("libx265") || !caps.has_filter("zscale") {
+        eprintln!("needs libx265 and zscale; skipping");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let src = footage(dir.path(), "white.mp4", "white", "bt709", ("bt709", "bt709", "bt709"));
+    let eng = one_clip(&src);
+    let out = dir.path().join("hdr.mp4");
+    let t = tools();
+    let mut j = compile_project(&eng.project, &RenderOptions { output: out.clone(), settings: ExportSettings::find("hdr10_mp4").unwrap(), range: None, scale_div: 1 }, Some(&caps)).unwrap();
+    j.program = t.ffmpeg.clone();
+    assert!(j.filter_graph.contains("smpte2084"), "{}", j.filter_graph);
+    run_job(&t, &j, "c", "export", &CancelToken::new(), &dir.path().join("tmp"), &mut |_| {}).unwrap_or_else(|e| panic!("export failed: {e}"));
+
+    assert_eq!(probe_tag(&out, "color_transfer"), "smpte2084");
+    assert_eq!(probe_tag(&out, "color_primaries"), "bt2020");
+    assert_eq!(probe_tag(&out, "color_space"), "bt2020nc");
+    assert_eq!(probe_tag(&out, "pix_fmt"), "yuv420p10le");
+    // SDR white lands at 203 nits = PQ 0.5807; `luma10` reads the code expanded to full range (0.5807 * 1023 = 594). Left at 100 nits it is 520, at the SDR code ~940
+    let white = luma10(&out);
+    assert!((white - 594).abs() < 20, "SDR white should sit at the 203-nit PQ code, got {white}");
+
+    // the stream carries the mastering display metadata
+    let o = Proc::new(t.ffprobe).args(["-v", "error", "-select_streams", "v:0", "-show_frames", "-read_intervals", "%+#1", "-show_entries", "frame_side_data=side_data_type", "-of", "csv"]).arg(&out).output().unwrap();
+    assert!(String::from_utf8_lossy(&o.stdout).contains("Mastering display metadata"), "{}", String::from_utf8_lossy(&o.stdout));
+}

@@ -12,16 +12,19 @@ use serde::{Deserialize, Serialize};
 pub enum Generator {
     /// `#RRGGBB` or `#RRGGBBAA` (alpha 00 = fully transparent).
     Solid { color: String },
+    /// A compound clip: the picture and sound of another sequence of this project, rendered to a file when needed.
+    Nested { sequence: String },
 }
 
 /// Colour of the transparent canvas titles are drawn on.
 pub const TRANSPARENT: &str = "#00000000";
 
 impl Generator {
-    /// The `lavfi` `color` source colour text.
-    pub fn ffmpeg_color(&self) -> String {
+    /// The `lavfi` `color` source colour text (None for generators that are not a `lavfi` source).
+    pub fn ffmpeg_color(&self) -> Option<String> {
         match self {
-            Generator::Solid { color } => crate::titles::ffmpeg_color(color),
+            Generator::Solid { color } => Some(crate::titles::ffmpeg_color(color)),
+            Generator::Nested { .. } => None,
         }
     }
 }
@@ -41,6 +44,7 @@ pub fn solid_asset(color: &str, settings: &ProjectSettings) -> Result<MediaAsset
         path: format!("generated:solid:{}", &color[1..]),
         fingerprint: None,
         generator: Some(Generator::Solid { color }),
+        color_override: None,
         info: MediaInfo {
             container: "generated".into(),
             duration: Rational::from_int(STILL_SECONDS),
@@ -64,6 +68,7 @@ mod tests {
         assert!(a.info.still && a.info.has_video() && !a.info.has_audio());
         assert!(solid_asset("orange", &s).is_err());
         assert_eq!(solid_asset(TRANSPARENT, &s).unwrap().name, "Title canvas");
-        assert_eq!(Generator::Solid { color: "#00000000".into() }.ffmpeg_color(), "0x000000@0.000");
+        assert_eq!(Generator::Solid { color: "#00000000".into() }.ffmpeg_color().as_deref(), Some("0x000000@0.000"));
+        assert_eq!(Generator::Nested { sequence: "seq_x".into() }.ffmpeg_color(), None);
     }
 }

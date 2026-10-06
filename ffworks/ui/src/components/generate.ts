@@ -39,3 +39,8 @@ export function addTitleAtPlayhead() {
 export function addSolidAtPlayhead(color = "#336699") {
   return place((track, start, duration) => ({ type: "add_solid", track, start, duration, color }), (c) => c.title === null);
 }
+
+/** An adjustment layer at the playhead (5 s): its effects apply to everything on the tracks beneath it. */
+export function addAdjustmentAtPlayhead() {
+  return place((track, start, duration) => ({ type: "add_adjustment", track, start, duration }), (c) => c.adjustment === true);
+}

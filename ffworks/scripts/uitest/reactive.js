@@ -62,6 +62,54 @@
     const peak = (b) => Math.max(...[-3, -2, -1, 0, 1, 2, 3].map((f) => evalK(pk, b + f * 0.04)));
     step("opacity pulses on the clicks and falls back between them", pk && peak(1.4) > 0.95 && peak(2.4) > 0.95 && evalK(pk, 2.0) < 0.15, pk && `${peak(1.4)} ${peak(2.4)} ${evalK(pk, 2.0)}`);
     step("it is one undo step", /Pulse opacity on beats/.test(view().undoLabel || ""), view().undoLabel);
+    // LFO: the same field has a second panel that writes a waveform
+    await P().dispatch({ type: "clear_keyframes", clip: c2().id, param: "opacity" }); await sleep(300);
+    const lb = await waitFor(() => $("[data-param='opacity'] button[aria-label^='LFO for']"));
+    step("an animatable field offers an LFO button", !!lb);
+    lb.click(); await sleep(300);
+    const lf = $("[data-param='opacity'] .kf-follow[aria-label^='LFO for']");
+    step("the LFO panel has shape, rate, range and phase", !!lf && ["LFO shape", "LFO rate in Hz", "LFO low value", "LFO high value", "LFO phase"].every((l) => lf.querySelector(`[aria-label='${l}']`)));
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(lf.querySelector("[aria-label='LFO shape']"), "square"); lf.querySelector("[aria-label='LFO shape']").dispatchEvent(new Event("change", { bubbles: true }));
+    setNum(lf.querySelector("[aria-label='LFO rate in Hz']"), 1);
+    setNum(lf.querySelector("[aria-label='LFO low value']"), 0);
+    setNum(lf.querySelector("[aria-label='LFO high value']"), 1); await sleep(200);
+    [...lf.querySelectorAll("button")].find((b) => /Apply/.test(b.textContent)).click();
+    const lk = await waitFor(() => c2().keyframes.opacity, 15000);
+    step("Apply writes a square wave: low in the first half second, high in the second", !!lk && evalK(lk, 0.25) < 0.05 && evalK(lk, 0.75) > 0.95, lk && `${evalK(lk, 0.25)} ${evalK(lk, 0.75)}`);
+    step("it is one undo step named after the shape", /square LFO on opacity/.test(view().undoLabel || ""), view().undoLabel);
+    // formula: a third panel, with an optional link to another parameter
+    await P().dispatch({ type: "clear_keyframes", clip: c2().id, param: "opacity" }); await sleep(300);
+    const fb = await waitFor(() => $("[data-param='opacity'] button[aria-label^='Formula for']"));
+    step("an animatable field offers a formula button", !!fb);
+    fb.click(); await sleep(300);
+    const fp = $("[data-param='opacity'] .kf-follow[aria-label^='Formula for']");
+    step("the formula panel has the formula, the source and the clamp switch", !!fp && ["Formula", "Value of v", "Clamp to the allowed range"].every((l) => fp.querySelector(`[aria-label='${l}']`)));
+    setNum(fp.querySelector("[aria-label='Formula']"), "p"); await sleep(200);
+    [...fp.querySelectorAll("button")].find((b) => /Apply/.test(b.textContent)).click();
+    const fk = await waitFor(() => c2().keyframes.opacity, 15000);
+    const half = rat(c2().duration) / 2;
+    step("Apply writes the ramp: about half way up half way through the clip", !!fk && Math.abs(evalK(fk, half) - 0.5) < 0.03, fk && evalK(fk, half));
+    step("it is one undo step named after the parameter", /Formula on opacity/.test(view().undoLabel || ""), view().undoLabel);
+    $("[data-param='opacity'] button[aria-label^='Formula for']").click(); await sleep(300);
+    const fp2 = $("[data-param='opacity'] .kf-follow[aria-label^='Formula for']");
+    step("the formula button reopens the panel", !!fp2);
+    setNum(fp2.querySelector("[aria-label='Formula']"), "sin("); await sleep(200);
+    [...fp2.querySelectorAll("button")].find((b) => /Replace|Apply/.test(b.textContent)).click(); await sleep(800);
+    step("a broken formula is refused with a toast and keeps the curve", (view().undoLabel || "") === "Formula on opacity" && !!$$(".toast").find((t) => /expression/i.test(t.textContent)), $$(".toast").map((t) => t.textContent).join("|"));
+    // MIDI: the panel, and the command (the native file dialog cannot be driven here, so the file goes straight to the command)
+    await P().dispatch({ type: "clear_keyframes", clip: c2().id, param: "opacity" }); await sleep(300);
+    const mb = await waitFor(() => $("[data-param='opacity'] button[aria-label^='MIDI for']"));
+    step("an animatable field offers a MIDI button", !!mb);
+    mb.click(); await sleep(300);
+    const mp = $("[data-param='opacity'] .kf-follow[aria-label^='Follow MIDI for']");
+    step("the MIDI panel has the file, source, channel, range and offset", !!mp && ["Choose a MIDI file", "MIDI source", "Controller number", "MIDI channel", "Value at minimum", "Value at maximum", "MIDI file offset in seconds"].every((l) => mp.querySelector(`[aria-label='${l}']`)));
+    step("Apply waits for a file", !!mp && [...mp.querySelectorAll("button")].find((b) => /Apply/.test(b.textContent)).disabled === true);
+    await P().dispatch({ type: "animate_from_midi", clip: c2().id, param: "opacity", path: "__MIDI__", source: "cc:1", channel: null, track: null, low: 0, high: 1, decay: 0, offset: rat(c2().start) });
+    const mk = await waitFor(() => c2().keyframes.opacity, 15000);
+    step("the MIDI controller sweep (0 to 127 over 2 s, file shifted to start with the clip) became keyframes: half way up after 1 s", !!mk && Math.abs(evalK(mk, 1) - 0.5) < 0.02 && evalK(mk, 0) < 0.02 && evalK(mk, 2.5) > 0.98, mk && `${evalK(mk, 0)} ${evalK(mk, 1)} ${evalK(mk, 2.5)}`);
+    step("it is one undo step", /Follow MIDI with opacity/.test(view().undoLabel || ""), view().undoLabel);
+    P().setView(await window.__TAURI_INTERNALS__.invoke("undo")); await sleep(300);
+    step("undo removes the keyframes", !(c2().keyframes.opacity || []).length);
   } catch (e) { step("exception", false, (e && e.stack) || e); }
   await window.__TAURI_INTERNALS__.invoke("uitest_report", { report: JSON.stringify(R) });
 })();

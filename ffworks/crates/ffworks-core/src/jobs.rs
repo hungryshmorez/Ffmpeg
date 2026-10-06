@@ -136,6 +136,45 @@ fn run_inner(
     };
 
     on_state(JobState::Queued);
+
+    // Compound clips, then pixel sorts, run first (see `nest` and `bake`); they share the first part of the progress bar, the
+    // render itself the last.
+    let steps = (job.nests.len() + job.stages.len()) as f64;
+    let started = Instant::now();
+    let fail = |e: Error, on_state: &mut dyn FnMut(JobState)| {
+        crate::bake::discard(&job.stages);
+        on_state(if matches!(e, Error::Canceled) { JobState::Canceled } else { JobState::Failed { message: e.to_string() } });
+        (Err(e), None)
+    };
+    for (i, nest) in job.nests.iter().enumerate() {
+        let r = crate::nest::run_stage(tools, nest, cancel, temp_dir, &mut |f| {
+            let elapsed = started.elapsed().as_secs_f64();
+            on_state(JobState::Rendering { fraction: Some((i as f64 + f) / (steps + 1.0)), fps: None, elapsed_secs: elapsed, eta_secs: None });
+        });
+        if let Err(e) = r {
+            return fail(e, on_state);
+        }
+    }
+    let offset = job.nests.len();
+    for (i, stage) in job.stages.iter().enumerate() {
+        let i = i + offset;
+        let stage_result = crate::bake::run_stage(tools, stage, cancel, temp_dir, &mut |f| {
+            let elapsed = started.elapsed().as_secs_f64();
+            on_state(JobState::Rendering { fraction: Some((i as f64 + f) / (steps + 1.0)), fps: None, elapsed_secs: elapsed, eta_secs: None });
+        });
+        if let Err(e) = stage_result {
+            return fail(e, on_state);
+        }
+    }
+    // bake files that were not meant to be kept are of no use afterwards, whichever way the render ends
+    struct Discard<'a>(&'a [crate::bake::BakeStage]);
+    impl Drop for Discard<'_> {
+        fn drop(&mut self) {
+            crate::bake::discard(self.0);
+        }
+    }
+    let _discard = Discard(&job.stages);
+
     let mut cmd = Command::new(&tools.ffmpeg);
     cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     suppress_console_window(&mut cmd);
@@ -179,7 +218,6 @@ fn run_inner(
         })
     };
 
-    let started = Instant::now();
     let total = job.total_duration.as_f64();
     let stdout = child.stdout.take().expect("piped");
     let mut last_fps: Option<f64> = None;
@@ -192,7 +230,7 @@ fn run_inner(
                     if let Ok(us) = v.trim().parse::<i64>() {
                         if us >= 0 && total > 0.0 {
                             let done_secs = us as f64 / 1_000_000.0;
-                            let frac = (done_secs / total).clamp(0.0, 1.0);
+                            let frac = (steps + (done_secs / total).clamp(0.0, 1.0)) / (steps + 1.0);
                             let elapsed = started.elapsed().as_secs_f64();
                             let eta = if frac > 0.01 { Some(elapsed * (1.0 - frac) / frac) } else { None };
                             on_state(JobState::Rendering { fraction: Some(frac), fps: last_fps, elapsed_secs: elapsed, eta_secs: eta });
@@ -243,7 +281,7 @@ fn partial_path(out: &std::path::Path) -> PathBuf {
     out.with_file_name(format!("{stem}.ffworks-partial.{ext}"))
 }
 
-fn kill_pid(pid: u32) {
+pub(crate) fn kill_pid(pid: u32) {
     #[cfg(unix)]
     {
         let _ = Command::new("kill").args(["-KILL", &pid.to_string()]).status();

@@ -92,8 +92,20 @@ interface UiStore {
   paletteOpen: boolean;
   /** Clip whose variation sheet is open, or null. */
   variationsClip: string | null;
+  moshClip: string | null;
+  setMoshClip: (c: string | null) => void;
+  corruptClip: string | null;
+  setCorruptClip: (c: string | null) => void;
+  framesClip: string | null;
+  setFramesClip: (c: string | null) => void;
+  scriptOpen: boolean;
+  setScriptOpen: (o: boolean) => void;
   setVariationsClip: (c: string | null) => void;
   snapshotsOpen: boolean;
+  pluginsOpen: boolean;
+  setPluginsOpen: (o: boolean) => void;
+  libraryOpen: boolean;
+  setLibraryOpen: (o: boolean) => void;
   setSnapshotsOpen: (o: boolean) => void;
   shortcutsOpen: boolean;
   setShortcutsOpen: (o: boolean) => void;
@@ -134,8 +146,20 @@ export const useUi = create<UiStore>((set) => ({
   demoOpen: false,
   paletteOpen: false,
   variationsClip: null,
+  moshClip: null,
+  setMoshClip: (moshClip) => set({ moshClip }),
+  corruptClip: null,
+  setCorruptClip: (corruptClip) => set({ corruptClip }),
+  framesClip: null,
+  setFramesClip: (framesClip) => set({ framesClip }),
+  scriptOpen: false,
+  setScriptOpen: (scriptOpen) => set({ scriptOpen }),
   setVariationsClip: (variationsClip) => set({ variationsClip }),
   snapshotsOpen: false,
+  pluginsOpen: false,
+  setPluginsOpen: (pluginsOpen) => set({ pluginsOpen }),
+  libraryOpen: false,
+  setLibraryOpen: (libraryOpen) => set({ libraryOpen }),
   setSnapshotsOpen: (snapshotsOpen) => set({ snapshotsOpen }),
   shortcutsOpen: false,
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),

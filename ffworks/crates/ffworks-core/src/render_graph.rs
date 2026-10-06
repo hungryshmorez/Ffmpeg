@@ -2,7 +2,7 @@
 //! Both preview and final export compile from this one structure so they share edit semantics (spec §156).
 
 use crate::clipprops::Transform;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::keyframes::Keyframe;
 use crate::project::{Clip, Project, TrackKind};
 use std::collections::{BTreeMap, HashMap};
@@ -27,6 +27,11 @@ pub struct InputRef {
     pub alpha: bool,
     /// Source length the renderer must supply for this use (stills and generated media are cut to it).
     pub need: Rational,
+    /// A compound clip: the id of the sequence whose rendered picture and sound this input reads. `path` stays empty until
+    /// `nest::prepare` has planned (and run) that render.
+    pub nested: Option<String>,
+    /// What this footage needs before it joins the Rec.709 picture (see `colormgmt`).
+    pub color: crate::colormgmt::Conversion,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -45,6 +50,8 @@ pub struct VideoSegment {
     /// Playback speed (source span = duration × speed). 1 for transitioned clips.
     pub speed: Rational,
     pub reverse: bool,
+    /// Interpolate the frames a slow-down leaves out (optical flow).
+    pub smooth: bool,
     /// Source time of the single frame held for the whole segment.
     pub freeze: Option<Rational>,
     pub transform: Transform,
@@ -56,6 +63,9 @@ pub struct VideoSegment {
     pub alpha_fx: bool,
     /// Title text and its resolved font file (the clip's media is the transparent title canvas).
     pub title: Option<(crate::titles::Title, std::path::PathBuf)>,
+    /// An adjustment layer: `filters` apply to everything composited beneath it for `[start, start + duration)`; `input`
+    /// (the transparent canvas) is never read.
+    pub adjustment: bool,
 }
 
 impl VideoSegment {
@@ -107,8 +117,18 @@ pub struct VideoTransition {
     pub start: Rational,
     pub duration: Rational,
     pub kind: String,
+    /// The mask picture of a `luma` wipe.
+    pub luma: Option<LumaMask>,
     pub a: TransitionPart,
     pub b: TransitionPart,
+}
+
+/// A luma wipe's mask: its own input (one `-i` per use), the soft-edge width and the direction.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LumaMask {
+    pub input: usize,
+    pub softness: f64,
+    pub invert: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -144,15 +164,25 @@ pub struct RenderGraph {
 }
 
 /// (filters, required FFmpeg filter names, whether any writes transparency)
-fn effect_filters(c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
+fn effect_filters(project: &Project, c: &Clip) -> Result<(Vec<String>, Vec<String>, bool)> {
     let (mut filters, mut requires, mut alpha) = (vec![], vec![], false);
     for fx in &c.effects {
-        if let Some(f) = crate::effects::to_filter(fx, &c.keyframes)? {
+        if let Some(mut f) = crate::effects::to_filter(fx, &c.keyframes)? {
+            if crate::bake::is_mark(&f) {
+                if let Some(pic) = &fx.picture {
+                    f = crate::bake::with_picture(&f, &project.media(pic)?.path)?;
+                } else if crate::bake::parse(&f).is_some_and(|p| p.mask == 3) {
+                    return Err(Error::validation("pixel sort mask 3 uses a picture: choose one for the effect"));
+                }
+            }
             filters.push(f);
             let def = crate::effects::find(&fx.effect)?;
             requires.extend(def.requires.iter().map(|r| r.to_string()));
             if let Some(g) = &fx.graph {
                 requires.extend(g.requires());
+            }
+            if fx.effect == "afilterchain" || fx.effect == "vfilterchain" {
+                requires.extend(crate::effects::chain_filter_names(fx.text.as_deref().unwrap_or("")).into_iter().filter(|n| !n.is_empty()));
             }
             alpha |= def.alpha;
         }
@@ -181,7 +211,12 @@ fn main_key(c: &Clip) -> String {
 type Trims = HashMap<String, (Rational, Rational)>;
 
 pub fn build(project: &Project) -> Result<RenderGraph> {
-    let seq = project.active()?;
+    build_for(project, &project.active_sequence)
+}
+
+/// The render graph of any sequence of the project (compound clips are rendered from theirs).
+pub fn build_for(project: &Project, sequence: &str) -> Result<RenderGraph> {
+    let seq = project.sequence(sequence)?;
     let mut g = RenderGraph {
         width: project.settings.width,
         height: project.settings.height,
@@ -203,14 +238,20 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
         g.inputs.push(InputRef {
             key: key.to_string(),
             media_id: m.id.clone(),
-            path: m.path.clone(),
+            // a compound has no file until `nest::prepare` renders it
+            path: if matches!(m.generator, Some(crate::generators::Generator::Nested { .. })) { String::new() } else { m.path.clone() },
             has_video: m.info.has_video(),
             has_audio: m.info.has_audio(),
             src_fps: m.info.video.first().and_then(|v| v.fps),
-            generated: m.generator.as_ref().map(|g| g.ffmpeg_color()),
+            generated: m.generator.as_ref().and_then(|g| g.ffmpeg_color()),
             still: m.info.still && !m.is_generated(),
             alpha: m.info.video.first().and_then(|v| v.color.pix_fmt.as_deref()).is_some_and(has_alpha),
             need: Rational::ZERO,
+            color: crate::colormgmt::for_media(m),
+            nested: match &m.generator {
+                Some(crate::generators::Generator::Nested { sequence }) => Some(sequence.clone()),
+                _ => None,
+            },
         });
         Ok(g.inputs.len() - 1)
     };
@@ -230,14 +271,21 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                 let half = tr.half();
                 trims.entry(a.id.clone()).or_default().1 = trims.get(&a.id).map(|x| x.1).unwrap_or(Rational::ZERO) + half;
                 trims.entry(b.id.clone()).or_default().0 = trims.get(&b.id).map(|x| x.0).unwrap_or(Rational::ZERO) + half;
-                let (fa, ra, _) = effect_filters(a)?;
-                let (fb, rb, _) = effect_filters(b)?;
+                let (fa, ra, _) = effect_filters(project, a)?;
+                let (fb, rb, _) = effect_filters(project, b)?;
                 let (ia, ib) = (input_index(&mut g, &a.media, &format!("tr:{}:a", tr.id))?, input_index(&mut g, &b.media, &format!("tr:{}:b", tr.id))?);
+                let luma = if tr.kind == crate::transitions::LUMA {
+                    let mask = tr.mask.as_deref().ok_or_else(|| Error::validation("a luma wipe needs a mask picture"))?;
+                    Some(LumaMask { input: input_index(&mut g, mask, &format!("tr:{}:m", tr.id))?, softness: tr.softness, invert: tr.invert })
+                } else {
+                    None
+                };
                 g.video_transitions.push(VideoTransition {
                     layer,
                     start: a.end() - half,
                     duration: tr.duration,
                     kind: tr.kind.clone(),
+                    luma,
                     a: TransitionPart { input: ia, source_in: a.source_in + a.duration - half, filters: fa, requires: ra },
                     b: TransitionPart { input: ib, source_in: b.source_in - half, filters: fb, requires: rb },
                 });
@@ -277,7 +325,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                     for c in &t.clips {
                         let Some((start, source_in, duration)) = trimmed(c) else { continue };
                         let input = input_index(&mut g, &c.media, &main_key(c))?;
-                        let (filters, requires, alpha_fx) = effect_filters(c)?;
+                        let (filters, requires, alpha_fx) = effect_filters(project, c)?;
                         g.video.push(VideoSegment {
                             input,
                             layer,
@@ -286,9 +334,10 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                             duration,
                             opacity: c.opacity,
                             filters,
-                            requires,
+                            requires: if c.smooth && c.speed < Rational::from_int(1) && c.freeze.is_none() { requires.iter().cloned().chain(["minterpolate".to_string()]).collect() } else { requires },
                             speed: c.speed,
                             reverse: c.reverse,
+                            smooth: c.smooth && c.speed < Rational::from_int(1) && c.freeze.is_none(),
                             freeze: c.freeze,
                             transform: c.transform,
                             blend: c.blend.clone(),
@@ -298,6 +347,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                                 Some(t) => Some((t.clone(), crate::fonts::resolve(&t.font)?)),
                                 None => None,
                             },
+                            adjustment: c.adjustment,
                         });
                     }
                 }
@@ -312,7 +362,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
                     }
                     let Some((start, source_in, duration)) = trimmed(c) else { continue };
                     let input = input_index(&mut g, &c.media, &main_key(c))?;
-                    let (filters, requires, _) = effect_filters(c)?;
+                    let (filters, requires, _) = effect_filters(project, c)?;
                     g.audio.push(AudioSegment {
                         input,
                         start,
@@ -338,6 +388,7 @@ pub fn build(project: &Project) -> Result<RenderGraph> {
     let one_frame = Rational::from_int(1).div(g.fps);
     let mut need: Vec<(usize, Rational)> = g.video.iter().map(|v| (v.input, v.source_in + v.source_span().max(one_frame) + one_frame.mul_int(2))).collect();
     need.extend(g.video_transitions.iter().flat_map(|t| [(t.a.input, t.a.source_in + t.duration), (t.b.input, t.b.source_in + t.duration)]));
+    need.extend(g.video_transitions.iter().filter_map(|t| t.luma.as_ref().map(|l| (l.input, t.duration + one_frame))));
     for (i, n) in need {
         let cur = g.inputs[i].need;
         g.inputs[i].need = cur.max(n);

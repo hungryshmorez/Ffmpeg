@@ -17,7 +17,14 @@ import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { actionFor, chordOf, hasCtrl } from "./state/keymap";
 import { CommandPalette } from "./components/CommandPalette";
 import { SnapshotsDialog } from "./components/SnapshotsDialog";
+import { LibraryDialog } from "./components/LibraryDialog";
+import { PluginsDialog } from "./components/PluginsDialog";
 import { VariationsDialog } from "./components/VariationsDialog";
+import { MoshDialog } from "./components/MoshDialog";
+import { CorruptDialog } from "./components/CorruptDialog";
+import { FramesDialog } from "./components/FramesDialog";
+import { ScriptDialog } from "./components/ScriptDialog";
+import { JobAnnouncer, ModalFocus } from "./components/Accessibility";
 import { ExportDialog } from "./components/ExportDialog";
 import { Inspector } from "./components/Inspector";
 import { importPaths, MediaBrowser } from "./components/MediaBrowser";
@@ -47,6 +54,13 @@ export default function App() {
 
   useEffect(() => {
     void api.getState().then((v) => useProject.getState().setView(v)).catch((e) => useProject.getState().toast("error", String(e)));
+  }, []);
+
+  // Edits made through the local API arrive as an event; refetch the project.
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    void api.onProjectChanged(() => void api.getState().then((v) => useProject.getState().setView(v)).catch(() => undefined)).then((u) => (un = u));
+    return () => un?.();
   }, []);
 
   // Mirror the Rust render queue.
@@ -163,8 +177,16 @@ export default function App() {
       <DemoDialog />
       <CommandPalette />
       <SnapshotsDialog />
+      <LibraryDialog />
+      <PluginsDialog />
       <ShortcutsDialog />
       <VariationsDialog />
+      <MoshDialog />
+      <CorruptDialog />
+      <FramesDialog />
+      <ScriptDialog />
+      <ModalFocus />
+      <JobAnnouncer />
       <QueuePanel />
       <RecoveryDialog />
       <UnfinishedExportsDialog />

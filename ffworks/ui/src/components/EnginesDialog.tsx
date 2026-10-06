@@ -29,10 +29,11 @@ export function EnginesDialog() {
   const [busy, setBusy] = useState(false);
   const [f0, setF0] = useState<Awaited<ReturnType<typeof api.frei0rStatus>> | null>(null);
   const [f0dirs, setF0dirs] = useState("");
+  const [ladspaDirs, setLadspaDirs] = useState("");
   const refresh = useCallback(async () => {
     try { const r = await api.listEngines(); setList(r.engines); setActive(r.active); } catch (e) { toast("error", String(e)); }
   }, [toast]);
-  const refreshF0 = useCallback(async () => { try { const r = await api.frei0rStatus(); setF0(r); setF0dirs(r.dirs.join("\n")); } catch (e) { toast("error", String(e)); } }, [toast]);
+  const refreshF0 = useCallback(async () => { try { const r = await api.frei0rStatus(); setF0(r); setF0dirs(r.dirs.join("\n")); setLadspaDirs(r.ladspaDirs.join("\n")); } catch (e) { toast("error", String(e)); } }, [toast]);
   useEffect(() => { if (open) { void refresh(); void refreshF0(); } }, [open, refresh, refreshF0]);
   if (!open) return null;
   const guard = async (f: () => Promise<unknown>) => { setBusy(true); try { await f(); await refresh(); } catch (e) { toast("error", String(e)); } finally { setBusy(false); } };
@@ -101,8 +102,16 @@ export function EnginesDialog() {
         </div>
         <h3>LADSPA audio plugins</h3>
         <p className="muted" data-ladspa-status>
-          {f0 ? (f0.ladspa.ffmpegHasFilter ? `The FFmpeg in use can load LADSPA plugins. ${f0.ladspa.installed} plugin librar${f0.ladspa.installed === 1 ? "y" : "ies"} found, ${f0.ladspa.offered} effect(s) usable (listed under “LADSPA” in the audio effects). Plugins are found in LADSPA_PATH and the usual system folders.` : "The FFmpeg in use has no ladspa filter, so LADSPA plugins are not offered.") : "Checking…"}
+          {f0 ? (f0.ladspa.ffmpegHasFilter ? `The FFmpeg in use can load LADSPA plugins. ${f0.ladspa.installed} plugin librar${f0.ladspa.installed === 1 ? "y" : "ies"} found, ${f0.ladspa.offered} effect(s) usable (listed under “LADSPA” in the audio effects). Plugins are found in the folders below, LADSPA_PATH and the usual system folders.` : "The FFmpeg in use has no ladspa filter, so LADSPA plugins are not offered.") : "Checking…"}
         </p>
+        <div className="field">
+          <label htmlFor="ladspadirs">Extra LADSPA plugin folders (one per line)</label>
+          <textarea id="ladspadirs" rows={2} value={ladspaDirs} onChange={(e) => setLadspaDirs(e.target.value)} placeholder="C:\\ladspa" />
+          <div className="row">
+            <button onClick={async () => { const d = await pickPath({ directory: true, title: "Folder with LADSPA plugins (.dll / .so)" }); if (typeof d === "string") setLadspaDirs((v) => (v.trim() ? v.trim() + "\n" : "") + d); }}>Add folder…</button>
+            <button disabled={busy} onClick={() => void guard(async () => { await api.setLadspaDirs(ladspaDirs.split("\n")); await refreshF0(); })}>Save and rescan</button>
+          </div>
+        </div>
         <div className="row end"><button onClick={() => setOpen(false)}>Close</button></div>
       </div>
     </div>

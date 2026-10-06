@@ -17,6 +17,7 @@ export function TransitionPanel({ clip, track, seq }: { clip: Clip; track: Track
   const [pick, setPick] = useState("fade");
   const favs = useFavs((s) => s.favs);
   const saveFavs = useFavs((s) => s.save);
+  const stills = useProject((s) => s.view)!.project.media.filter((m) => m.info.still && m.info.video.length > 0 && !m.generator);
   useEffect(() => { void useFavs.getState().load(); }, []);
   useEffect(() => {
     if (!kindsCache) void api.listTransitions().then((k) => { kindsCache = k; setKinds(k); });
@@ -38,9 +39,23 @@ export function TransitionPanel({ clip, track, seq }: { clip: Clip; track: Track
       </div>
       <div className="field compact">
         <select aria-label="Transition type" value={t.kind} onChange={(e) => void dispatch({ type: "set_transition", transition: t.id, kind: e.target.value })}>
+          {t.kind === "luma" && <option value="luma">Picture (luma) wipe</option>}
           {kinds.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
       </div>
+      <div className="field compact">
+        <label>Picture wipe: dark parts of the picture switch first</label>
+        <select aria-label="Mask picture" value={t.mask ?? ""} disabled={stills.length === 0 && !t.mask} onChange={(e) => void dispatch({ type: "set_transition_mask", transition: t.id, media: e.target.value || null })}>
+          <option value="">{stills.length === 0 ? "(import a still image to use as a mask)" : "(none: use the type above)"}</option>
+          {stills.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      </div>
+      {t.kind === "luma" && (
+        <>
+          <CommitSlider label="Edge softness" unit="" value={Number((t.softness ?? 0.1).toFixed(2))} min={0.01} max={1} step={0.01} onCommit={(v) => void dispatch({ type: "set_transition_mask", transition: t.id, media: t.mask ?? null, softness: v })} />
+          <label className="check"><input type="checkbox" aria-label="Invert mask" checked={!!t.invert} onChange={(e) => void dispatch({ type: "set_transition_mask", transition: t.id, media: t.mask ?? null, invert: e.target.checked })} /> Bright parts switch first</label>
+        </>
+      )}
       <CommitSlider label="Duration" unit="s" value={Number(toSec(t.duration).toFixed(3))} min={2 / fps} max={5} step={0.04} onCommit={(v) => void dispatch({ type: "set_transition", transition: t.id, duration: fromSec(v) })} />
     </div>
   );

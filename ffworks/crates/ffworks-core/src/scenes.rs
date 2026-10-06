@@ -2,6 +2,7 @@
 //! MIT/Apache-2.0). FFmpeg decodes a low-resolution BGR stream; the crate decides where the cuts are.
 
 use crate::error::{Error, Result};
+use crate::jobs::CancelToken;
 use crate::process::{suppress_console_window, Tools};
 use scenesdetect::content::{Detector, Options};
 use scenesdetect::frame::{RgbFrame, Timebase, Timestamp};
@@ -60,6 +61,11 @@ pub fn detect_cuts(frames: &mut dyn Iterator<Item = Vec<u8>>, w: u32, h: u32, fp
 
 /// Detect scenes in `media`. `threshold` is PySceneDetect's content score (default 27; lower = more sensitive). Cached per key+threshold.
 pub fn detect(tools: &Tools, media: &Path, duration: f64, cache_dir: &Path, key: &str, threshold: f64) -> Result<SceneAnalysis> {
+    detect_with(tools, media, duration, cache_dir, key, threshold, &CancelToken::new())
+}
+
+/// [`detect`] that stops (with [`Error::Canceled`]) when `cancel` is raised.
+pub fn detect_with(tools: &Tools, media: &Path, duration: f64, cache_dir: &Path, key: &str, threshold: f64, cancel: &CancelToken) -> Result<SceneAnalysis> {
     std::fs::create_dir_all(cache_dir).map_err(|e| Error::io(cache_dir, e))?;
     let cache_file = cache_dir.join(format!("{key}.scenes_{threshold}.json"));
     if let Some(a) = std::fs::read_to_string(&cache_file).ok().and_then(|t| serde_json::from_str::<SceneAnalysis>(&t).ok()) {
@@ -73,10 +79,19 @@ pub fn detect(tools: &Tools, media: &Path, duration: f64, cache_dir: &Path, key:
     let mut out = child.stdout.take().expect("piped");
     let size = (W * H * 3) as usize;
     let mut frames = std::iter::from_fn(|| {
+        if cancel.is_canceled() {
+            return None;
+        }
         let mut buf = vec![0u8; size];
         out.read_exact(&mut buf).ok().map(|_| buf)
     });
     let cuts = detect_cuts(&mut frames, W, H, FPS, threshold);
+    if cancel.is_canceled() {
+        crate::jobs::kill_pid(child.id());
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(Error::Canceled);
+    }
     let status = child.wait().map_err(|e| Error::io(media, e))?;
     if !status.success() {
         return Err(Error::ToolFailed { tool: "ffmpeg".into(), code: status.code(), hint: "video decode failed during scene detection (does the file have a video stream?)".into() });

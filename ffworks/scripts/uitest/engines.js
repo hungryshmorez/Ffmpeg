@@ -79,6 +79,19 @@
     step("the dialog reports LADSPA support and usable audio plugins", !!la && f0.ladspa.ffmpegHasFilter && f0.ladspa.offered > 50 && /can load LADSPA/.test(la.textContent), la && la.textContent);
     const effs = await inv("list_effects");
     step("LADSPA effects are offered as audio effects", effs.filter((d) => d.category === "LADSPA").length === f0.ladspa.offered && effs.filter((d) => d.category === "LADSPA").every((d) => d.kind === "audio"), String(effs.filter((d) => d.category === "LADSPA").length));
+    // LADSPA folders: a field, saved to the settings, shown again, and removable
+    const lta = $("#ladspadirs");
+    step("the dialog has a field for extra LADSPA folders", !!lta);
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(lta, "__BUILDS__/ladspa-extra"); lta.dispatchEvent(new Event("input", { bubbles: true })); await sleep(300);
+    const lsave = [...$$(".engines-dialog button")].filter((b) => /^Save and rescan$/.test(b.textContent.trim()))[1];
+    lsave.click(); await sleep(300);
+    await waitFor(() => !lsave.disabled, 10000); await sleep(300);
+    let lstat = await inv("frei0r_status");
+    step("saving puts the folder in the settings and the status", lstat.ladspaDirs.length === 1 && /ladspa-extra$/.test(lstat.ladspaDirs[0]), JSON.stringify(lstat.ladspaDirs));
+    step("LADSPA plugins from the usual places are still found", lstat.ladspa.installed === f0.ladspa.installed, `${lstat.ladspa.installed} vs ${f0.ladspa.installed}`);
+    await inv("set_ladspa_dirs", { dirs: [] });
+    lstat = await inv("frei0r_status");
+    step("emptying the list removes it again", lstat.ladspaDirs.length === 0);
     const ta = $("#f0dirs"); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "__BUILDS__/f0"); ta.dispatchEvent(new Event("input", { bubbles: true })); await sleep(800);
     btn(/^Save and rescan$/, $(".engines-dialog")).click();
     let saved = await inv("get_settings");

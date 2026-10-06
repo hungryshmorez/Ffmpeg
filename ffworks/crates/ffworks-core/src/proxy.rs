@@ -29,10 +29,12 @@ pub fn eligible(m: &MediaAsset) -> bool {
     m.info.has_video() && !m.info.still && !m.is_generated()
 }
 
-/// Where the proxy of `m` lives: `<cache>/proxies/<fingerprint>_<height>p.mp4`.
+/// Where the proxy of `m` lives: `<cache>/proxies/<fingerprint>_<height>p.mp4`, with the colour conversion in the name when the
+/// proxy is converted to Rec.709 (so changing a file's source colours never shows a stale proxy).
 pub fn proxy_path(cache_dir: &Path, m: &MediaAsset) -> PathBuf {
     let key: String = m.fingerprint.clone().unwrap_or_else(|| m.id.clone()).chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-    cache_dir.join("proxies").join(format!("{key}_{PROXY_HEIGHT}p.mp4"))
+    let conv = crate::colormgmt::for_media(m).key().map(|k| format!("_{k}")).unwrap_or_default();
+    cache_dir.join("proxies").join(format!("{key}_{PROXY_HEIGHT}p{conv}.mp4"))
 }
 
 pub fn status(cache_dir: &Path, m: &MediaAsset) -> ProxyStatus {
@@ -55,7 +57,9 @@ pub fn build_job(m: &MediaAsset, out: &Path, caps: Option<&Capabilities>) -> Res
     let v = &m.info.video[0];
     // nominal frame rate keeps variable-frame-rate sources steady; never upscale
     let fps = v.fps.map(|f| format!("fps={}/{},", f.num(), f.den())).unwrap_or_default();
-    let mut graph = format!("[0:v:0]{fps}scale=-2:'min({PROXY_HEIGHT},ih)':flags=bicubic,format=yuv420p[v]");
+    // footage that is not Rec.709 is converted like an export would, so the monitor shows the colours the project will have
+    let convert = crate::colormgmt::for_media(m).filter().map(|(f, _)| format!(",format=yuv420p,{f},{}", crate::colormgmt::FRAME_TAGS)).unwrap_or_default();
+    let mut graph = format!("[0:v:0]{fps}scale=-2:'min({PROXY_HEIGHT},ih)':flags=bicubic,format=yuv420p{convert}[v]");
     let mut post: Vec<String> = ["-map", "[v]"].map(String::from).into();
     if m.info.has_audio() {
         graph.push_str(";[0:a:0]aresample=48000,aformat=channel_layouts=stereo[a]");
@@ -63,12 +67,15 @@ pub fn build_job(m: &MediaAsset, out: &Path, caps: Option<&Capabilities>) -> Res
     }
     // short GOP: every 12th frame is a keyframe, so seeking/scrubbing is quick
     post.extend(["-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-g", "12", "-keyint_min", "12", "-sc_threshold", "0", "-pix_fmt", "yuv420p", "-movflags", "+faststart"].map(String::from));
+    if !convert.is_empty() {
+        post.extend(crate::colormgmt::OUTPUT_TAGS.map(String::from));
+    }
     if m.info.has_audio() {
         post.extend(["-c:a", "aac", "-b:a", "128k"].map(String::from));
     }
     post.push(out.to_string_lossy().into_owned());
     let pre = ["-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats", "-i"].iter().map(|s| s.to_string()).chain([m.path.clone()]).collect();
-    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: graph, post, total_duration: m.info.duration.max(Rational::new(1, 100)), output: out.to_path_buf(), force_file: false })
+    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: graph, post, total_duration: m.info.duration.max(Rational::new(1, 100)), output: out.to_path_buf(), force_file: false, stages: vec![], nests: vec![] })
 }
 
 #[cfg(test)]
@@ -83,6 +90,7 @@ mod tests {
             path: "/x/a.mov".into(),
             fingerprint: Some("abc/def+1".into()),
             generator: None,
+            color_override: None,
             info: MediaInfo { video: vec![VideoStream { index: 0, codec: "prores".into(), width: 1920, height: 1080, fps: Some(Rational::new(30000, 1001)), bit_rate: None, color: ColorInfo::default() }], still, ..Default::default() },
         }
     }

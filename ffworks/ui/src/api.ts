@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform } from "./types";
+import type { AudioWorkflow, VideoWorkflow, JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs, MoshFx, ScriptOutcome, DriftResult } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -23,9 +23,25 @@ export const api = {
   packageProject: (folder: string) => invoke<string>("package_project", { folder }),
   startRecording: () => invoke<void>("start_recording"),
   stopRecording: (path: string | null) => invoke<number>("stop_recording", { path }),
+  searchLibrary: (query: string, limit?: number) => invoke<LibraryEntry[]>("search_library", { query, limit: limit ?? null }),
+  forgetMissingLibrary: () => invoke<number>("forget_missing_library"),
+  setPluginGrant: (folder: string, grant: PluginGrant) => invoke<void>("set_plugin_grant", { folder, grant }),
+  listPlugins: () => invoke<PluginList>("list_plugins"),
+  installPlugin: (folder: string) => invoke<PluginInfo>("install_plugin", { folder }),
+  runPlugin: (folder: string, action: string, selected: string | null) => invoke<{ log: string[]; commands: number; view: StateView }>("run_plugin", { folder, action, selected }),
+  runScript: (path: string, selected: string | null, allowAnalysis: boolean) => invoke<ScriptOutcome>("run_script", { path, selected, allowAnalysis }),
+  runScriptText: (source: string, selected: string | null, allowAnalysis: boolean, dry: boolean) => invoke<ScriptOutcome>("run_script_text", { source, selected, allowAnalysis, dry }),
+  scriptExamples: () => invoke<[string, string, string][]>("script_examples"),
+  readScriptFile: (path: string) => invoke<string>("read_script_file", { path }),
+  writeScriptFile: (path: string, source: string) => invoke<void>("write_script_file", { path, source }),
+  setActiveSequence: (id: string) => invoke<StateView>("set_active_sequence", { id }),
+  localApiStatus: () => invoke<LocalApi>("local_api_status"),
+  setLocalApi: (enabled: boolean, newToken: boolean) => invoke<LocalApi>("set_local_api", { enabled, newToken }),
+  onProjectChanged: (cb: () => void): Promise<UnlistenFn> => listen<null>("project-changed", () => cb()),
   runMacro: (path: string, selected: string | null) => invoke<StateView>("run_macro", { path, selected }),
   importSubtitles: (path: string, offset: number) => invoke<StateView>("import_subtitles", { path, offset }),
   syncOffset: (reference: string, clip: string) => invoke<{ lag: number; confidence: number; start: number }>("sync_offset", { reference, clip }),
+  syncDrift: (reference: string, clip: string) => invoke<DriftResult>("sync_drift", { reference, clip }),
   getEffectPresets: () => invoke<Record<string, EffectPreset>>("get_effect_presets"),
   saveEffectPreset: (name: string, preset: EffectPreset) => invoke<Record<string, EffectPreset>>("save_effect_preset", { name, preset }),
   deleteEffectPreset: (name: string) => invoke<Record<string, EffectPreset>>("delete_effect_preset", { name }),
@@ -42,15 +58,31 @@ export const api = {
   randomEffects: (clip: string, count: number, pool: string, seed?: number) => invoke<RandomResult>("random_effects", { clip, count, pool, seed: seed ?? null }),
   randomTransitions: (clip: string, count: number, pool: string, seed?: number) => invoke<RandomResult>("random_transitions", { clip, count, pool, seed: seed ?? null, duration: null }),
   listTransitions: () => invoke<[string, string][]>("list_transitions"),
+  listAudioWorkflows: () => invoke<AudioWorkflow[]>("list_audio_workflows"),
+  listVideoWorkflows: () => invoke<VideoWorkflow[]>("list_video_workflows"),
   listEffects: () => invoke<EffectDef[]>("list_effects"),
   proxyStatus: () => invoke<ProxyStatus[]>("proxy_status"),
   createProxy: (mediaId: string) => invoke<string>("create_proxy", { mediaId }),
+  ffglitchStatus: () => invoke<GlitchStatus>("ffglitch_status"),
+  setFfglitchDir: (dir: string) => invoke<GlitchStatus>("set_ffglitch_dir", { dir }),
+  makeMosh: (clip: string, mosh: { kind: "amplify" | "drift" | "transfer" | "fx"; factor?: number; x?: number; y?: number; donor?: string; fx?: string; params?: Record<string, number> }) => invoke<StateView>("make_mosh", { clip, ...mosh }),
+  listMoshEffects: () => invoke<MoshFx[]>("list_mosh_effects"),
+  cancelMosh: () => invoke<boolean>("cancel_mosh"),
+  makeCorruption: (clip: string, o: { codec: string; bits: number | null; dropEvery: number | null; keyframeEvery: number }) => invoke<StateView>("make_corruption", { clip, ...o }),
+  cancelCorruption: () => invoke<boolean>("cancel_corruption"),
+  makeFrames: (clip: string, args: FrameArgs) => invoke<StateView>("make_frames", { clip, args }),
+  cancelFramelab: () => invoke<boolean>("cancel_framelab"),
+  onFramelabProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("framelab-progress", (ev) => cb(ev.payload)),
+  onCorruptionProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("corruption-progress", (ev) => cb(ev.payload)),
+  /** Fraction (0..1) of the mosh run, by stage. */
+  onMoshProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("mosh-progress", (ev) => cb(ev.payload)),
   clearProxies: () => invoke<number>("clear_proxies"),
   listFonts: () => invoke<FontEntry[]>("list_fonts"),
   listFilters: () => invoke<FilterInfo[]>("list_filters"),
   checkFilterGraph: (graph: FilterGraph) => invoke<string[]>("check_filter_graph", { graph }),
   filterHelp: (name: string) => invoke<FilterHelp>("filter_help", { name }),
   listClipProps: () => invoke<ClipProps>("list_clip_props"),
+  cancelPreview: () => invoke<boolean>("cancel_preview"),
   renderPreview: (start: string, end: string, scaleDiv: number) => invoke<PreviewInfo>("render_preview", { start, end, scaleDiv }),
   listExportPresets: () => invoke<ExportPreset[]>("list_export_presets"),
   previewCommand: (preset: string, output: string, engine?: string) => invoke<string>("preview_command", { preset, output, engine: engine ?? null }),
@@ -59,8 +91,9 @@ export const api = {
   resolveUnfinished: (requeue: boolean) => invoke<string[]>("resolve_unfinished", { requeue }),
   exportName: (template: string, preset: string, date: string, time: string) => invoke<string>("export_name", { template, preset, date, time }),
   demoBatch: (req: { useTransitions: boolean; useEffects: boolean; transitionPool: string; effectPool: string; effectStack: number; includeGl: boolean; segments: number; segmentSecs: number; scaleDiv: number }) => invoke<DemoBatch>("demo_batch", { req }),
-  frei0rStatus: () => invoke<{ ffmpegHasFilter: boolean; dirs: string[]; installed: number; offered: string[]; ladspa: { ffmpegHasFilter: boolean; installed: number; offered: number } }>("frei0r_status"),
+  frei0rStatus: () => invoke<{ ffmpegHasFilter: boolean; dirs: string[]; ladspaDirs: string[]; installed: number; offered: string[]; ladspa: { ffmpegHasFilter: boolean; installed: number; offered: number } }>("frei0r_status"),
   setFrei0rDirs: (dirs: string[]) => invoke<void>("set_frei0r_dirs", { dirs }),
+  setLadspaDirs: (dirs: string[]) => invoke<void>("set_ladspa_dirs", { dirs }),
   listEngines: () => invoke<{ engines: EngineInfo[]; active: string }>("list_engines"),
   scanEngines: (dir: string) => invoke<FoundEngine[]>("scan_engines", { dir }),
   addEngine: (name: string, ffmpegPath: string, ffprobePath?: string) => invoke<EngineInfo>("add_engine", { name, ffmpegPath, ffprobePath: ffprobePath ?? null }),
@@ -73,4 +106,12 @@ export const api = {
   verifyOutput: (path: string) => invoke<string>("verify_output", { path }),
   diagnostics: () => invoke<Record<string, unknown>>("get_diagnostics"),
   onJob: (cb: (e: JobEvent) => void): Promise<UnlistenFn> => listen<JobEvent>("job-state", (ev) => cb(ev.payload)),
+  /** Fraction (0..1) of the preview being rendered, reported while a pixel sort is baked and the preview rendered. */
+  onPreviewProgress: (cb: (fraction: number) => void): Promise<UnlistenFn> => listen<number>("preview-progress", (ev) => cb(ev.payload)),
 };
+
+export interface PluginGrant { analysis: boolean; hosts: string[]; folders: Record<string, string> }
+export interface PluginInfo { folder: string; name: string; version: string; description: string; actions: { id: string; label: string; export: string }[]; requests: { edit: boolean; analysis: boolean; network: string[]; files: string[] }; wasi: boolean; granted: PluginGrant }
+export interface PluginList { dir: string; plugins: PluginInfo[]; broken: [string, string][] }
+
+export interface LibraryEntry { path: string; name: string; fingerprint: string | null; sizeBytes: number | null; duration: number; hasVideo: boolean; hasAudio: boolean; width: number | null; height: number | null; container: string; firstSeenUnix: number; lastSeenUnix: number; exists: boolean }

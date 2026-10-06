@@ -4,7 +4,7 @@ import type { Clip, Track, Waveform } from "../types";
 
 const clip = (over: Partial<Clip> = {}): Clip => ({
   id: "a", media: "m", name: "a", kind: "audio", start: "2", source_in: "1", duration: "4", link: null, gain_db: 0, opacity: 1, effects: [],
-  pan: 0, fade_in: "0", fade_out: "0", title: null, speed: "1", reverse: false, freeze: null, transform: { x: 0, y: 0, scale: 1, rotation: 0 }, blend: "normal", keyframes: {}, ...over,
+  pan: 0, fade_in: "0", fade_out: "0", title: null, speed: "1", reverse: false, smooth: false, freeze: null, transform: { x: 0, y: 0, scale: 1, rotation: 0 }, blend: "normal", keyframes: {}, ...over,
 });
 const track = (c: Clip, over: Partial<Track> = {}): Track => ({ id: "t", name: "A1", kind: "audio", muted: false, locked: false, gain_db: 0, pan: 0, solo: false, clips: [c], transitions: [], ...over });
 // 10 bins per second, a constant 0.5 peak except bin 15 (= 1.5 s) which is 1

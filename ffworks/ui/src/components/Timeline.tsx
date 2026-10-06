@@ -1,11 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { fpsOf, fromSec, snapToFrame, timecode, toSec } from "../time";
-import { beatPoints, dbToGain, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
+import { beatPoints, dbToGain, groupEdit, keyEdit, type KeyEdit, linkedIds, snap, snapPoints, tickStep, times } from "../timeline/math";
 import { useAnalysis } from "../state/analysis";
-import { addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
+import { addAdjustmentAtPlayhead, addSolidAtPlayhead, addTitleAtPlayhead } from "./generate";
 import { usePlayhead, useProject, useUi } from "../state/stores";
-import type { Clip, Marker, Sequence, Track, Transition } from "../types";
+import type { Clip, Command, Generator, Marker, Sequence, Track, Transition } from "../types";
+import { leaveCompound, openCompound } from "./compound";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
+import { activeSequence } from "../state/sequences";
 
 const HEADER_W = 132;
 const ROW_H: Record<string, number> = { video: 54, audio: 48 };
@@ -49,6 +51,12 @@ export function Timeline() {
   const tracks = displayTracks(seq);
   return (
     <div className="timeline" aria-label="Timeline">
+      {seq.compound && (
+        <div className="compound-bar" role="status">
+          Editing the inside of the compound clip “{seq.name}”
+          <button onClick={() => void leaveCompound()}>← Back to the main timeline</button>
+        </div>
+      )}
       <div className="timeline-bar">
         <span className="muted">Zoom</span>
         <input aria-label="Timeline zoom" type="range" min={4} max={600} value={px} onChange={(e) => setZoom(Number(e.target.value))} />
@@ -56,6 +64,7 @@ export function Timeline() {
         <button title="Add a marker at the playhead (M)" onClick={() => void addMarkerAtPlayhead(seq)}>+ Marker</button>
         <button title="Add a title at the playhead (5 s) on the topmost free video track" onClick={() => void addTitleAtPlayhead()}>+ Title</button>
         <button title="Add a solid colour clip at the playhead (5 s)" onClick={() => void addSolidAtPlayhead()}>+ Solid</button>
+        <button title="Add an adjustment layer at the playhead (5 s): its effects apply to everything on the tracks beneath it" onClick={() => void addAdjustmentAtPlayhead()}>+ Adjustment</button>
         <button title="Add audio track" onClick={() => dispatch({ type: "add_track", kind: "audio" })}>+ Audio track</button>
         <label className="check" title="Snap clip edges and the playhead to detected beats (detect beats in the Inspector first)"><input type="checkbox" checked={snapBeats} onChange={(e) => setSnapBeats(e.target.checked)} /> Snap to beats</label>
         <span className="muted right">Space play · S split · Del delete · ⇧Del ripple · ←/→ frame · Ctrl+wheel zoom</span>
@@ -227,14 +236,35 @@ const ClipView = memo(
     const g = ghost ?? { start, duration, sourceIn };
     return (
       <div
-        className={`clip ${clip.kind} ${isSel ? "selected" : ""} ${ghost ? "dragging" : ""}`}
+        className={`clip ${clip.kind} ${clip.adjustment ? "adjustment" : ""} ${isSel ? "selected" : ""} ${ghost ? "dragging" : ""}`}
         style={{ left: g.start * px, width: Math.max(2, g.duration * px), height }}
         onPointerDown={begin("move")}
         role="button"
         tabIndex={0}
-        aria-label={`${clip.kind} clip ${clip.name}`}
+        aria-label={`${clip.kind} clip ${clip.name}, starts at ${timecode(start, fps)}, lasts ${timecode(duration, fps)}`}
+        aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Control+ArrowLeft Control+ArrowRight Alt+ArrowUp Alt+ArrowDown"
+        onKeyDown={(e) => {
+          const edit = keyEdit(e, start, duration, fps);
+          if (!edit || track.locked) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (applyToSelection(edit, clip, start, duration, fps)) return;
+          if (edit.kind === "track") {
+            // video tracks are drawn newest on top, audio tracks oldest on top
+            // read the current tracks, not the ones this memoised clip was drawn with: a track may have been added since
+            const live = useProject.getState().view;
+            const now = live ? (activeSequence(live.project) ?? seq) : seq;
+            const same = now.tracks.filter((t) => t.kind === track.kind);
+            const at = same.findIndex((t) => t.id === track.id);
+            const to = same[track.kind === "video" ? at + (edit.up ? 1 : -1) : at + (edit.up ? -1 : 1)];
+            if (to && !to.locked) void dispatch({ type: "move_clip", clip: clip.id, start: fromSec(start), track: to.id });
+          } else if (edit.kind === "move") void dispatch({ type: "move_clip", clip: clip.id, start: fromSec(edit.start), track: null });
+          else if (edit.kind === "trim-start") void dispatch({ type: "trim_clip", clip: clip.id, edge: "start", to: fromSec(edit.start) });
+          else void dispatch({ type: "trim_clip", clip: clip.id, edge: "end", to: fromSec(edit.end) });
+        }}
         aria-pressed={isSel}
-        onFocus={() => select(clip.id)}
+        onFocus={() => { const ui = useUi.getState(); if (ui.selected !== clip.id && !ui.extra.includes(clip.id)) select(clip.id); }}
+        onDoubleClick={() => void openCompound(clip.id)}
         title={`${clip.name}\nstart ${timecode(g.start, fps)}  dur ${timecode(g.duration, fps)}`}
       >
         {media?.generator ? <GeneratedFill clip={clip} media={media} /> : clip.kind === "video" ? <Filmstrip mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} freeze={media?.info.still ? 0 : clip.freeze ? toSec(clip.freeze) : null} /> : <WaveCanvas mediaId={clip.media} sourceIn={g.sourceIn} duration={g.duration} px={px} speed={speed} reverse={clip.reverse} gainDb={clip.gain_db + track.gain_db} height={height} />}
@@ -248,14 +278,57 @@ const ClipView = memo(
   (a, b) => a.px === b.px && a.fps === b.fps && a.height === b.height && a.track.locked === b.track.locked && a.track.gain_db === b.track.gain_db && JSON.stringify(a.clip) === JSON.stringify(b.clip) && linkKey(a.seq, a.clip) === linkKey(b.seq, b.clip),
 );
 
+/**
+ * With several clips selected (Shift/Ctrl+click), a keyboard move/trim/track change on one of them applies to all of them as one
+ * undo step, all or nothing. Returns false when the selection is just this clip, so the caller handles it alone.
+ */
+function applyToSelection(edit: KeyEdit, focused: Clip, start: number, duration: number, fps: number): boolean {
+  const ui = useUi.getState();
+  const sel = new Set([ui.selected, ...ui.extra].filter((x): x is string => !!x));
+  const live = useProject.getState().view;
+  const seq = live ? activeSequence(live.project) : null;
+  if (!seq || sel.size < 2) return false;
+  const picked: { clip: Clip; track: Track }[] = [];
+  const seen = new Set<string>();
+  for (const tr of seq.tracks) for (const c of tr.clips) {
+    if (!linkedIds(seq, c.id).some((g) => sel.has(g))) continue;
+    const key = c.link ?? c.id;
+    if (seen.has(key)) continue; // a linked pair moves together: one clip stands for both
+    seen.add(key);
+    picked.push({ clip: c, track: tr });
+  }
+  if (!picked.some((p) => p.clip.id === focused.id || linkedIds(seq, focused.id).includes(p.clip.id))) return false;
+  const { dispatch, toast } = useProject.getState();
+  if (picked.some((p) => p.track.locked)) { toast("error", "A selected clip is on a locked track"); return true; }
+  let commands: Command[] | null = null;
+  if (edit.kind === "track") {
+    commands = [];
+    for (const p of picked) {
+      const same = seq.tracks.filter((t) => t.kind === p.track.kind);
+      const at = same.findIndex((t) => t.id === p.track.id);
+      const to = same[p.track.kind === "video" ? at + (edit.up ? 1 : -1) : at + (edit.up ? -1 : 1)];
+      if (!to || to.locked) { commands = null; break; }
+      commands.push({ type: "move_clip", clip: p.clip.id, start: p.clip.start, track: to.id });
+    }
+  } else {
+    const steps = groupEdit(edit, { start, duration }, picked.map((p) => { const t = times(p.clip); return { id: p.clip.id, start: t.start, duration: t.duration }; }), fps);
+    commands = steps && steps.map((st): Command => st.op === "move" ? { type: "move_clip", clip: st.clip, start: fromSec(st.to), track: null } : st.op === "trim-start" ? { type: "trim_clip", clip: st.clip, edge: "start", to: fromSec(st.to) } : { type: "trim_clip", clip: st.clip, edge: "end", to: fromSec(st.to) });
+  }
+  if (!commands) { toast("error", "Not every selected clip can make that change, so none were changed"); return true; }
+  const what = edit.kind === "track" ? "Move" : edit.kind === "move" ? "Nudge" : "Trim";
+  void dispatch({ type: "batch", label: `${what} ${picked.length} clips`, commands });
+  return true;
+}
+
 /** Cheap key capturing only what ClipView reads from the sequence (its link group). */
 function linkKey(seq: Sequence, c: Clip): string {
   return linkedIds(seq, c.id).join(",");
 }
 
 /** Fill for a generated clip: its colour for a solid, the text for a title (the real picture appears in a rendered preview). */
-function GeneratedFill({ clip, media }: { clip: Clip; media: { generator: { kind: "solid"; color: string } | null } }) {
-  const color = media.generator?.color ?? "#000000";
+function GeneratedFill({ clip, media }: { clip: Clip; media: { generator: Generator | null } }) {
+  if (media.generator?.kind === "nested") return <div className="gen-fill compound" aria-hidden><span>▣</span> compound</div>;
+  const color = media.generator?.kind === "solid" ? media.generator.color : "#000000";
   if (clip.title) return <div className="gen-fill title" aria-hidden><span>T</span> {clip.title.text.replace(/\n/g, " ⏎ ")}</div>;
   return <div className="gen-fill" aria-hidden style={{ background: color.length === 9 ? `${color.slice(0, 7)}${color.slice(7)}` : color }} />;
 }

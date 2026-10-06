@@ -1,7 +1,8 @@
 // Multiply all forward motion vectors by `factor` (setup param, default 4).
 let factor = 4;
 export function setup(args) {
-  if (args && args.factor) factor = args.factor;
+  // the -sp JSON arrives as args.params
+  if (args && args.params && args.params.factor) factor = args.params.factor;
   return { features: ["mv"], mb_type: false };
 }
 export function glitch_frame(frame) {

@@ -79,7 +79,23 @@ pub struct Transition {
     pub clip_b: Id,
     pub kind: String,
     pub duration: Rational,
+    /// Kind `luma` only: a still picture whose brightness decides *when* each pixel switches from A to B (dark first).
+    #[serde(default)]
+    pub mask: Option<Id>,
+    /// Width of the soft edge of a luma wipe, as a fraction of the brightness range (0.01 to 1).
+    #[serde(default = "default_softness")]
+    pub softness: f64,
+    /// Switch the bright parts first instead of the dark ones.
+    #[serde(default)]
+    pub invert: bool,
 }
+
+pub fn default_softness() -> f64 {
+    0.1
+}
+
+/// The transition kind that uses a mask picture.
+pub const LUMA: &str = "luma";
 
 impl Transition {
     pub fn half(&self) -> Rational {
@@ -122,6 +138,12 @@ pub fn validate_track(p: &Project, track: &Track) -> Result<()> {
     let mut seen: Vec<(&Id, &Id)> = vec![];
     for t in &track.transitions {
         check_kind(&t.kind)?;
+        if t.kind == LUMA {
+            let m = p.media(t.mask.as_deref().ok_or_else(|| Error::validation("a luma wipe needs a mask picture (pick a still image)"))?).map_err(|_| Error::validation("the luma wipe's mask picture is no longer in the project"))?;
+            if !m.info.still || !m.info.has_video() || m.is_generated() {
+                return Err(Error::validation(format!("'{}' cannot be a luma mask: use a still image", m.name)));
+            }
+        }
         if seen.contains(&(&t.clip_a, &t.clip_b)) {
             return Err(Error::validation("a cut can only have one transition"));
         }
@@ -136,7 +158,7 @@ pub fn validate_track(p: &Project, track: &Track) -> Result<()> {
             return Err(Error::validation("clips with a transition must have opacity 100%"));
         }
         for c in [a, b] {
-            if p.media(&c.media)?.is_generated() {
+            if matches!(p.media(&c.media)?.generator, Some(crate::generators::Generator::Solid { .. })) {
                 return Err(Error::validation(format!("'{}' is a generated clip (title/solid colour); transitions are not supported on those yet — fade its opacity instead", c.name)));
             }
             if !c.is_plain_timing() {

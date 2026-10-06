@@ -37,6 +37,8 @@ impl ExportSettings {
             ExportSettings { id: "datamosh_mp4".into(), name: "Datamosh MP4 (drops keyframes: smeared glitch look)".into(), extension: "mp4".into(), video_codec: Some("libx264".into()), crf: Some(23), encoder_preset: Some("fast".into()), pix_fmt: Some("yuv420p".into()), audio_codec: Some("aac".into()), audio_bitrate: Some("160k".into()), extra: s(&["-g", "15", "-keyint_min", "15", "-sc_threshold", "0", "-bf", "0", "-bsf:v", "noise=drop=key*gt(n\\,0)", "-movflags", "+faststart"]) },
             ExportSettings { id: "vp9_webm".into(), name: "VP9 WebM".into(), extension: "webm".into(), video_codec: Some("libvpx-vp9".into()), crf: Some(32), encoder_preset: None, pix_fmt: Some("yuv420p".into()), audio_codec: Some("libopus".into()), audio_bitrate: Some("128k".into()), extra: s(&["-b:v", "0", "-row-mt", "1"]) },
             ExportSettings { id: "h265_mp4".into(), name: "H.265 / HEVC MP4".into(), extension: "mp4".into(), video_codec: Some("libx265".into()), crf: Some(24), encoder_preset: Some("medium".into()), pix_fmt: Some("yuv420p".into()), audio_codec: Some("aac".into()), audio_bitrate: Some("192k".into()), extra: s(&["-tag:v", "hvc1", "-movflags", "+faststart"]) },
+            // HDR10: SDR (Rec.709) material is mapped to PQ / BT.2020 (see `colormgmt::HDR10_FRAMES`); the mastering display is the usual P3-D65 1000-nit one, MaxCLL/MaxFALL are not measured so they are left out
+            ExportSettings { id: "hdr10_mp4".into(), name: "HDR10 MP4 (H.265 10-bit, SDR mapped to PQ)".into(), extension: "mp4".into(), video_codec: Some("libx265".into()), crf: Some(20), encoder_preset: Some("medium".into()), pix_fmt: Some("yuv420p10le".into()), audio_codec: Some("aac".into()), audio_bitrate: Some("192k".into()), extra: s(&["-tag:v", "hvc1", "-x265-params", "hdr10=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,10)", "-movflags", "+faststart"]) },
             ExportSettings { id: "av1_mp4".into(), name: "AV1 MP4 (SVT-AV1)".into(), extension: "mp4".into(), video_codec: Some("libsvtav1".into()), crf: Some(34), encoder_preset: Some("8".into()), pix_fmt: Some("yuv420p".into()), audio_codec: Some("aac".into()), audio_bitrate: Some("160k".into()), extra: s(&["-movflags", "+faststart"]) },
             ExportSettings { id: "prores_mov".into(), name: "ProRes 422 HQ MOV".into(), extension: "mov".into(), video_codec: Some("prores_ks".into()), crf: None, encoder_preset: None, pix_fmt: Some("yuv422p10le".into()), audio_codec: Some("pcm_s16le".into()), audio_bitrate: None, extra: s(&["-profile:v", "3"]) },
             ExportSettings { id: "dnxhr_mov".into(), name: "DNxHR HQ MOV".into(), extension: "mov".into(), video_codec: Some("dnxhd".into()), crf: None, encoder_preset: None, pix_fmt: Some("yuv422p".into()), audio_codec: Some("pcm_s16le".into()), audio_bitrate: None, extra: s(&["-profile:v", "dnxhr_hq"]) },
@@ -78,6 +80,12 @@ pub struct FfmpegJob {
     pub output: PathBuf,
     /// Always pass the graph through a file (used by tests to exercise that path on small graphs).
     pub force_file: bool,
+    /// Pixel sorts (see `bake`) that must have run before this job starts; `jobs::run_job` runs them first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stages: Vec<crate::bake::BakeStage>,
+    /// Compound clips (see `nest`) that must have been rendered before this job starts, inner ones first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nests: Vec<crate::nest::NestStage>,
 }
 
 impl FfmpegJob {
@@ -123,7 +131,7 @@ impl FfmpegJob {
 }
 
 /// Decimal seconds with nanosecond resolution for FFmpeg time parameters.
-fn secs(t: Rational) -> String {
+pub(crate) fn secs(t: Rational) -> String {
     let s = format!("{:.9}", t.as_f64());
     let s = s.trim_end_matches('0').trim_end_matches('.');
     if s.is_empty() || s == "-" { "0".into() } else { s.to_string() }
@@ -203,6 +211,12 @@ const MAX_REVERSE_BYTES: f64 = 2.0e9;
 
 pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities>) -> Result<FfmpegJob> {
     let st = &opts.settings;
+    if g.video.iter().flat_map(|v| &v.filters).chain(g.video_transitions.iter().flat_map(|t| t.a.filters.iter().chain(&t.b.filters))).any(|f| crate::bake::is_mark(f)) {
+        return Err(Error::validation("this graph holds a pixel sort that has not been baked yet; run it through `bake::prepare` (compile_project and preview do) before compiling"));
+    }
+    if g.inputs.iter().any(|i| i.nested.is_some() && i.path.is_empty()) {
+        return Err(Error::validation("this graph reads a compound clip that has not been planned yet; run it through `nest::prepare` (compile_project and preview do) before compiling"));
+    }
     if opts.scale_div == 0 {
         return Err(Error::validation("scale_div must be >= 1"));
     }
@@ -261,6 +275,11 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         Ok(())
     };
 
+    for i in &g.inputs {
+        if let Some((_, need)) = i.color.filter() {
+            require(&need.iter().map(|n| n.to_string()).collect::<Vec<_>>())?;
+        }
+    }
     let mut f: Vec<String> = vec![];
     if want_video {
         f.push(format!("color=c=black:s={w}x{h}:r={fps}:d={},format=yuv420p[base0]", secs(g.duration)));
@@ -280,6 +299,10 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                 secs(t0),
                 secs(t1),
             );
+            if let Some((conv, _)) = g.inputs[input].color.filter() {
+                chain.push(',');
+                chain.push_str(&conv);
+            }
             for fx in filters {
                 chain.push(',');
                 chain.push_str(fx);
@@ -300,51 +323,67 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     let speed = seg.speed.as_f64();
                     let span = seg.source_span();
                     let mut chain = String::new();
-                    // source window (frozen: a single frame), restart timestamps, retime
-                    let (t0, t1) = match seg.freeze {
-                        // two frames of margin around the held time; `trim=end_frame=1` below keeps just the first
-                        Some(fz) => {
-                            let a = (fz - src_half(seg.input)).max(Rational::ZERO);
-                            (a, a + Rational::new(2, 1).div(g.fps))
-                        }
-                        None => ((seg.source_in - src_half(seg.input)).max(Rational::ZERO), seg.source_in + span - src_half(seg.input)),
-                    };
-                    chain.push_str(&format!("{}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS", take(seg.input), secs(t0), secs(t1)));
-                    if seg.freeze.is_none() && seg.speed != Rational::from_int(1) {
-                        chain.push_str(&format!(",setpts=PTS/{}", dec(speed)));
-                    }
                     let input = &g.inputs[seg.input];
-                    if input.generated.is_some() {
-                        // generated canvases are already output-sized; keep their alpha
-                        chain.push_str(&format!(",fps={fps},format=yuva420p"));
-                    } else if input.alpha {
-                        // pictures with transparency: even pad offsets (odd ones corrupt the alpha plane in `pad`) and a transparent border
-                        chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,format=yuva420p,pad={w}:{h}:trunc((ow-iw)/4)*2:trunc((oh-ih)/4)*2:color=black@0,setsar=1"));
+                    if seg.adjustment {
+                        // an adjustment layer works on the picture composited so far: a copy of it is cut to the layer's
+                        // span (half a frame early, like source trims), run through the effects, then laid back over
+                        let half = Rational::new(1, 2).div(g.fps);
+                        f.push(format!("[base{n}]split[adk{n}][adf{n}]"));
+                        chain = format!("[adf{n}]trim=start={}:end={},setpts=PTS-STARTPTS", secs((seg.start - half).max(Rational::ZERO)), secs(seg.start + seg.duration - half));
                     } else {
-                        chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"));
-                    }
-                    if let Some((title, font)) = &seg.title {
-                        require(&["drawtext".to_string()])?;
-                        chain.push(',');
-                        chain.push_str(&crate::titles::to_drawtext(title, font, h));
-                    }
-                    if seg.freeze.is_some() {
-                        chain.push_str(&format!(",trim=end_frame=1,tpad=stop_mode=clone:stop_duration={d},trim=end={d},setpts=PTS-STARTPTS", d = secs(seg.duration)));
-                    } else {
-                        chain.push_str(&format!(",trim=end={},setpts=PTS-STARTPTS", secs(seg.duration)));
-                    }
-                    if seg.reverse && seg.freeze.is_none() {
-                        // `reverse` holds every frame in memory; refuse clips that would not fit
-                        let bytes = seg.duration.as_f64() * g.fps.as_f64() * (w as f64) * (h as f64) * 1.5;
-                        if bytes > MAX_REVERSE_BYTES {
-                            return Err(Error::validation(format!(
-                                "reversing {:.1}s at {w}x{h} needs about {:.1} GB of memory (limit {:.0} GB); reverse a shorter clip or render with a lower preview quality",
-                                seg.duration.as_f64(),
-                                bytes / 1e9,
-                                MAX_REVERSE_BYTES / 1e9
-                            )));
+                        // source window (frozen: a single frame), restart timestamps, retime
+                        let (t0, t1) = match seg.freeze {
+                            // two frames of margin around the held time; `trim=end_frame=1` below keeps just the first
+                            Some(fz) => {
+                                let a = (fz - src_half(seg.input)).max(Rational::ZERO);
+                                (a, a + Rational::new(2, 1).div(g.fps))
+                            }
+                            None => ((seg.source_in - src_half(seg.input)).max(Rational::ZERO), seg.source_in + span - src_half(seg.input)),
+                        };
+                        chain.push_str(&format!("{}setpts=PTS-STARTPTS,trim=start={}:end={},setpts=PTS-STARTPTS", take(seg.input), secs(t0), secs(t1)));
+                        if seg.freeze.is_none() && seg.speed != Rational::from_int(1) {
+                            chain.push_str(&format!(",setpts=PTS/{}", dec(speed)));
+                            if seg.smooth {
+                                // optical flow: motion-compensated frames fill the gaps the slow-down leaves
+                                chain.push_str(&format!(",minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"));
+                            }
                         }
-                        chain.push_str(",reverse,setpts=PTS-STARTPTS");
+                        if input.generated.is_some() {
+                            // generated canvases are already output-sized; keep their alpha
+                            chain.push_str(&format!(",fps={fps},format=yuva420p"));
+                        } else if input.alpha {
+                            // pictures with transparency: even pad offsets (odd ones corrupt the alpha plane in `pad`) and a transparent border
+                            chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,format=yuva420p,pad={w}:{h}:trunc((ow-iw)/4)*2:trunc((oh-ih)/4)*2:color=black@0,setsar=1"));
+                        } else {
+                            chain.push_str(&format!(",fps={fps},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"));
+                            if let Some((conv, _)) = input.color.filter() {
+                                chain.push(',');
+                                chain.push_str(&conv);
+                            }
+                        }
+                        if let Some((title, font)) = &seg.title {
+                            require(&["drawtext".to_string()])?;
+                            chain.push(',');
+                            chain.push_str(&crate::titles::to_drawtext(title, font, h));
+                        }
+                        if seg.freeze.is_some() {
+                            chain.push_str(&format!(",trim=end_frame=1,tpad=stop_mode=clone:stop_duration={d},trim=end={d},setpts=PTS-STARTPTS", d = secs(seg.duration)));
+                        } else {
+                            chain.push_str(&format!(",trim=end={},setpts=PTS-STARTPTS", secs(seg.duration)));
+                        }
+                        if seg.reverse && seg.freeze.is_none() {
+                            // `reverse` holds every frame in memory; refuse clips that would not fit
+                            let bytes = seg.duration.as_f64() * g.fps.as_f64() * (w as f64) * (h as f64) * 1.5;
+                            if bytes > MAX_REVERSE_BYTES {
+                                return Err(Error::validation(format!(
+                                    "reversing {:.1}s at {w}x{h} needs about {:.1} GB of memory (limit {:.0} GB); reverse a shorter clip or render with a lower preview quality",
+                                    seg.duration.as_f64(),
+                                    bytes / 1e9,
+                                    MAX_REVERSE_BYTES / 1e9
+                                )));
+                            }
+                            chain.push_str(",reverse,setpts=PTS-STARTPTS");
+                        }
                     }
                     for (k, fx) in seg.filters.iter().enumerate() {
                         match fx.strip_prefix(crate::effects::GRAPH_MARK) {
@@ -362,10 +401,10 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                             }
                         }
                     }
-                    let blended = seg.blend != "normal";
+                    let blended = seg.blend != "normal" && !seg.adjustment;
                     let animated_opacity = seg.animated("opacity");
-                    let transform = transform_filter(seg, w, h, g.fps);
-                    let translucent = seg.opacity < 1.0 || animated_opacity || seg.alpha_fx || transform.is_some() || blended || input.generated.is_some() || input.alpha;
+                    let transform = if seg.adjustment { None } else { transform_filter(seg, w, h, g.fps) };
+                    let translucent = seg.opacity < 1.0 || animated_opacity || seg.alpha_fx || transform.is_some() || blended || (!seg.adjustment && (input.generated.is_some() || input.alpha));
                     if animated_opacity {
                         // alpha plane × keyframed opacity, evaluated per frame (T = clip-relative seconds at this point of the chain)
                         chain.push_str(&format!(",format=yuva420p,geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='alpha(X,Y)*({})'", crate::keyframes::to_expr(&seg.keyframes["opacity"], "T")));
@@ -382,7 +421,8 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     f.push(chain);
                     let fmt = if translucent { ":format=auto" } else { "" };
                     if !blended {
-                        f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", n + 1));
+                        let below = if seg.adjustment { format!("adk{n}") } else { format!("base{n}") };
+                        f.push(format!("[{below}][vs{n}]overlay=eof_action=pass:repeatlast=0{fmt}[base{}]", n + 1));
                     } else {
                         require(&["blend".to_string(), "alphamerge".to_string(), "alphaextract".to_string()])?;
                         // Blend the layer with the picture beneath, then composite that result through the layer's own alpha.
@@ -402,14 +442,14 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                 Item::Tr(t) => {
                     require(&t.a.requires)?;
                     require(&t.b.requires)?;
-                    require(&["xfade".to_string()])?;
-                    let gl = crate::glx::expr(&t.kind);
+                    require(&[if t.luma.is_some() { "maskedmerge".to_string() } else { "xfade".to_string() }])?;
+                    let gl = if t.luma.is_some() { None } else { crate::glx::expr(&t.kind) };
                     if let (Some(caps), Some(_)) = (caps, gl) {
                         if !caps.xfade_custom {
                             return Err(Error::validation(format!("'{}' is a GL transition and needs an FFmpeg whose xfade supports custom expressions", t.kind)));
                         }
                     }
-                    if let Some(caps) = caps.filter(|_| gl.is_none()) {
+                    if let Some(caps) = caps.filter(|_| gl.is_none() && t.luma.is_none()) {
                         if !caps.xfade_transitions.is_empty() && !caps.xfade_transitions.iter().any(|(k, _)| *k == t.kind) {
                             return Err(Error::validation(format!("the installed FFmpeg does not support the '{}' transition (it needs a newer FFmpeg)", t.kind)));
                         }
@@ -417,6 +457,23 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                     let (la, lb) = (take(t.a.input), take(t.b.input));
                     f.push(format!("{}[ta{n}]", vchain(&la, t.a.input, t.a.source_in, t.duration, None, &t.a.filters)));
                     f.push(format!("{}[tb{n}]", vchain(&lb, t.b.input, t.b.source_in, t.duration, None, &t.b.filters)));
+                    if let Some(l) = &t.luma {
+                        // The mask picture is brightened into a per-frame 0..255 weight: a pixel switches from A to B when the wipe's
+                        // progress passes its brightness (dark first, or bright first when inverted), over a soft edge of `softness`.
+                        require(&["geq".to_string()])?;
+                        let d = secs(t.duration);
+                        let s = l.softness.clamp(0.01, 1.0);
+                        let level = if l.invert { "(1-lum(X,Y)/255)" } else { "(lum(X,Y)/255)" };
+                        f.push(format!(
+                            "{}setpts=PTS-STARTPTS,fps={fps},trim=end={d},setpts=PTS-STARTPTS,scale={w}:{h},format=gray,geq=lum='255*clip((T/{d}*(1+{s})-{level})/{s},0,1)',format=gbrp[tm{n}]",
+                            take(l.input)
+                        ));
+                        // all three inputs are planar RGB: in YUV the mask's chroma planes would blend the colours 50/50
+                        f.push(format!("[ta{n}]format=gbrp[tag{n}];[tb{n}]format=gbrp[tbg{n}]"));
+                        f.push(format!("[tag{n}][tbg{n}][tm{n}]maskedmerge,setpts=PTS-STARTPTS+{}/TB,format=yuv420p[vs{n}]", secs(t.start)));
+                        f.push(format!("[base{n}][vs{n}]overlay=eof_action=pass:repeatlast=0[base{}]", n + 1));
+                        continue;
+                    }
                     // a bundled GL transition is an `xfade` custom expression (values are escaped for the filter graph)
                     let which = match gl {
                         Some(e) => format!("custom:expr={}", crate::titles::escape_filter_value(e)),
@@ -427,7 +484,17 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
                 }
             }
         }
-        f.push(format!("[base{}]null[vout]", items.len()));
+        // newer FFmpeg takes the encoder's colour tags from the frames, not from the -color_* options: tag the frames
+        let tag_frames = !matches!(st.video_codec.as_deref(), Some("png" | "gif" | "rawvideo")) && !st.pix_fmt.as_deref().is_some_and(|p| p.starts_with("rgb") || p.starts_with("gbr"));
+        let tags = if st.id == crate::colormgmt::HDR10_PRESET {
+            require(&["zscale".to_string()])?;
+            crate::colormgmt::HDR10_FRAMES
+        } else if tag_frames {
+            crate::colormgmt::FRAME_TAGS
+        } else {
+            "null"
+        };
+        f.push(format!("[base{}]{}[vout]", items.len(), tags));
     }
     if want_audio {
         let sr = g.sample_rate;
@@ -467,7 +534,15 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
             }
             for fx in &seg.filters {
                 chain.push(',');
-                chain.push_str(fx);
+                chain.push_str(&fx.replace("@SR@", &sr.to_string()));
+                // pitch/tempo filters change the length and the rate: bring both back so the clip still fills exactly its place
+                if fx.starts_with("pan=") {
+                    chain.push_str(",aformat=sample_fmts=fltp:channel_layouts=stereo");
+                }
+                if fx.contains("asetrate") || fx.contains("atempo") {
+                    let n = seg.duration.round_units(rate);
+                    chain.push_str(&format!(",aresample={sr},apad=whole_len={n},atrim=end_sample={n},asetpts=PTS-STARTPTS"));
+                }
             }
             for p in [seg.pan, seg.track_pan] {
                 if let Some(b) = balance_filter(p) {
@@ -548,6 +623,11 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
         if let Some(p) = &st.pix_fmt {
             post.extend(["-pix_fmt".into(), p.clone()]);
         }
+        // the picture is Rec.709 whatever came in (see `colormgmt`): say so, or players guess by resolution
+        if !matches!(vc.as_str(), "png" | "gif" | "rawvideo") && !st.pix_fmt.as_deref().is_some_and(|p| p.starts_with("rgb") || p.starts_with("gbr")) {
+            let tags = if st.id == crate::colormgmt::HDR10_PRESET { crate::colormgmt::HDR10_OUTPUT_TAGS } else { crate::colormgmt::OUTPUT_TAGS };
+            post.extend(tags.map(String::from));
+        }
         post.extend(["-r".into(), fps.clone()]);
     }
     if want_audio {
@@ -571,7 +651,7 @@ pub fn compile(g: &RenderGraph, opts: &RenderOptions, caps: Option<&Capabilities
     post.push(out_arg);
 
     // Unreferenced inputs would trigger "does not contain any stream" noise; graph building only adds used inputs.
-    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: first_out, force_file: false })
+    Ok(FfmpegJob { program: PathBuf::from("ffmpeg"), pre, filter_graph: f.join(";\n"), post, total_duration: out_dur, output: first_out, force_file: false, stages: vec![], nests: vec![] })
 }
 
 /// Case-insensitive on Windows, exact elsewhere; compares canonical paths when both exist.
@@ -590,5 +670,31 @@ pub fn compile_project(project: &crate::project::Project, opts: &RenderOptions, 
     if opts.settings.id == crate::quick::PRESET {
         return crate::quick::compile(project, opts);
     }
-    compile(&crate::render_graph::build(project)?, opts, caps)
+    let mut g = crate::render_graph::build(project)?;
+    // compound clips are rendered first; their files may feed pixel sorts, so they are planned before those
+    let nests = crate::nest::prepare(project, &mut g, &crate::bake::cache_dir(), caps)?;
+    // pixel sorts are planned here and run by the job before FFmpeg starts. Their files are kept in the content-keyed cache
+    // (trimmed to a size limit), so exporting again after an edit elsewhere does not sort the same frames twice
+    let stages = crate::bake::prepare(&mut g, opts.range, &crate::bake::cache_dir(), true)?;
+    let mut job = compile(&g, opts, caps)?;
+    add_chapters(&mut job, project, opts);
+    job.stages = stages;
+    job.nests = nests;
+    Ok(job)
+}
+
+/// Timeline markers become chapters of the export when the container can hold them: the metadata file is one more input and
+/// `-map_chapters` points at it. A failure to write the file only drops the chapters (the export itself is unaffected).
+fn add_chapters(job: &mut FfmpegJob, project: &crate::project::Project, opts: &RenderOptions) {
+    if !crate::chapters::supports(&opts.settings.extension) || job.post.iter().any(|a| a == "-f") {
+        return;
+    }
+    let Ok(seq) = project.active() else { return };
+    let (start, end) = opts.range.map(|(a, b)| (a, b.min(seq.duration()))).unwrap_or((Rational::ZERO, seq.duration()));
+    let Some(text) = crate::chapters::metadata(&seq.markers, start, end) else { return };
+    let Ok(path) = crate::chapters::write(&crate::bake::cache_dir(), &text) else { return };
+    let index = job.pre.iter().filter(|a| *a == "-i").count();
+    job.pre.extend(["-i".to_string(), path.to_string_lossy().into_owned()]);
+    let at = job.post.len().saturating_sub(1);
+    job.post.splice(at..at, ["-map_chapters".to_string(), index.to_string()]);
 }

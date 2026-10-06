@@ -30,3 +30,32 @@ fn a_delayed_quieter_noisy_copy_is_found_to_the_millisecond() {
     run(&["-f", "lavfi", "-i", "color=c=red:s=64x64:d=1", "-pix_fmt", "yuv420p", v.to_str().unwrap()]);
     assert!(measure(&tools(), &a, &v).is_err());
 }
+
+#[test]
+fn a_recording_that_runs_a_little_slow_is_measured_as_drift_and_the_speed_fixes_it() {
+    use ffworks_core::audiosync::measure_drift;
+    use ffworks_core::jobs::CancelToken;
+    let dir = tempfile::tempdir().unwrap();
+    let (a, b, fixed) = (dir.path().join("a.wav"), dir.path().join("b.wav"), dir.path().join("fixed.wav"));
+    let run = |args: &[&str]| {
+        let o = Proc::new(tools().ffmpeg).args(["-v", "error", "-y"]).args(args).output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    };
+    // 100 s of noise; the second recording is the same sound 2.5 s late and 0.1 % slower in its clock (events further apart)
+    run(&["-f", "lavfi", "-i", "anoisesrc=d=100:c=pink:r=44100:seed=5:a=0.5", "-ac", "1", a.to_str().unwrap()]);
+    run(&["-i", a.to_str().unwrap(), "-af", "asetrate=44100*0.999,aresample=44100,adelay=2500", "-ac", "1", b.to_str().unwrap()]);
+    let d = measure_drift(&tools(), &a, &b, 90.0, &CancelToken::new()).unwrap();
+    assert!((d.lag_start - 2.5).abs() < 0.05, "{d:?}");
+    // stretching by 1/0.999 puts events 0.1 % further apart: the lag grows about 0.001 s per second
+    assert!((d.drift - 0.001).abs() < 0.0002, "{d:?}");
+    assert!((d.speed - 1.001).abs() < 0.0002 && d.confidence > 0.1, "{d:?}");
+
+    // playing the second recording at the measured speed removes the drift
+    run(&["-i", b.to_str().unwrap(), "-af", &format!("atempo={}", d.speed), "-ac", "1", fixed.to_str().unwrap()]);
+    let after = measure_drift(&tools(), &a, &fixed, 90.0, &CancelToken::new()).unwrap();
+    assert!(after.drift.abs() < 0.0002, "after the correction the lag no longer changes: {after:?}");
+
+    // too little overlap is refused with the reason
+    let e = measure_drift(&tools(), &a, &b, 20.0, &CancelToken::new()).unwrap_err().to_string();
+    assert!(e.contains("at least 60 seconds"), "{e}");
+}

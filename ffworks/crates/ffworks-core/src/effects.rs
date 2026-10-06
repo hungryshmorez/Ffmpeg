@@ -62,6 +62,16 @@ fn builtin_registry() -> Vec<EffectDef> {
         e("sharpen", "Sharpen", "Sharpen", &["unsharp"], vec![p("amount", "Amount", 0.0, 5.0, 1.0, 0.05, "")]),
         e("noise", "Film grain", "Noise", &["noise"], vec![p("strength", "Strength", 0.0, 100.0, 20.0, 1.0, ""), p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, "")]),
         e("vignette", "Vignette", "Color", &["vignette"], vec![pa("angle", "Angle", 0.1, 1.5, 0.6, 0.01, "rad")]),
+        e("lens_correction", "Lens correction (barrel / pincushion)", "Transform", &["lenscorrection"], vec![p("k1", "Quadratic term k1", -1.0, 1.0, 0.2, 0.01, ""), p("k2", "Double-quadratic term k2", -1.0, 1.0, 0.0, 0.01, "")]),
+        e("temperature", "Colour temperature", "Color", &["colortemperature"], vec![p("kelvin", "Temperature", 1000.0, 40000.0, 4500.0, 100.0, "K")]),
+        e("vibrance", "Vibrance", "Color", &["vibrance"], vec![p("intensity", "Intensity", -2.0, 2.0, 0.6, 0.05, "")]),
+        e("exposure", "Exposure", "Color", &["exposure"], vec![p("stops", "Exposure", -3.0, 3.0, 0.5, 0.05, "EV")]),
+        e("denoise_video", "Denoise (spatial + temporal)", "Restoration", &["hqdn3d"], vec![p("strength", "Strength", 0.0, 20.0, 4.0, 0.5, "")]),
+        e("deflicker", "Remove flicker", "Restoration", &["deflicker"], vec![p("size", "Frames averaged", 2.0, 129.0, 5.0, 1.0, "")]),
+        e("swap_uv", "Swap colour channels U/V (colour glitch)", "Glitch", &["swapuv"], vec![]),
+        e("rgb_rotate", "Rotate colour channels (R→G→B)", "Glitch", &["colorchannelmixer"], vec![p("steps", "Steps (1 or 2)", 1.0, 2.0, 1.0, 1.0, "")]),
+        e("frame_diff", "Frame difference (motion edges)", "Glitch", &["tblend"], vec![]),
+        e("frame_shuffle", "Frame shuffle (time glitch)", "Glitch", &["random"], vec![p("frames", "Frames shuffled together", 2.0, 60.0, 12.0, 1.0, ""), p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, "")]),
         e("flip_h", "Flip horizontal", "Transform", &["hflip"], vec![]),
         e("flip_v", "Flip vertical", "Transform", &["vflip"], vec![]),
         au("eq", "Equalizer (3-band)", "EQ", &["bass", "equalizer", "treble"], vec![p("low", "Low shelf 120 Hz", -18.0, 18.0, 0.0, 0.5, "dB"), p("mid", "Mid", -18.0, 18.0, 0.0, 0.5, "dB"), p("mid_freq", "Mid frequency", 200.0, 5000.0, 1000.0, 10.0, "Hz"), p("high", "High shelf 8 kHz", -18.0, 18.0, 0.0, 0.5, "dB")]),
@@ -69,6 +79,8 @@ fn builtin_registry() -> Vec<EffectDef> {
         au("lowpass", "Low-pass filter", "EQ", &["lowpass"], vec![p("freq", "Cutoff", 1000.0, 20000.0, 12000.0, 50.0, "Hz")]),
         au("compressor", "Compressor", "Dynamics", &["acompressor"], vec![p("threshold", "Threshold", -60.0, 0.0, -18.0, 0.5, "dB"), p("ratio", "Ratio", 1.0, 20.0, 4.0, 0.1, ":1"), p("attack", "Attack", 1.0, 200.0, 20.0, 1.0, "ms"), p("release", "Release", 20.0, 1000.0, 250.0, 5.0, "ms"), p("makeup", "Make-up gain", 0.0, 24.0, 0.0, 0.5, "dB")]),
         au("limiter", "Limiter", "Dynamics", &["alimiter"], vec![p("ceiling", "Ceiling", -24.0, 0.0, -1.0, 0.5, "dB")]),
+        au("afilterchain", "Audio filter chain (advanced)", "Advanced", &[], vec![]),
+        e("vfilterchain", "Video filter chain (advanced)", "Advanced", &[], vec![]),
         au("echo", "Echo", "Time", &["aecho"], vec![p("delay", "Delay", 20.0, 2000.0, 300.0, 10.0, "ms"), p("decay", "Decay", 0.0, 0.9, 0.4, 0.05, "")]),
         au("denoise", "Noise reduction (FFT)", "Restoration", &["afftdn"], vec![p("amount", "Reduction", 0.0, 40.0, 12.0, 0.5, "dB")]),
         au("normalizer", "Dynamic normalizer", "Dynamics", &["dynaudnorm"], vec![]),
@@ -77,11 +89,33 @@ fn builtin_registry() -> Vec<EffectDef> {
         e("grayscale", "Black & white", "Color", &["hue"], vec![]),
         e("sepia", "Sepia", "Color", &["colorchannelmixer"], vec![]),
         e("negate", "Invert colours", "Color", &["negate"], vec![]),
+        e("lut", "Colour lookup table (LUT)", "Color", &["lut3d"], vec![]),
         e("posterize", "Posterize", "Stylize", &["lutrgb"], vec![p("bits", "Bits per channel", 1.0, 7.0, 3.0, 1.0, "")]),
         e("edges", "Edge detect", "Stylize", &["edgedetect"], vec![]),
         e("rgb_split", "RGB split (glitch)", "Glitch", &["rgbashift"], vec![p("amount", "Shift", 0.0, 60.0, 8.0, 1.0, "px")]),
         e("trails", "Motion trails", "Glitch", &["tmix"], vec![p("frames", "Frames mixed", 2.0, 30.0, 6.0, 1.0, "")]),
         e("shuffle_pixels", "Pixel shuffle (scramble blocks)", "Glitch", &["shufflepixels"], vec![p("size", "Block size", 2.0, 200.0, 24.0, 1.0, "px"), p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, "")]),
+        e("pixel_sort", "Pixel sort", "Glitch", &[], vec![
+            p("direction", "Direction (0 across, 1 down)", 0.0, 1.0, 0.0, 1.0, ""),
+            p("key", "Sort by (0 brightness, 1 hue, 2 saturation, 3 value, 4 red, 5 green, 6 blue)", 0.0, 6.0, 0.0, 1.0, ""),
+            p("mode", "Which pixels (0 brightness range, 1 whole lines, 2 random blocks)", 0.0, 2.0, 0.0, 1.0, ""),
+            pa("low", "Range from brightness", 0.0, 1.0, 0.25, 0.01, ""),
+            pa("high", "Range up to brightness", 0.0, 1.0, 0.8, 0.01, ""),
+            pa("length", "Block length", 2.0, 2000.0, 120.0, 1.0, "px"),
+            pa("variation", "Block length variation", 0.0, 1.0, 0.5, 0.05, ""),
+            p("reverse", "Order (0 dark to light, 1 light to dark)", 0.0, 1.0, 0.0, 1.0, ""),
+            pa("mix", "Amount", 0.0, 1.0, 1.0, 0.01, ""),
+            p("seed", "Seed", 0.0, 9999.0, 1.0, 1.0, ""),
+            p("flicker", "New blocks every frame (0 off, 1 on)", 0.0, 1.0, 0.0, 1.0, ""),
+            pa("angle", "Angle (turns the direction, degrees)", -90.0, 90.0, 0.0, 1.0, "°"),
+            p("mask", "Only inside a shape (0 everywhere, 1 rectangle, 2 ellipse, 3 a picture: white sorts, black stays)", 0.0, 3.0, 0.0, 1.0, ""),
+            pa("mask_x", "Shape centre across", 0.0, 1.0, 0.5, 0.01, ""),
+            pa("mask_y", "Shape centre down", 0.0, 1.0, 0.5, 0.01, ""),
+            pa("mask_w", "Shape width", 0.0, 1.0, 0.5, 0.01, ""),
+            pa("mask_h", "Shape height", 0.0, 1.0, 0.5, 0.01, ""),
+            pa("mask_feather", "Soft edge", 0.0, 400.0, 0.0, 1.0, "px"),
+            p("mask_invert", "Sort outside the shape or picture instead (0 no, 1 yes)", 0.0, 1.0, 0.0, 1.0, ""),
+        ]),
         e("chroma_shift", "Chroma shift (colour bleed)", "Glitch", &["chromashift"], vec![p("amount", "Shift", -40.0, 40.0, 8.0, 1.0, "px")]),
         e("scroll", "Scroll (wrap around)", "Glitch", &["scroll"], vec![p("speed", "Horizontal speed", -0.1, 0.1, 0.02, 0.005, "/frame")]),
         e("ghost", "Ghosting (slow update)", "Glitch", &["lagfun"], vec![p("decay", "Decay", 0.5, 0.99, 0.95, 0.01, "")]),
@@ -133,7 +167,111 @@ pub struct EffectInstance {
     /// Only for the `graph` effect: the user-built node graph.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<crate::filtergraph::FilterGraph>,
+    /// Only for `pixel_sort`: the project media (a picture or a video) whose brightness is the mask when `mask` is 3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<String>,
+    /// Only for `lut`: the lookup-table file (`.cube`, `.3dl`, `.dat`, `.m3d`, `.csp`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+    /// Only for `afilterchain`: the FFmpeg audio filter chain (see `check_audio_chain`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
+
+/// Audio filters an `afilterchain` may use: tone, dynamics, modulation and time/pitch filters. Nothing that reads or writes files, opens
+/// network or control sockets, or changes the number of streams.
+pub const CHAIN_FILTERS: &[&str] = &[
+    "equalizer", "volume", "lowpass", "highpass", "bandpass", "bandreject", "bass", "treble", "acompressor", "alimiter", "agate", "compand", "loudnorm", "dynaudnorm", "speechnorm", "aecho", "aphaser", "chorus", "flanger", "tremolo", "vibrato", "apulsator", "stereotools", "stereowiden", "extrastereo",
+    "crystalizer", "asoftclip", "acrusher", "afftdn", "anlmdn", "adeclick", "adeclip", "deesser", "adelay", "asetrate", "aresample", "atempo", "areverse", "afade", "aexciter", "anequalizer", "firequalizer", "silenceremove", "highshelf", "lowshelf", "allpass", "biquad", "pan",
+];
+
+/// Largest chain accepted (characters).
+pub const CHAIN_MAX_CHARS: usize = 2000;
+
+/// Split a chain at its top-level commas (commas inside parentheses belong to expressions).
+fn chain_parts(text: &str) -> Vec<&str> {
+    let (mut depth, mut start, mut out) = (0i32, 0, vec![]);
+    for (i, c) in text.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(&text[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&text[start..]);
+    out
+}
+
+/// The filter names used by a chain, in order.
+pub fn chain_filter_names(text: &str) -> Vec<String> {
+    chain_parts(text).iter().map(|p| p.trim().split('=').next().unwrap_or("").trim().to_string()).collect()
+}
+
+/// A chain goes into the filter graph as text, so it is restricted to known audio filters and a plain character set: no quotes, labels,
+/// brackets, semicolons, backslashes or newlines. `@SR@` stands for the project's sample rate.
+pub fn check_audio_chain(text: &str) -> Result<()> {
+    check_chain(text, CHAIN_FILTERS, "audio")
+}
+
+/// Video filters a `vfilterchain` may use: colour, blur/sharpen, noise, edges, flips and temporal blends. Nothing that reads or writes files
+/// or draws text.
+pub const VIDEO_CHAIN_FILTERS: &[&str] = &[
+    "eq", "hue", "colorchannelmixer", "negate", "noise", "boxblur", "gblur", "unsharp", "edgedetect", "sobel", "vignette", "lutyuv", "lutrgb", "hflip", "vflip", "curves", "colorbalance", "colorlevels", "colortemperature", "tmix", "tblend", "lagfun", "amplify", "deflicker", "chromashift", "rgbashift", "lenscorrection", "geq", "format",
+];
+
+/// Same checks as `check_audio_chain`, against the video filter list.
+pub fn check_video_chain(text: &str) -> Result<()> {
+    check_chain(text, VIDEO_CHAIN_FILTERS, "video")
+}
+
+/// In a filter graph a comma separates filters, so the commas inside an expression's parentheses are escaped.
+pub fn escape_chain_commas(text: &str) -> String {
+    let (mut depth, mut out) = (0i32, String::new());
+    for c in text.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth > 0 => out.push('\\'),
+            _ => {}
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn check_chain(text: &str, allowed: &[&str], what: &str) -> Result<()> {
+    if text.chars().count() > CHAIN_MAX_CHARS {
+        return Err(Error::validation(format!("the filter chain is longer than {CHAIN_MAX_CHARS} characters")));
+    }
+    if let Some(c) = text.chars().find(|c| !(c.is_ascii_alphanumeric() || "_=:,.-+*/()| @".contains(*c))) {
+        return Err(Error::validation(format!("the filter chain contains '{c}'; only letters, digits and _ = : , . - + * / ( ) | @ are allowed")));
+    }
+    let mut depth = 0i32;
+    for c in text.chars() {
+        depth += i32::from(c == '(') - i32::from(c == ')');
+        if depth < 0 {
+            return Err(Error::validation("the filter chain has an unmatched ')'"));
+        }
+    }
+    if depth != 0 {
+        return Err(Error::validation("the filter chain has an unmatched '('"));
+    }
+    for n in chain_filter_names(text) {
+        if !allowed.contains(&n.as_str()) {
+            return Err(Error::validation(if n.is_empty() { "the filter chain has an empty step".to_string() } else { format!("'{n}' is not {} {what} filter this chain allows (allowed: {})", if what == "audio" { "an" } else { "a" }, allowed.join(", ")) }));
+        }
+    }
+    Ok(())
+}
+
+/// File types FFmpeg's `lut3d` reads.
+pub const LUT_EXTENSIONS: &[&str] = &["cube", "3dl", "dat", "m3d", "csp"];
+/// Largest lookup table accepted (bytes).
+pub const LUT_MAX_BYTES: u64 = 64 << 20;
 
 /// Effect id of the node-graph effect.
 pub const GRAPH_EFFECT: &str = "graph";
@@ -154,7 +292,7 @@ impl EffectInstance {
             params.insert(k.clone(), *v);
         }
         let graph = (effect == GRAPH_EFFECT).then(crate::filtergraph::FilterGraph::passthrough);
-        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph })
+        Ok(EffectInstance { id, effect: effect.into(), enabled: true, params, graph, picture: None, file: None, text: None })
     }
 }
 
@@ -224,6 +362,29 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
         // all_seed makes grain deterministic for a given seed (spec §30)
         "noise" => format!("noise=alls={}:allf=t:all_seed={}", g("strength")?.round() as i64, g("seed")?.round() as i64),
         "vignette" => format!("vignette=angle={}{}", val("angle")?, eval("angle")),
+        "lens_correction" => format!("lenscorrection=k1={}:k2={}", g("k1")?, g("k2")?),
+        "temperature" => format!("colortemperature=temperature={}", g("kelvin")?.round() as i64),
+        "vibrance" => format!("vibrance=intensity={}", g("intensity")?),
+        "exposure" => format!("exposure=exposure={}", g("stops")?),
+        "denoise_video" => {
+            let a = g("strength")?;
+            if a == 0.0 {
+                return Ok(None);
+            }
+            format!("hqdn3d={a}:{a}:{}:{}", a * 1.5, a * 1.5)
+        }
+        "deflicker" => format!("deflicker=size={}:mode=pm", g("size")?.round() as i64),
+        "swap_uv" => "swapuv".into(),
+        // red takes green's place, green blue's, blue red's (one step), or the other way round (two)
+        "rgb_rotate" => {
+            if g("steps")?.round() as i64 == 2 {
+                "colorchannelmixer=rr=0:rg=0:rb=1:gr=1:gg=0:gb=0:br=0:bg=1:bb=0".into()
+            } else {
+                "colorchannelmixer=rr=0:rg=1:rb=0:gr=0:gg=0:gb=1:br=1:bg=0:bb=0".into()
+            }
+        }
+        "frame_diff" => "tblend=all_mode=difference".into(),
+        "frame_shuffle" => format!("random=frames={}:seed={}", g("frames")?.round() as i64, g("seed")?.round() as i64),
         "flip_h" => "hflip".into(),
         "flip_v" => "vflip".into(),
         "crop" => {
@@ -284,6 +445,38 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
         "shuffle_pixels" => {
             let n = g("size")?.round() as i64;
             format!("shufflepixels=direction=forward:mode=horizontal:width={n}:height={n}:seed={}", g("seed")?.round() as i64)
+        }
+        // not an FFmpeg filter: a marker that `bake` turns into a pre-render stage
+        "pixel_sort" => {
+            for d in &def.params {
+                g(d.id)?;
+            }
+            // animated parameters travel with the marker as their keyframes; the bake reads them frame by frame
+            let anim: std::collections::BTreeMap<String, Vec<keyframes::Keyframe>> = def.params.iter().filter(|d| animated(d.id)).map(|d| (d.id.to_string(), kfs[&key(d.id)].clone())).collect();
+            if anim.is_empty() && g("mix")? == 0.0 {
+                return Ok(None);
+            }
+            let mut sort = crate::pixelsort::Params::from_map(&inst.params);
+            if !anim.is_empty() {
+                sort.base = inst.params.clone();
+                sort.anim = anim;
+            }
+            crate::bake::mark(&sort)
+        }
+        "afilterchain" | "vfilterchain" => match inst.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+            None => return Ok(None),
+            Some(t) => {
+                if inst.effect == "afilterchain" { check_audio_chain(t)? } else { check_video_chain(t)? }
+                escape_chain_commas(t)
+            }
+        },
+        "lut" => {
+            // nothing happens until a file is chosen; a chosen file that has gone missing is an error, not a silent no-op
+            let Some(f) = inst.file.as_deref() else { return Ok(None) };
+            if !std::path::Path::new(f).is_file() {
+                return Err(Error::validation(format!("the LUT file '{f}' is missing")));
+            }
+            format!("lut3d=file={}:interp=tetrahedral", crate::titles::escape_filter_value(f))
         }
         "chroma_shift" => {
             let a = g("amount")?.round() as i64;
@@ -365,7 +558,7 @@ mod tests {
         for d in registry() {
             let e = EffectInstance::new("x".into(), d.id, &BTreeMap::new()).unwrap();
             // crop, eq and volume at their defaults are deliberate no-ops
-            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume"].contains(&d.id), "{}", d.id);
+            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume", "lut", "afilterchain", "vfilterchain"].contains(&d.id), "{}", d.id);
         }
     }
 

@@ -18,13 +18,13 @@ export function clipAt(track: Track, t: number): Clip | null {
   return null;
 }
 
-/** Topmost visible video clip at time `t` (later video tracks are on top; muted = hidden). */
+/** Topmost visible video clip at time `t` (later video tracks are on top; muted = hidden). Adjustment layers paint nothing themselves, so they are skipped. */
 export function visibleVideoAt(seq: Sequence, t: number): { clip: Clip; track: Track } | null {
   let found: { clip: Clip; track: Track } | null = null;
   for (const track of seq.tracks) {
     if (track.kind !== "video" || track.muted) continue;
     const clip = clipAt(track, t);
-    if (clip) found = { clip, track };
+    if (clip && !clip.adjustment) found = { clip, track };
   }
   return found;
 }
@@ -108,4 +108,64 @@ export function beatPoints(seq: Sequence, beatsByMedia: Record<string, readonly 
       for (const b of beats) if (b >= sourceIn && b <= sourceIn + duration) out.push(start + (b - sourceIn));
     }
   return out;
+}
+
+/** What a keyboard shortcut on a focused clip does to it (seconds), or null for no change / a key that means nothing here. */
+export type KeyEdit = { kind: "move"; start: number } | { kind: "trim-start"; start: number } | { kind: "trim-end"; end: number } | { kind: "track"; up: boolean };
+
+/**
+ * Alt+←/→ moves the clip a frame (Shift: a second); Ctrl+←/→ trims its end a frame; Ctrl+Shift+←/→ trims its start a frame;
+ * Alt+↑/↓ moves it to the track above / below (same time). Never goes before zero or leaves less than one frame.
+ */
+export function keyEdit(e: { key: string; altKey: boolean; ctrlKey: boolean; shiftKey: boolean }, start: number, duration: number, fps: number): KeyEdit | null {
+  if ((e.key === "ArrowUp" || e.key === "ArrowDown") && e.altKey && !e.ctrlKey && !e.shiftKey) return { kind: "track", up: e.key === "ArrowUp" };
+  const dir = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+  if (dir === 0 || e.altKey === e.ctrlKey) return null;
+  const frame = 1 / fps;
+  const snap = (t: number) => Math.round(t * fps) / fps;
+  if (e.altKey) {
+    const next = snap(Math.max(0, start + dir * (e.shiftKey ? 1 : frame)));
+    return next === snap(start) ? null : { kind: "move", start: next };
+  }
+  if (e.shiftKey) {
+    const next = snap(start + dir * frame);
+    return next < 0 || snap(start + duration) - next < frame - 1e-9 ? null : { kind: "trim-start", start: next };
+  }
+  const end = snap(start + duration + dir * frame);
+  return end - snap(start) < frame - 1e-9 ? null : { kind: "trim-end", end };
+}
+
+/** One step of a keyboard edit applied to several selected clips. */
+export interface GroupStep { clip: string; op: "move" | "trim-start" | "trim-end"; to: number }
+
+/**
+ * Apply the keyboard edit the focused clip would make (`edit`, from [`keyEdit`]) to every selected clip by the same amount.
+ * `items` must hold one clip per linked group (the engine moves a linked partner along). All or nothing: if any clip would end
+ * before zero or shrink below a frame, the whole edit is refused (null). Ordered so clips moving into each other's old place
+ * go first (rightwards: latest first, leftwards: earliest first).
+ */
+export function groupEdit(edit: KeyEdit, anchor: { start: number; duration: number }, items: { id: string; start: number; duration: number }[], fps: number): GroupStep[] | null {
+  if (edit.kind === "track") return null;
+  const frame = 1 / fps;
+  const snapT = (t: number) => Math.round(t * fps) / fps;
+  const delta = edit.kind === "trim-end" ? edit.end - (anchor.start + anchor.duration) : edit.start - anchor.start;
+  const steps: { s: GroupStep; at: number }[] = [];
+  for (const it of items) {
+    const end = it.start + it.duration;
+    if (edit.kind === "move") {
+      const to = snapT(it.start + delta);
+      if (to < 0) return null;
+      steps.push({ s: { clip: it.id, op: "move", to }, at: it.start });
+    } else if (edit.kind === "trim-start") {
+      const to = snapT(it.start + delta);
+      if (to < 0 || end - to < frame - 1e-9) return null;
+      steps.push({ s: { clip: it.id, op: "trim-start", to }, at: it.start });
+    } else {
+      const to = snapT(end + delta);
+      if (to - it.start < frame - 1e-9) return null;
+      steps.push({ s: { clip: it.id, op: "trim-end", to }, at: it.start });
+    }
+  }
+  steps.sort((a, b) => (delta > 0 ? b.at - a.at : a.at - b.at));
+  return steps.map((x) => x.s);
 }

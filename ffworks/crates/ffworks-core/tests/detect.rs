@@ -82,3 +82,31 @@ fn removing_the_silence_shortens_the_timeline_keeps_av_linked_and_undoes_in_one_
     assert!((total - 2.5).abs() < 0.06, "got {total}");
     assert!(eng.dispatch(Command::RemoveRanges { clip: "nope".into(), ranges: vec![(secs(1), secs(2))] }).is_err());
 }
+
+#[test]
+fn transients_find_hits_by_sensitivity_and_gap() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("hits.wav");
+    // a loud 12 ms noise burst every half second, and a soft one (15 %) a quarter second after each
+    let expr = "(lt(mod(t,0.5),0.012))*(random(0)*2-1)+(lt(mod(t+0.25,0.5),0.012))*0.15*(random(1)*2-1)";
+    let o = Proc::new(tools().ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i"]).arg(format!("aevalsrc='{expr}':s=44100:d=4")).arg(&f).output().unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+
+    let near = |hits: &[(f64, f64)], t: f64| hits.iter().any(|(a, _)| (a - t).abs() < 0.06);
+    let strict = detect(&tools(), &f, 4.0, Kind::Transients, 4.0, 0.18).unwrap();
+    for t in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0] {
+        assert!(near(&strict, t), "a loud hit at {t} s is found: {strict:?}");
+    }
+    assert!(strict.iter().all(|(a, b)| (b - a - 0.05).abs() < 1e-9), "each hit is a short range starting at the attack");
+    let gentle = detect(&tools(), &f, 4.0, Kind::Transients, 1.2, 0.18).unwrap();
+    assert!(gentle.len() > strict.len(), "a lower sensitivity factor also finds the soft hits: {} vs {}", gentle.len(), strict.len());
+    assert!(near(&gentle, 0.75) || near(&gentle, 1.25), "a soft hit between the loud ones shows up: {gentle:?}");
+    let sparse = detect(&tools(), &f, 4.0, Kind::Transients, 1.2, 0.8).unwrap();
+    assert!(sparse.len() < gentle.len(), "a longer minimum gap thins them out: {} vs {}", sparse.len(), gentle.len());
+    assert!(sparse.windows(2).all(|w| w[1].0 - w[0].0 >= 0.75), "and keeps them apart");
+
+    assert!(detect(&tools(), &f, 4.0, Kind::Transients, 0.5, 0.18).is_err(), "a factor below 1 is refused");
+    let silent = dir.path().join("quiet.wav");
+    Proc::new(tools().ffmpeg).args(["-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono", "-t", "3"]).arg(&silent).output().unwrap();
+    assert!(detect(&tools(), &silent, 3.0, Kind::Transients, 1.35, 0.18).unwrap().is_empty(), "silence has no hits");
+}

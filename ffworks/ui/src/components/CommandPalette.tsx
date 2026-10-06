@@ -1,15 +1,16 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../api";
+import { api, type PluginInfo } from "../api";
 import { addMarkerAtPlayhead } from "./MarkerPanel";
 import { importSubtitlesViaDialog, importViaDialog } from "./MediaBrowser";
 import { filterActions, type PaletteAction } from "./palette";
 import { deleteSelected, newProject, openProject, saveProject, splitAtPlayhead } from "./Toolbar";
+import { fitCompound, leaveCompound, makeCompound, openCompound, takeCompoundApart } from "./compound";
 import { hintFor } from "../state/keymap";
 import { useJobs, usePlayhead, useProject, useUi } from "../state/stores";
 
 /** Everything the toolbar and shortcuts can do, searchable from the keyboard (Ctrl+K). */
-function buildActions(): PaletteAction[] {
+function buildActions(plugins: PluginInfo[]): PaletteAction[] {
   const ui = useUi.getState();
   const proj = useProject.getState();
   const v = proj.view;
@@ -34,6 +35,40 @@ function buildActions(): PaletteAction[] {
       if (typeof p !== "string") return;
       try { proj.setView(await api.runMacro(p, ui.selected)); proj.toast("info", "Macro applied (one undo step)"); } catch (e) { proj.toast("error", String(e)); }
     })() },
+    { id: "script-editor", label: "Script editor: write, dry-run and run a Rhai script…", keywords: "macro automation rhai loop condition code program", run: () => ui.setScriptOpen(true) },
+    { id: "script-run", label: "Run a script (Rhai) on the project…", keywords: "macro automation rhai loop condition", run: () => void (async () => {
+      const p = await open({ title: "Script to run", filters: [{ name: "Rhai script", extensions: ["rhai"] }] });
+      if (typeof p !== "string") return;
+      try {
+        const r = await api.runScript(p, ui.selected, false);
+        proj.setView(r.view);
+        proj.toast("info", `Script ran: ${r.commands} commands, one undo step${r.log.length ? ` — ${r.log[r.log.length - 1]}` : ""}`);
+      } catch (e) { proj.toast("error", String(e)); }
+    })() },
+    { id: "plugin-install", label: "Install a plugin from a folder…", keywords: "extension wasm extism add-on", run: () => void (async () => {
+      const dir = await open({ directory: true, title: "Plugin folder (contains plugin.json and the .wasm file)" });
+      if (typeof dir !== "string") return;
+      try { const p = await api.installPlugin(dir); proj.toast("info", `Installed plugin “${p.name}” (${p.actions.length} actions): find them in the command palette`); } catch (e) { proj.toast("error", String(e)); }
+    })() },
+    { id: "plugins", label: "Plugins: installed plugins and what they may do…", keywords: "extension wasm extism permissions network folders allow", run: () => ui.setPluginsOpen(true) },
+    ...plugins.flatMap((p) => p.actions.map((a) => ({
+      id: `plugin:${p.folder}:${a.id}`,
+      label: `Plugin ${p.name}: ${a.label}`,
+      keywords: `extension wasm ${p.description}`,
+      run: () => void (async () => {
+        try {
+          const r = await api.runPlugin(p.folder, a.id, ui.selected);
+          proj.setView(r.view);
+          proj.toast("info", `${p.name}: ${r.commands} commands, one undo step${r.log.length ? ` — ${r.log[r.log.length - 1]}` : ""}`);
+        } catch (e) { proj.toast("error", String(e)); }
+      })(),
+    }))),
+    { id: "compound-make", label: "Make a compound clip from the selected clips", keywords: "nest group fold sequence", run: () => void makeCompound() },
+    { id: "compound-open", label: "Open the selected compound clip to edit what is inside", keywords: "nest enter sequence", run: () => void openCompound() },
+    { id: "compound-leave", label: "Back to the main timeline (leave the compound clip)", keywords: "nest exit close sequence", run: () => void leaveCompound() },
+    { id: "compound-apart", label: "Take the selected compound clip apart", keywords: "nest ungroup unnest", run: () => void takeCompoundApart() },
+    { id: "compound-fit", label: "Fit the selected compound clip's length to its contents", keywords: "nest shorten", run: () => void fitCompound() },
+    { id: "library", label: "Media library: find files imported before…", keywords: "search index sqlite recent import history", run: () => ui.setLibraryOpen(true) },
     { id: "snapshots", label: "Snapshots (save and restore the timeline)…", keywords: "version backup history", run: () => ui.setSnapshotsOpen(true) },
     { id: "saveas", label: "Save project as…", run: () => void saveProject(true) },
     { id: "import", label: "Import media…", run: () => void importViaDialog() },
@@ -65,7 +100,9 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
-  const actions = useMemo(() => (open ? buildActions() : []), [open]);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  useEffect(() => { if (open) api.listPlugins().then((l) => setPlugins(l.plugins)).catch(() => setPlugins([])); }, [open]);
+  const actions = useMemo(() => (open ? buildActions(plugins) : []), [open, plugins]);
   const shown = useMemo(() => filterActions(actions, query), [actions, query]);
   useEffect(() => { if (open) { setQuery(""); setIndex(0); setTimeout(() => input.current?.focus(), 0); } }, [open]);
   useEffect(() => setIndex(0), [query]);
