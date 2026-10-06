@@ -37,6 +37,8 @@ jobs:
       - run: npm test --prefix ui
   windows-build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -136,6 +138,17 @@ jobs:
         with:
           name: ffworks-windows-installers
           path: ffworks/target/release/bundle/**/*
+      - name: Publish the installers as the "ffworks-latest" pre-release (pushes only; replaces the previous one)
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = @(Get-ChildItem target/release/bundle/nsis/*.exe, target/release/bundle/msi/*.msi | ForEach-Object { $_.FullName })
+          if ($files.Count -eq 0) { throw "no installers to publish" }
+          gh release delete ffworks-latest --cleanup-tag --yes 2>$null
+          $notes = "Unsigned build of commit ${{ github.sha }} (branch ${{ github.ref_name }}). Windows SmartScreen will warn about an unknown publisher: choose More info, then Run anyway. It bundles FFmpeg 7.1.1 and frei0r plugins. Built by CI; the Windows installer has not been launched by a person yet."
+          gh release create ffworks-latest @files --prerelease --target ${{ github.sha }} --title "FFWORKS (latest CI build)" --notes $notes
       - name: Render every bundled frei0r plugin with the bundled FFmpeg (after the upload, so a failure here still leaves the installer)
         shell: pwsh
         run: |
