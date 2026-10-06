@@ -1,0 +1,27 @@
+blockbuster-orange-teal	Blockbuster Orange & Teal	color-grading	Hollywood-style warm highlights and cool shadows.	eq=brightness=-0.02:contrast=1.15:saturation=1.1:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,colorchannelmixer=rr=1.12:rg=-0.04:rb=-0.15:gr=0:gg=1:gb=0:br=0.08:bg=0:bb=0.88
+moody-dark-cinematic	Moody Dark Cinematic	color-grading	High-contrast, low-saturation, blue-shifted shadows.	eq=brightness=-0.08:contrast=1.2:saturation=0.85:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,colorchannelmixer=rr=0.85:rg=0:rb=0:gr=0:gg=1:gb=0.05:br=0:bg=0:bb=1.15
+warm-golden-hour	Warm Golden Hour	color-grading	Warm sunset glow with extra red and yellow.	eq=brightness=0.05:contrast=1:saturation=1.2:gamma=1:gamma_r=1.2:gamma_g=1:gamma_b=0.85
+cool-moonlight	Cool Moonlight	color-grading	Cool blue-dominant night-time palette.	eq=brightness=-0.05:contrast=1.1:saturation=0.8:gamma=1:gamma_r=0.85:gamma_g=1:gamma_b=1.3
+vintage-film	Vintage Film	color-grading	Faded, slightly desaturated film with a vignette.	eq=brightness=-0.02:contrast=1.1:saturation=0.75:gamma=1.1:gamma_r=1:gamma_g=1:gamma_b=1,vignette=angle=0.628
+sepia-tone	Sepia Tone	color-grading	Classic brownish sepia via channel mixer.	colorchannelmixer=rr=0.393:rg=0.769:rb=0.189:gr=0.349:gg=0.686:gb=0.168:br=0.272:bg=0.534:bb=0.131
+high-contrast-bw	High Contrast Black & White	color-grading	Saturation to zero, contrast pushed to 1.4.	eq=brightness=-0.03:contrast=1.4:saturation=0:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1
+desaturated-bleach-bypass	Desaturated / Bleach Bypass	color-grading	Half-saturation, high-contrast bleach-bypass look.	eq=brightness=-0.02:contrast=1.3:saturation=0.5:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1
+night-vision	Night Vision	color-grading	Green-tinted low-light look with strong noise.	colorchannelmixer=rr=0.1:rg=0.1:rb=0:gr=0.2:gg=1.5:gb=0.2:br=0:bg=0.1:bb=0.1,noise=alls=20:allf=t
+film-grain-vignette	Film Grain + Vignette	color-grading	Heavy grain with a subtle vignette.	eq=brightness=0:contrast=1.05:saturation=0.9:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,noise=alls=15:allf=t+u,vignette=angle=0.6
+cross-process	Cross Process	color-grading	Channel-mixed cross-processed look.	colorchannelmixer=rr=1:rg=0.3:rb=-0.2:gr=-0.1:gg=1:gb=0.1:br=0.2:bg=-0.2:bb=1.2
+high-key-bright	High Key Bright	color-grading	Bright, low-contrast dreamy highlight look.	eq=brightness=0.1:contrast=0.9:saturation=0.9:gamma=0.85:gamma_r=1:gamma_g=1:gamma_b=1
+invert-negative	Invert / Negative	color-grading	Invert all colors (film negative).	eq=brightness=0:contrast=1:saturation=1:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,negate
+edge-detect-wireframe	Edge Detect Wireframe	glitch	Sobel-style wireframe edge detection.	edgedetect=mode=wires
+posterize	Posterize (Limited Colors)	glitch	Quantize each color channel to 3 bits — 8 levels per channel.	lutyuv=y=bitand(val,0xE0):u=val:v=val
+film-projector	Film Projector	retro-analog	Grain + vertical jitter + vignette + warm grade + occasional white flash.	eq=brightness=0.03:contrast=1.05:saturation=0.85:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,noise=alls=15:allf=t+u,vignette=angle=0.5
+old-film-scratches	Old Film Scratches	retro-analog	Grain + random vertical white lines. Damaged film look.	eq=brightness=0:contrast=1.15:saturation=1:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,noise=alls=15:allf=t+u
+thermal-vision	Thermal Vision	retro-analog	Color-channel mix that biases the image toward a heat palette (warm reds and yellows).	eq=brightness=0:contrast=1.1:saturation=1.4:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,colorchannelmixer=rr=1.2:rg=0.4:rb=0:gr=0.8:gg=0.4:gb=0:br=0.4:bg=0:bb=0
+night-vision-phosphor	Night Vision (Green Phosphor)	retro-analog	Green-channel boost + grain + vignette + slight blur. Night-vision goggles look.	colorchannelmixer=rr=0:rg=0:rb=0:gr=0.2:gg=1.4:gb=0.2:br=0:bg=0.2:bb=0,noise=alls=15:allf=t+u,vignette=angle=0.7
+cartoon-cel	Cartoon / Cel Shade	artistic-stylize	Posterize + edge detect + composite edges over the flattened colors. The cel-shaded comic look.	eq=brightness=0:contrast=1:saturation=1.4:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,edgedetect=mode=colormix,lutyuv=y=bitand(val,0xE0):u=val:v=val
+oil-painting	Oil Painting	artistic-stylize	Heavy box blur + unsharp + posterize. Imitates an oil-paint surface.	boxblur=5:5,unsharp=5:5:1.5:5:5:0,lutyuv=y=bitand(val,0xF8):u=val:v=val
+halftone	Halftone Print	artistic-stylize	Posterize + geq dot pattern. Mimics newspaper halftone printing.	eq=brightness=0:contrast=1.4:saturation=0:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,lutyuv=y=bitand(val,0xF0):u=val:v=val
+duotone	Duotone (Two-Color Map)	artistic-stylize	Map luminance onto two chosen colors via color-channel mixer. Black shadow → blue midtones → cyan highlight.	colorchannelmixer=rr=0:rg=0:rb=0.2:gr=0:gg=0:gb=0.6:br=0:bg=0:bb=1
+solarize	Solarize	artistic-stylize	Invert the upper half of the tonal range. Classic photographic effect.	eq=brightness=0:contrast=1.3:saturation=1:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1
+neon-edge	Neon Edge Glow	artistic-stylize	Edge detect with colormix mode + saturation boost + gaussian-blur bloom. A glowing edge look.	eq=brightness=0:contrast=1.2:saturation=1.6:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,gblur=sigma=3,edgedetect=mode=colormix
+chromatic-bloom	Chromatic Bloom	artistic-stylize	Bright areas bleed color. Boost saturation + add a soft blur for a bloom look.	eq=brightness=0.05:contrast=1:saturation=1.5:gamma=1:gamma_r=1:gamma_g=1:gamma_b=1,gblur=sigma=4
+mirror-lr	Mirror (Left → Right)	artistic-stylize	Split horizontally, hflip the right half, and hstack the two halves.	hflip

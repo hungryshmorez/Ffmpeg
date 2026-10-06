@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { AudioWorkflow, JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs, MoshFx, ScriptOutcome, DriftResult } from "./types";
+import type { AudioWorkflow, VideoWorkflow, JobLog, Command, ClipProps, EffectDef, ProxyStatus, FontEntry, FilterInfo, FilterHelp, FilterGraph, DemoBatch, EngineInfo, FoundEngine, Favourites, RandomResult, ExportPreset, JobEvent, PreviewInfo, RecoveryInfo, AppSettings, BeatAnalysis, Loudness, SceneAnalysis, DetectKind, EffectPreset, RelinkResult, StateView, Waveform, GlitchStatus, LocalApi, FrameArgs, MoshFx, ScriptOutcome, DriftResult } from "./types";
 
 /** Every backend call goes through here so the UI never touches the filesystem or processes directly. */
 export const api = {
@@ -59,6 +59,7 @@ export const api = {
   randomTransitions: (clip: string, count: number, pool: string, seed?: number) => invoke<RandomResult>("random_transitions", { clip, count, pool, seed: seed ?? null, duration: null }),
   listTransitions: () => invoke<[string, string][]>("list_transitions"),
   listAudioWorkflows: () => invoke<AudioWorkflow[]>("list_audio_workflows"),
+  listVideoWorkflows: () => invoke<VideoWorkflow[]>("list_video_workflows"),
   listEffects: () => invoke<EffectDef[]>("list_effects"),
   proxyStatus: () => invoke<ProxyStatus[]>("proxy_status"),
   createProxy: (mediaId: string) => invoke<string>("create_proxy", { mediaId }),

@@ -80,6 +80,7 @@ fn builtin_registry() -> Vec<EffectDef> {
         au("compressor", "Compressor", "Dynamics", &["acompressor"], vec![p("threshold", "Threshold", -60.0, 0.0, -18.0, 0.5, "dB"), p("ratio", "Ratio", 1.0, 20.0, 4.0, 0.1, ":1"), p("attack", "Attack", 1.0, 200.0, 20.0, 1.0, "ms"), p("release", "Release", 20.0, 1000.0, 250.0, 5.0, "ms"), p("makeup", "Make-up gain", 0.0, 24.0, 0.0, 0.5, "dB")]),
         au("limiter", "Limiter", "Dynamics", &["alimiter"], vec![p("ceiling", "Ceiling", -24.0, 0.0, -1.0, 0.5, "dB")]),
         au("afilterchain", "Audio filter chain (advanced)", "Advanced", &[], vec![]),
+        e("vfilterchain", "Video filter chain (advanced)", "Advanced", &[], vec![]),
         au("echo", "Echo", "Time", &["aecho"], vec![p("delay", "Delay", 20.0, 2000.0, 300.0, 10.0, "ms"), p("decay", "Decay", 0.0, 0.9, 0.4, 0.05, "")]),
         au("denoise", "Noise reduction (FFT)", "Restoration", &["afftdn"], vec![p("amount", "Reduction", 0.0, 40.0, 12.0, 0.5, "dB")]),
         au("normalizer", "Dynamic normalizer", "Dynamics", &["dynaudnorm"], vec![]),
@@ -213,6 +214,36 @@ pub fn chain_filter_names(text: &str) -> Vec<String> {
 /// A chain goes into the filter graph as text, so it is restricted to known audio filters and a plain character set: no quotes, labels,
 /// brackets, semicolons, backslashes or newlines. `@SR@` stands for the project's sample rate.
 pub fn check_audio_chain(text: &str) -> Result<()> {
+    check_chain(text, CHAIN_FILTERS, "audio")
+}
+
+/// Video filters a `vfilterchain` may use: colour, blur/sharpen, noise, edges, flips and temporal blends. Nothing that reads or writes files
+/// or draws text.
+pub const VIDEO_CHAIN_FILTERS: &[&str] = &[
+    "eq", "hue", "colorchannelmixer", "negate", "noise", "boxblur", "gblur", "unsharp", "edgedetect", "sobel", "vignette", "lutyuv", "lutrgb", "hflip", "vflip", "curves", "colorbalance", "colorlevels", "colortemperature", "tmix", "tblend", "lagfun", "amplify", "deflicker", "chromashift", "rgbashift", "lenscorrection", "format",
+];
+
+/// Same checks as `check_audio_chain`, against the video filter list.
+pub fn check_video_chain(text: &str) -> Result<()> {
+    check_chain(text, VIDEO_CHAIN_FILTERS, "video")
+}
+
+/// In a filter graph a comma separates filters, so the commas inside an expression's parentheses are escaped.
+pub fn escape_chain_commas(text: &str) -> String {
+    let (mut depth, mut out) = (0i32, String::new());
+    for c in text.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth > 0 => out.push('\\'),
+            _ => {}
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn check_chain(text: &str, allowed: &[&str], what: &str) -> Result<()> {
     if text.chars().count() > CHAIN_MAX_CHARS {
         return Err(Error::validation(format!("the filter chain is longer than {CHAIN_MAX_CHARS} characters")));
     }
@@ -230,8 +261,8 @@ pub fn check_audio_chain(text: &str) -> Result<()> {
         return Err(Error::validation("the filter chain has an unmatched '('"));
     }
     for n in chain_filter_names(text) {
-        if !CHAIN_FILTERS.contains(&n.as_str()) {
-            return Err(Error::validation(if n.is_empty() { "the filter chain has an empty step".to_string() } else { format!("'{n}' is not an audio filter this chain allows (allowed: {})", CHAIN_FILTERS.join(", ")) }));
+        if !allowed.contains(&n.as_str()) {
+            return Err(Error::validation(if n.is_empty() { "the filter chain has an empty step".to_string() } else { format!("'{n}' is not {} {what} filter this chain allows (allowed: {})", if what == "audio" { "an" } else { "a" }, allowed.join(", ")) }));
         }
     }
     Ok(())
@@ -432,11 +463,11 @@ pub fn to_filter(inst: &EffectInstance, kfs: &KeyframeMap) -> Result<Option<Stri
             }
             crate::bake::mark(&sort)
         }
-        "afilterchain" => match inst.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        "afilterchain" | "vfilterchain" => match inst.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
             None => return Ok(None),
             Some(t) => {
-                check_audio_chain(t)?;
-                t.to_string()
+                if inst.effect == "afilterchain" { check_audio_chain(t)? } else { check_video_chain(t)? }
+                escape_chain_commas(t)
             }
         },
         "lut" => {
@@ -527,7 +558,7 @@ mod tests {
         for d in registry() {
             let e = EffectInstance::new("x".into(), d.id, &BTreeMap::new()).unwrap();
             // crop, eq and volume at their defaults are deliberate no-ops
-            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume", "lut", "afilterchain"].contains(&d.id), "{}", d.id);
+            assert_eq!(to_filter(&e, &KeyframeMap::new()).unwrap().is_some(), !["crop", "eq", "graph", "volume", "lut", "afilterchain", "vfilterchain"].contains(&d.id), "{}", d.id);
         }
     }
 

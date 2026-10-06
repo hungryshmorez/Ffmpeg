@@ -23,8 +23,8 @@ export function pasteCommands(effects: readonly EffectInstance[], target: Clip):
   let skipped = 0;
   for (const fx of effects) {
     if (fx.effect === "graph") { skipped++; continue; }
-    if (fx.effect === "afilterchain") {
-      if (fx.text) commands.push({ type: "add_audio_chain", clip: target.id, chain: fx.text });
+    if (fx.effect === "afilterchain" || fx.effect === "vfilterchain") {
+      if (fx.text) commands.push({ type: fx.effect === "afilterchain" ? "add_audio_chain" : "add_video_chain", clip: target.id, chain: fx.text });
       else skipped++;
       continue;
     }

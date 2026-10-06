@@ -5,6 +5,7 @@
 use std::sync::OnceLock;
 
 const AUDIO: &str = include_str!("../assets/workflows/audio_workflows.tsv");
+const VIDEO: &str = include_str!("../assets/workflows/video_workflows.tsv");
 
 /// One audio workflow: an FFmpeg audio filter chain (`@SR@` = the project's sample rate) to put on an audio clip, and/or a clip speed.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -35,6 +36,31 @@ pub fn audio_workflows() -> &'static [AudioWorkflow] {
     })
 }
 
+/// One video workflow: an FFmpeg video filter chain to put on a video clip as an effect.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct VideoWorkflow {
+    pub id: &'static str,
+    pub name: &'static str,
+    /// The browser app's category (`color-grading`, `retro-analog`, `artistic-stylize`, `glitch`).
+    pub category: &'static str,
+    pub description: &'static str,
+    pub chain: &'static str,
+}
+
+/// The browser app's colour, retro, stylize and glitch looks that are plain filter chains (`scripts/workflows/build_video.py`).
+pub fn video_workflows() -> &'static [VideoWorkflow] {
+    static T: OnceLock<Vec<VideoWorkflow>> = OnceLock::new();
+    T.get_or_init(|| {
+        VIDEO
+            .lines()
+            .filter_map(|l| {
+                let mut p = l.split('\t');
+                Some(VideoWorkflow { id: p.next()?, name: p.next()?, category: p.next()?, description: p.next()?, chain: p.next()? })
+            })
+            .collect()
+    })
+}
+
 pub fn audio_workflow(id: &str) -> Option<&'static AudioWorkflow> {
     audio_workflows().iter().find(|w| w.id == id)
 }
@@ -42,6 +68,18 @@ pub fn audio_workflow(id: &str) -> Option<&'static AudioWorkflow> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_video_workflow_is_a_valid_chain() {
+        assert_eq!(video_workflows().len(), 27);
+        let mut ids: Vec<_> = video_workflows().iter().map(|w| w.id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), 27, "unique ids");
+        for w in video_workflows() {
+            crate::effects::check_video_chain(w.chain).unwrap_or_else(|e| panic!("{}: {e}", w.id));
+        }
+    }
 
     #[test]
     fn every_audio_workflow_is_a_valid_chain() {

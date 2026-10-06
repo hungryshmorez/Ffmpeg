@@ -71,7 +71,9 @@ pub enum Command {
     SetEffectFile { clip: Id, effect_id: Id, path: Option<String> },
     /// Add an audio filter chain effect (`effects::check_audio_chain`) to an audio clip.
     AddAudioChain { clip: Id, chain: String, index: Option<usize> },
-    /// Change the text of an audio filter chain effect.
+    /// Add a video filter chain effect (`effects::check_video_chain`) to a video clip.
+    AddVideoChain { clip: Id, chain: String, index: Option<usize> },
+    /// Change the text of an audio or video filter chain effect.
     SetEffectText { clip: Id, effect_id: Id, text: String },
     MoveEffect { clip: Id, effect_id: Id, index: usize },
     SetClipOpacity { clip: Id, opacity: f64 },
@@ -187,6 +189,7 @@ impl Command {
             Command::SetEffectPicture { .. } => "Set mask picture".into(),
             Command::SetEffectFile { .. } => "Set LUT file".into(),
             Command::AddAudioChain { .. } => "Add audio filter chain".into(),
+            Command::AddVideoChain { .. } => "Add video filter chain".into(),
             Command::SetEffectText { .. } => "Edit audio filter chain".into(),
             Command::MoveEffect { .. } => "Reorder effect".into(),
             Command::SetClipOpacity { .. } => "Clip opacity".into(),
@@ -561,15 +564,30 @@ pub fn plan(p: &Project, cmd: &Command) -> Result<Vec<Patch>> {
             c2.effects.insert(at, inst);
             Ok(vec![Patch::PutClip { seq: sid.clone(), track: t.id.clone(), clip: c2 }])
         }
+        Command::AddVideoChain { clip, chain, index } => {
+            let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
+            ensure_unlocked(t)?;
+            if c.kind != TrackKind::Video {
+                return Err(Error::validation("a video filter chain applies to video clips; select the video clip"));
+            }
+            effects::check_video_chain(chain)?;
+            let mut c2 = c.clone();
+            let mut inst = EffectInstance::new(new_id("fx"), "vfilterchain", &BTreeMap::new())?;
+            inst.text = Some(chain.trim().to_string());
+            let at = index.unwrap_or(c2.effects.len()).min(c2.effects.len());
+            c2.effects.insert(at, inst);
+            Ok(vec![Patch::PutClip { seq: sid.clone(), track: t.id.clone(), clip: c2 }])
+        }
         Command::SetEffectText { clip, effect_id, text } => {
             let (t, c) = seq.find_clip(clip).ok_or_else(|| Error::NotFound(format!("clip {clip}")))?;
             ensure_unlocked(t)?;
             let mut c2 = c.clone();
             let fx = c2.effects.iter_mut().find(|e| &e.id == effect_id).ok_or_else(|| Error::NotFound(format!("effect {effect_id}")))?;
-            if fx.effect != "afilterchain" {
-                return Err(Error::validation("only an audio filter chain effect has text"));
+            match fx.effect.as_str() {
+                "afilterchain" => effects::check_audio_chain(text)?,
+                "vfilterchain" => effects::check_video_chain(text)?,
+                _ => return Err(Error::validation("only a filter chain effect has text")),
             }
-            effects::check_audio_chain(text)?;
             fx.text = Some(text.trim().to_string());
             Ok(vec![Patch::PutClip { seq: sid.clone(), track: t.id.clone(), clip: c2 }])
         }

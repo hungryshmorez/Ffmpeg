@@ -181,7 +181,7 @@ fn effect_filters(project: &Project, c: &Clip) -> Result<(Vec<String>, Vec<Strin
             if let Some(g) = &fx.graph {
                 requires.extend(g.requires());
             }
-            if fx.effect == "afilterchain" {
+            if fx.effect == "afilterchain" || fx.effect == "vfilterchain" {
                 requires.extend(crate::effects::chain_filter_names(fx.text.as_deref().unwrap_or("")).into_iter().filter(|n| !n.is_empty()));
             }
             alpha |= def.alpha;
